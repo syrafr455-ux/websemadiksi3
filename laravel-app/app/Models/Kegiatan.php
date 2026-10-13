@@ -1,0 +1,290 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\KegiatanStatus;
+use App\Enums\UserRole;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
+
+class Kegiatan extends Model
+{
+    use HasFactory, SoftDeletes;
+
+    protected $table = 'kegiatan';
+
+    public const KATEGORI = [
+        'webinar',
+        'workshop',
+        'seminar',
+        'pelatihan',
+        'pengabdian_masyarakat',
+        'lomba',
+        'lainnya',
+    ];
+
+    public const METODE = ['online', 'offline', 'hybrid'];
+
+    public const SASARAN = ['kipk_only', 'internal_unusa', 'umum'];
+
+    public const LOKASI_TYPES = ['unusa_campus', 'external', 'online'];
+
+    protected $fillable = [
+        'nama_kegiatan',
+        'deskripsi',
+        'kategori',
+        'metode_pelaksanaan',
+        'sasaran_peserta',
+        'tanggal_mulai',
+        'tanggal_selesai',
+        'registration_deadline',
+        'submission_deadline',
+        'lokasi_type',
+        'lokasi_nama',
+        'lokasi_detail',
+        'narasumber',
+        'file_panduan_pdf',
+        'certificate_template_path',
+        'certificate_schema_config',
+        'kuota',
+        'kuota_terisi',
+        'poin_xp',
+        'biaya',
+        'is_seat_booking_active',
+        'seat_layout_config',
+        'is_submission_active',
+        'submission_instructions',
+        'status',
+        'legacy_activity_id',
+    ];
+
+    protected $appends = ['file_panduan_url', 'certificate_template_url'];
+
+    protected function casts(): array
+    {
+        return [
+            'tanggal_mulai' => 'datetime',
+            'tanggal_selesai' => 'datetime',
+            'registration_deadline' => 'datetime',
+            'submission_deadline' => 'datetime',
+            'narasumber' => 'array',
+            'seat_layout_config' => 'array',
+            'certificate_schema_config' => 'array',
+            'kuota' => 'integer',
+            'kuota_terisi' => 'integer',
+            'poin_xp' => 'integer',
+            'biaya' => 'decimal:2',
+            'is_seat_booking_active' => 'boolean',
+            'is_submission_active' => 'boolean',
+            'status' => KegiatanStatus::class,
+        ];
+    }
+
+    public function seats(): HasMany
+    {
+        return $this->hasMany(KegiatanSeat::class);
+    }
+
+    public function registrations(): HasMany
+    {
+        return $this->hasMany(KegiatanRegistration::class);
+    }
+
+    public function activeRegistrations(): HasMany
+    {
+        return $this->registrations()->active();
+    }
+
+    public function submissions(): HasMany
+    {
+        return $this->hasMany(KegiatanSubmission::class);
+    }
+
+    public function presensis(): HasMany
+    {
+        return $this->hasMany(KegiatanPresensi::class);
+    }
+
+    public function sertifikats(): HasMany
+    {
+        return $this->hasMany(Sertifikat::class);
+    }
+
+    /**
+     * URL publik file panduan PDF (null untuk data lama tanpa panduan).
+     */
+    public function getFilePanduanUrlAttribute(): ?string
+    {
+        return $this->file_panduan_pdf
+            ? Storage::disk('public')->url($this->file_panduan_pdf)
+            : null;
+    }
+
+    /**
+     * URL publik file template sertifikat (jika diunggah).
+     */
+    public function getCertificateTemplateUrlAttribute(): ?string
+    {
+        return $this->certificate_template_path
+            ? Storage::disk('public')->url($this->certificate_template_path)
+            : null;
+    }
+
+    public function isFree(): bool
+    {
+        return (float) $this->biaya <= 0.0;
+    }
+
+    public function isLomba(): bool
+    {
+        return $this->kategori === 'lomba';
+    }
+
+    public function acceptsSubmissions(): bool
+    {
+        return $this->is_submission_active && $this->status !== KegiatanStatus::Cancelled;
+    }
+
+    /**
+     * Cek apakah pendaftaran/tiket masih dibuka berdasarkan status dan batas waktu registrasi.
+     */
+    public function isRegistrationOpen(): bool
+    {
+        if ($this->status !== KegiatanStatus::Published && $this->status !== KegiatanStatus::Ongoing) {
+            return false;
+        }
+
+        if ($this->registration_deadline && now()->greaterThan($this->registration_deadline)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Cek apakah pengumpulan karya masih dibuka berdasarkan batas waktu submission.
+     */
+    public function isSubmissionOpen(): bool
+    {
+        if (! $this->acceptsSubmissions()) {
+            return false;
+        }
+
+        if ($this->submission_deadline && now()->greaterThan($this->submission_deadline)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function scopeBookable($query)
+    {
+        return $query->whereIn('status', [KegiatanStatus::Published->value, KegiatanStatus::Ongoing->value]);
+    }
+
+    /**
+     * Apakah $user (sebagai peserta) memenuhi sasaran kegiatan ini?
+     */
+    public function allowsParticipant(User $user): bool
+    {
+        $role = $user->role;
+
+        if (! $role instanceof UserRole || ! $role->isParticipant() || $user->is_blocked) {
+            return false;
+        }
+
+        return match ($this->sasaran_peserta) {
+            'kipk_only' => $role === UserRole::MahasiswaKipk && $user->isVerified(),
+            'internal_unusa' => $role === UserRole::MahasiswaKipk || $user->hasUnusaEmail(),
+            default => true,
+        };
+    }
+
+    /**
+     * Daftar field yang, jika berubah, wajib dibroadcast ke peserta.
+     *
+     * @return list<string>
+     */
+    public static function scheduleSensitiveFields(): array
+    {
+        return ['tanggal_mulai', 'tanggal_selesai', 'lokasi_type', 'lokasi_nama', 'lokasi_detail', 'metode_pelaksanaan'];
+    }
+
+    public function getWaktuMulaiAttribute()
+    {
+        return $this->tanggal_mulai;
+    }
+
+    public function setWaktuMulaiAttribute($value): void
+    {
+        $this->attributes['tanggal_mulai'] = $value;
+    }
+
+    public function getWaktuSelesaiAttribute()
+    {
+        return $this->tanggal_selesai;
+    }
+
+    public function setWaktuSelesaiAttribute($value): void
+    {
+        $this->attributes['tanggal_selesai'] = $value;
+    }
+
+    public function getTargetPesertaAttribute()
+    {
+        return $this->sasaran_peserta;
+    }
+
+    public function setTargetPesertaAttribute($value): void
+    {
+        $this->attributes['sasaran_peserta'] = $value;
+    }
+
+    public function getKuotaTotalAttribute()
+    {
+        return $this->kuota;
+    }
+
+    public function setKuotaTotalAttribute($value): void
+    {
+        $this->attributes['kuota'] = $value;
+    }
+
+    public function getPoinSkpAttribute()
+    {
+        return $this->poin_xp;
+    }
+
+    public function setPoinSkpAttribute($value): void
+    {
+        $this->attributes['poin_xp'] = $value;
+    }
+
+    public function getHasSeatSelectionAttribute(): bool
+    {
+        return (bool) $this->is_seat_booking_active;
+    }
+
+    public function setHasSeatSelectionAttribute($value): void
+    {
+        $this->attributes['is_seat_booking_active'] = (bool) $value;
+    }
+
+    public function getHasSubmissionAttribute(): bool
+    {
+        return (bool) $this->is_submission_active;
+    }
+
+    public function setHasSubmissionAttribute($value): void
+    {
+        $this->attributes['is_submission_active'] = (bool) $value;
+    }
+
+    public function getKuotaTerisiAttribute(): int
+    {
+        return $this->registrations()->count();
+    }
+}
