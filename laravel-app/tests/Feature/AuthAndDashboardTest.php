@@ -55,7 +55,8 @@ class AuthAndDashboardTest extends TestCase
 
     public function test_student_cannot_access_admin_dashboard(): void
     {
-        $student = User::where('role', \App\Enums\UserRole::MahasiswaKipk->value)->where('is_blocked', false)->first();
+        $student = User::where('role', \App\Enums\UserRole::MahasiswaKipk->value)->where('is_blocked', false)->first()
+            ?? User::factory()->create(['role' => \App\Enums\UserRole::MahasiswaKipk, 'is_blocked' => false]);
         $response = $this->actingAs($student)->get(route('admin.dashboard'));
         
         $response->assertRedirect(route('admin.login'));

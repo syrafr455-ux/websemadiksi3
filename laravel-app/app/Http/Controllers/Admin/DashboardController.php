@@ -20,10 +20,24 @@ class DashboardController extends Controller
     /**
      * Admin Overview Dashboard.
      */
-    public function index(): View
+    public function index(): View|RedirectResponse
     {
+        $user = auth()->user();
+
+        if ($user && $user->role === \App\Enums\UserRole::PenilaiKarya) {
+            return redirect()->route('admin.penilaian');
+        }
+
+        if ($user && $user->role === \App\Enums\UserRole::VerifikatorBerkas) {
+            return redirect()->route('admin.berkas');
+        }
+
+        if (! $user || ! $user->isSuperAdmin()) {
+            abort(403, 'Akses terbatas untuk Super Administrator.');
+        }
+
         $stats = [
-            'total_students' => User::where('role', 'student')->count(),
+            'total_students' => User::whereIn('role', [\App\Enums\UserRole::MahasiswaKipk->value, 'student'])->count(),
             'pending_verifications' => User::where('verification_status', 'Pending')->count(),
             'total_activities' => Activity::count(),
             'total_certificates' => Certificate::count(),
@@ -32,7 +46,7 @@ class DashboardController extends Controller
             'total_submissions' => CustomFormSubmission::count(),
         ];
 
-        $recentStudents = User::where('role', 'student')->latest('id')->take(5)->get();
+        $recentStudents = User::whereIn('role', [\App\Enums\UserRole::MahasiswaKipk->value, 'student'])->latest('id')->take(5)->get();
         $recentAttendances = Attendance::latest('id')->take(5)->get();
         $recentDocs = KipkDocument::latest('id')->take(5)->get();
 
@@ -229,13 +243,33 @@ class DashboardController extends Controller
      */
     public function berkas(): View
     {
+        \Illuminate\Support\Facades\Gate::authorize('viewAny', KipkDocument::class);
         $documents = KipkDocument::latest('id')->paginate(15);
         return view('admin.berkas.index', compact('documents'));
+    }
+
+    public function downloadDoc(int $id)
+    {
+        $doc = KipkDocument::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('download', $doc);
+
+        $relativePath = $doc->file_url ? str_replace('/storage/', '', parse_url($doc->file_url, PHP_URL_PATH)) : null;
+        if ($relativePath && Storage::disk('public')->exists($relativePath)) {
+            return Storage::disk('public')->download($relativePath, $doc->file_name ?? 'berkas-kipk.pdf');
+        }
+
+        if ($doc->file_url) {
+            return redirect($doc->file_url);
+        }
+
+        return back()->with('error', 'File berkas tidak ditemukan.');
     }
 
     public function updateDocStatus(int $id, Request $request): RedirectResponse
     {
         $doc = KipkDocument::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('verify', $doc);
+
         $doc->status = $request->input('status', 'Disetujui');
         $doc->score = (int) $request->input('score', 100);
         $doc->notes = $request->input('notes');

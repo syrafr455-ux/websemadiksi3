@@ -425,6 +425,8 @@ class DashboardController extends Controller
 
     public function uploadBerkas(Request $request): RedirectResponse
     {
+        \Illuminate\Support\Facades\Gate::authorize('create', KipkDocument::class);
+
         $request->validate([
             'category' => ['required', 'string'],
             'tahap' => ['required', 'integer', 'in:1,2,3'],
@@ -455,6 +457,23 @@ class DashboardController extends Controller
         ]);
 
         return back()->with('success', 'Berkas KIP-K berhasil diunggah.');
+    }
+
+    public function downloadBerkas(int $id)
+    {
+        $doc = KipkDocument::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('download', $doc);
+
+        $relativePath = $doc->file_url ? str_replace('/storage/', '', parse_url($doc->file_url, PHP_URL_PATH)) : null;
+        if ($relativePath && Storage::disk('public')->exists($relativePath)) {
+            return Storage::disk('public')->download($relativePath, $doc->file_name ?? 'berkas-kipk.pdf');
+        }
+
+        if ($doc->file_url) {
+            return redirect($doc->file_url);
+        }
+
+        return back()->with('error', 'File berkas tidak ditemukan.');
     }
 
     /**

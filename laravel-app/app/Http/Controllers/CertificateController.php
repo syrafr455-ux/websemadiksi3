@@ -51,15 +51,16 @@ class CertificateController extends Controller
 
         // Jika kode diinputkan (dan belum dicocokkan via file hash)
         if ($code && ! $sertifikat) {
+            $likeOp = \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
             $sertifikat = Sertifikat::with(['kegiatan', 'user', 'presensi'])
                 ->where('nomor_sertifikat', $code)
-                ->orWhere('nomor_sertifikat', 'ilike', $code)
+                ->orWhere('nomor_sertifikat', $likeOp, $code)
                 ->first();
 
             if (! $sertifikat) {
                 // Fallback ke tabel sertifikat legacy
                 $legacyCertificate = Certificate::where('code', $code)
-                    ->orWhere('code', 'ilike', $code)
+                    ->orWhere('code', $likeOp, $code)
                     ->first();
             }
         }

@@ -20,17 +20,20 @@ class UserManagementController extends Controller
      */
     public function index(Request $request): Response
     {
+        \Illuminate\Support\Facades\Gate::authorize('viewAny', User::class);
+
         $query = User::query()->latest('id');
 
-        // Pencarian case-insensitive (PostgreSQL ILIKE)
+        // Pencarian case-insensitive (PostgreSQL ILIKE / SQLite LIKE)
         if ($request->filled('q')) {
             $q = trim($request->input('q'));
-            $query->where(function ($w) use ($q) {
-                $w->where('name', 'ilike', "%{$q}%")
-                  ->orWhere('email', 'ilike', "%{$q}%")
-                  ->orWhere('nim', 'ilike', "%{$q}%")
-                  ->orWhere('prodi', 'ilike', "%{$q}%")
-                  ->orWhere('last_login_ip', 'ilike', "%{$q}%");
+            $likeOp = \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($w) use ($q, $likeOp) {
+                $w->where('name', $likeOp, "%{$q}%")
+                  ->orWhere('email', $likeOp, "%{$q}%")
+                  ->orWhere('nim', $likeOp, "%{$q}%")
+                  ->orWhere('prodi', $likeOp, "%{$q}%")
+                  ->orWhere('last_login_ip', $likeOp, "%{$q}%");
             });
         }
 
@@ -72,6 +75,8 @@ class UserManagementController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        \Illuminate\Support\Facades\Gate::authorize('create', User::class);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email:rfc,dns', 'max:255', 'unique:users,email'],
@@ -117,6 +122,7 @@ class UserManagementController extends Controller
     public function toggleBlock(int $id): RedirectResponse
     {
         $user = User::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('toggleBlock', $user);
 
         if ($user->id === auth()->id()) {
             return back()->with('error', 'Anda tidak dapat menonaktifkan akun Anda sendiri.');
@@ -143,6 +149,8 @@ class UserManagementController extends Controller
     public function verify(int $id): RedirectResponse
     {
         $user = User::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('verify', $user);
+
         $user->verification_status = 'Verified';
         $user->save();
 

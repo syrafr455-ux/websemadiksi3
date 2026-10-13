@@ -201,7 +201,13 @@ class AuthController extends Controller
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        return redirect()->intended(route('admin.dashboard'));
+        $targetRoute = match ($user->role) {
+            \App\Enums\UserRole::PenilaiKarya => route('admin.penilaian'),
+            \App\Enums\UserRole::VerifikatorBerkas => route('admin.berkas'),
+            default => route('admin.dashboard'),
+        };
+
+        return redirect()->intended($targetRoute);
     }
 
     /**

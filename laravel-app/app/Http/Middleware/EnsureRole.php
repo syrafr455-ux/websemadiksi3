@@ -40,7 +40,8 @@ class EnsureRole
             return redirect()->route('login')->with('error', 'Akun Anda dinonaktifkan oleh administrator.');
         }
 
-        $userRoleValue = $user->role instanceof UserRole ? $user->role->value : (string) $user->role;
+        $userRole = $user->role instanceof UserRole ? $user->role : UserRole::tryFrom((string) $user->role);
+        $userRoleValue = $userRole?->value ?? (string) $user->role;
 
         // super_admin has master access to all role-protected routes
         if ($userRoleValue === UserRole::SuperAdmin->value) {
@@ -55,11 +56,20 @@ class EnsureRole
             return response()->json(['message' => 'Anda tidak memiliki hak akses untuk tindakan ini.'], 403);
         }
 
-        // Redirect based on role
-        if ($user->role === UserRole::MahasiswaKipk || $user->role === UserRole::UserUmum) {
-            return redirect()->route('dashboard.index')->with('error', 'Akses ditolak: Anda tidak memiliki wewenang untuk halaman tersebut.');
+        // Tentukan rute tujuan yang pasti dapat diakses oleh role yang bersangkutan
+        $targetRoute = match ($userRole) {
+            UserRole::PenilaiKarya => 'admin.penilaian',
+            UserRole::VerifikatorBerkas => 'admin.berkas',
+            UserRole::SuperAdmin => 'admin.dashboard',
+            UserRole::MahasiswaKipk, UserRole::UserUmum => 'dashboard.index',
+            default => 'login',
+        };
+
+        // Cegah redirect loop jika rute saat ini sama dengan rute tujuan
+        if ($request->routeIs($targetRoute) || $request->routeIs($targetRoute . '.*')) {
+            abort(403, 'Akses ditolak: Anda tidak memiliki hak akses untuk halaman ini.');
         }
 
-        return redirect()->route('admin.dashboard')->with('error', 'Akses ditolak untuk peran Anda.');
+        return redirect()->route($targetRoute)->with('error', 'Akses ditolak: Anda tidak memiliki wewenang untuk halaman tersebut.');
     }
 }

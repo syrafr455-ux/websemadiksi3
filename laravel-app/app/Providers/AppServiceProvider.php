@@ -40,5 +40,9 @@ class AppServiceProvider extends ServiceProvider
             \App\Events\KegiatanUpdatedEvent::class,
             \App\Listeners\SendKegiatanUpdatedNotification::class
         );
+
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\Kegiatan::class, \App\Policies\KegiatanPolicy::class);
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\User::class, \App\Policies\UserPolicy::class);
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\KipkDocument::class, \App\Policies\KipkDocumentPolicy::class);
     }
 }

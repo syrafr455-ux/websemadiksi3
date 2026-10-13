@@ -30,6 +30,8 @@ class KegiatanController extends Controller
      */
     public function index(Request $request): Response
     {
+        \Illuminate\Support\Facades\Gate::authorize('viewAny', Kegiatan::class);
+
         $query = Kegiatan::query()
             ->withCount(['seats', 'registrations', 'submissions'])
             ->latest('id');
@@ -69,6 +71,8 @@ class KegiatanController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        \Illuminate\Support\Facades\Gate::authorize('create', Kegiatan::class);
+
         $validated = $request->validate([
             'nama_kegiatan' => ['required', 'string', 'max:255'],
             'deskripsi' => ['nullable', 'string'],
@@ -213,6 +217,7 @@ class KegiatanController extends Controller
     public function update(Request $request, int $id): RedirectResponse
     {
         $kegiatan = Kegiatan::with('seats')->findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('update', $kegiatan);
 
         $validated = $request->validate([
             'nama_kegiatan' => ['required', 'string', 'max:255'],
@@ -338,6 +343,7 @@ class KegiatanController extends Controller
     public function destroy(int $id): RedirectResponse
     {
         $kegiatan = Kegiatan::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('delete', $kegiatan);
 
         $hasBooked = $kegiatan->registrations()->exists();
         if ($hasBooked) {

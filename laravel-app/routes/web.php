@@ -75,6 +75,7 @@ Route::middleware('auth')->prefix('dashboard')->name('dashboard.')->group(functi
 
     Route::get('/berkas-kipk', [DashboardController::class, 'berkas'])->name('berkas');
     Route::post('/berkas-kipk', [DashboardController::class, 'uploadBerkas'])->name('berkas.upload');
+    Route::get('/berkas-kipk/{id}/download', [DashboardController::class, 'downloadBerkas'])->name('berkas.download');
 
     Route::get('/info-beasiswa', [DashboardController::class, 'beasiswa'])->name('beasiswa');
     Route::get('/info-kip', [DashboardController::class, 'infoKip'])->name('info.kip');
@@ -90,49 +91,57 @@ Route::post('/kegiatan/{id}/checkout', [\App\Http\Controllers\KegiatanBookingCon
 
 // Admin & Staff Dashboard Routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-    Route::get('/', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
+    // 1. Super Admin Exclusive Routes
+    Route::middleware(['role:super_admin'])->group(function () {
+        Route::get('/', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
 
-    // Enterprise Kegiatan CRUD & Seat Setup
-    Route::get('/kegiatan', [\App\Http\Controllers\Admin\KegiatanController::class, 'index'])->name('kegiatan');
-    Route::post('/kegiatan', [\App\Http\Controllers\Admin\KegiatanController::class, 'store'])->name('kegiatan.store');
-    Route::get('/kegiatan/{id}', [\App\Http\Controllers\Admin\KegiatanController::class, 'show'])->name('kegiatan.show');
-    Route::match(['put', 'patch'], '/kegiatan/{id}', [\App\Http\Controllers\Admin\KegiatanController::class, 'update'])->name('kegiatan.update');
-    Route::delete('/kegiatan/{id}', [\App\Http\Controllers\Admin\KegiatanController::class, 'destroy'])->name('kegiatan.delete');
+        // Enterprise Kegiatan CRUD & Seat Setup
+        Route::get('/kegiatan', [\App\Http\Controllers\Admin\KegiatanController::class, 'index'])->name('kegiatan');
+        Route::post('/kegiatan', [\App\Http\Controllers\Admin\KegiatanController::class, 'store'])->name('kegiatan.store');
+        Route::get('/kegiatan/{id}', [\App\Http\Controllers\Admin\KegiatanController::class, 'show'])->name('kegiatan.show');
+        Route::match(['put', 'patch'], '/kegiatan/{id}', [\App\Http\Controllers\Admin\KegiatanController::class, 'update'])->name('kegiatan.update');
+        Route::delete('/kegiatan/{id}', [\App\Http\Controllers\Admin\KegiatanController::class, 'destroy'])->name('kegiatan.delete');
 
-    // Certificate Template & Dynamic Generator Routes (Admin)
-    Route::post('/kegiatan/{id}/template-sertifikat', [\App\Http\Controllers\CertificateController::class, 'uploadTemplate'])->name('kegiatan.certificate-template');
-    Route::post('/kegiatan/{id}/schema-sertifikat', [\App\Http\Controllers\CertificateController::class, 'updateSchemaConfig'])->name('kegiatan.certificate-schema');
-    Route::post('/kegiatan/{id}/generate-sertifikat', [\App\Http\Controllers\CertificateController::class, 'generateBatch'])->name('kegiatan.certificate-batch');
+        // Certificate Template & Dynamic Generator Routes (Admin)
+        Route::post('/kegiatan/{id}/template-sertifikat', [\App\Http\Controllers\CertificateController::class, 'uploadTemplate'])->name('kegiatan.certificate-template');
+        Route::post('/kegiatan/{id}/schema-sertifikat', [\App\Http\Controllers\CertificateController::class, 'updateSchemaConfig'])->name('kegiatan.certificate-schema');
+        Route::post('/kegiatan/{id}/generate-sertifikat', [\App\Http\Controllers\CertificateController::class, 'generateBatch'])->name('kegiatan.certificate-batch');
 
-    // User Matrix & Tracking
-    Route::get('/pengguna', [\App\Http\Controllers\Admin\UserManagementController::class, 'index'])->name('users');
-    Route::post('/pengguna', [\App\Http\Controllers\Admin\UserManagementController::class, 'store'])->name('users.store');
-    Route::match(['post', 'patch'], '/pengguna/{id}/toggle-block', [\App\Http\Controllers\Admin\UserManagementController::class, 'toggleBlock'])->name('users.toggle-block');
-    Route::match(['post', 'patch'], '/pengguna/{id}/toggle_block', [\App\Http\Controllers\Admin\UserManagementController::class, 'toggleBlock'])->name('users.toggle_block');
-    Route::match(['post', 'patch'], '/pengguna/{id}/verify', [\App\Http\Controllers\Admin\UserManagementController::class, 'verify'])->name('users.verify');
+        // User Matrix & Tracking
+        Route::get('/pengguna', [\App\Http\Controllers\Admin\UserManagementController::class, 'index'])->name('users');
+        Route::post('/pengguna', [\App\Http\Controllers\Admin\UserManagementController::class, 'store'])->name('users.store');
+        Route::match(['post', 'patch'], '/pengguna/{id}/toggle-block', [\App\Http\Controllers\Admin\UserManagementController::class, 'toggleBlock'])->name('users.toggle-block');
+        Route::match(['post', 'patch'], '/pengguna/{id}/toggle_block', [\App\Http\Controllers\Admin\UserManagementController::class, 'toggleBlock'])->name('users.toggle_block');
+        Route::match(['post', 'patch'], '/pengguna/{id}/verify', [\App\Http\Controllers\Admin\UserManagementController::class, 'verify'])->name('users.verify');
 
-    // Penjurian & Penilaian Karya (Role penilai_karya & super_admin)
+        // Legacy & Admin Certificates
+        Route::get('/sertifikat', [\App\Http\Controllers\Admin\DashboardController::class, 'certificates'])->name('certificates');
+        Route::post('/sertifikat', [\App\Http\Controllers\Admin\DashboardController::class, 'storeCertificate'])->name('certificates.store');
+        Route::delete('/sertifikat/{id}', [\App\Http\Controllers\Admin\DashboardController::class, 'deleteCertificate'])->name('certificates.delete');
+
+        // Admin Attendances
+        Route::get('/absensi', [\App\Http\Controllers\Admin\DashboardController::class, 'attendances'])->name('attendances');
+        Route::match(['post', 'patch'], '/absensi/{id}', [\App\Http\Controllers\Admin\DashboardController::class, 'updateAttendanceStatus'])->name('attendances.update');
+        Route::match(['post', 'patch'], '/absensi/{id}/status', [\App\Http\Controllers\Admin\DashboardController::class, 'updateAttendanceStatus'])->name('attendances.status');
+    });
+
+    // 2. Verifikasi Berkas KIP-K & Monev Submissions (Role super_admin & verifikator_berkas)
+    Route::middleware(['role:super_admin,verifikator_berkas'])->group(function () {
+        Route::get('/berkas', [\App\Http\Controllers\Admin\DashboardController::class, 'berkas'])->name('berkas');
+        Route::get('/berkas/{id}/download', [\App\Http\Controllers\Admin\DashboardController::class, 'downloadDoc'])->name('berkas.download');
+        Route::match(['post', 'patch'], '/berkas/{id}', [\App\Http\Controllers\Admin\DashboardController::class, 'updateDocStatus'])->name('berkas.update');
+        Route::match(['post', 'patch'], '/berkas/{id}/status', [\App\Http\Controllers\Admin\DashboardController::class, 'updateDocStatus'])->name('berkas.status');
+
+        Route::get('/submissions', [\App\Http\Controllers\Admin\DashboardController::class, 'submissions'])->name('submissions');
+        Route::match(['post', 'patch'], '/submissions/{id}', [\App\Http\Controllers\Admin\DashboardController::class, 'updateSubmissionStatus'])->name('submissions.update');
+        Route::match(['post', 'patch'], '/submissions/{id}/status', [\App\Http\Controllers\Admin\DashboardController::class, 'updateSubmissionStatus'])->name('submissions.status');
+    });
+
+    // 3. Penjurian & Penilaian Karya (Role super_admin & penilai_karya)
     Route::middleware(['role:super_admin,penilai_karya'])->group(function () {
         Route::get('/penilaian', [\App\Http\Controllers\PenilaianKaryaController::class, 'index'])->name('penilaian');
         Route::post('/penilaian/{id}/score', [\App\Http\Controllers\PenilaianKaryaController::class, 'updateScore'])->name('penilaian.score');
         Route::get('/penilaian/{kegiatanId}/export', [\App\Http\Controllers\PenilaianKaryaController::class, 'exportCsv'])->name('penilaian.export');
         Route::post('/penilaian/{kegiatanId}/import', [\App\Http\Controllers\PenilaianKaryaController::class, 'importCsv'])->name('penilaian.import');
     });
-
-    // Legacy & Other Modules
-    Route::get('/sertifikat', [\App\Http\Controllers\Admin\DashboardController::class, 'certificates'])->name('certificates');
-    Route::post('/sertifikat', [\App\Http\Controllers\Admin\DashboardController::class, 'storeCertificate'])->name('certificates.store');
-    Route::delete('/sertifikat/{id}', [\App\Http\Controllers\Admin\DashboardController::class, 'deleteCertificate'])->name('certificates.delete');
-
-    Route::get('/absensi', [\App\Http\Controllers\Admin\DashboardController::class, 'attendances'])->name('attendances');
-    Route::match(['post', 'patch'], '/absensi/{id}', [\App\Http\Controllers\Admin\DashboardController::class, 'updateAttendanceStatus'])->name('attendances.update');
-    Route::match(['post', 'patch'], '/absensi/{id}/status', [\App\Http\Controllers\Admin\DashboardController::class, 'updateAttendanceStatus'])->name('attendances.status');
-
-    Route::get('/berkas', [\App\Http\Controllers\Admin\DashboardController::class, 'berkas'])->name('berkas');
-    Route::match(['post', 'patch'], '/berkas/{id}', [\App\Http\Controllers\Admin\DashboardController::class, 'updateDocStatus'])->name('berkas.update');
-    Route::match(['post', 'patch'], '/berkas/{id}/status', [\App\Http\Controllers\Admin\DashboardController::class, 'updateDocStatus'])->name('berkas.status');
-
-    Route::get('/submissions', [\App\Http\Controllers\Admin\DashboardController::class, 'submissions'])->name('submissions');
-    Route::match(['post', 'patch'], '/submissions/{id}', [\App\Http\Controllers\Admin\DashboardController::class, 'updateSubmissionStatus'])->name('submissions.update');
-    Route::match(['post', 'patch'], '/submissions/{id}/status', [\App\Http\Controllers\Admin\DashboardController::class, 'updateSubmissionStatus'])->name('submissions.status');
 });
