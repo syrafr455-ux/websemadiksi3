@@ -26,4 +26,22 @@ return [
     // Cache hasil provider (detik); 0 = tanpa cache.
     'facilities_cache_ttl' => (int) env('UNUSA_FACILITIES_CACHE_TTL', 300),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Kalender Akademik (Periode Semester)
+    |--------------------------------------------------------------------------
+    |
+    | Bulan awal tiap semester, dihitung dari tanggal 1 pukul 00:00 waktu lokal.
+    | Semester berakhir tepat sebelum semester berikutnya dimulai.
+    | Default sesuai kalender akademik UNUSA 2026/2027:
+    | Gasal = Agustus-Januari, Genap = Februari-Juli.
+    |
+    */
+
+    'semester' => [
+        'gasal_start_month' => 8,
+        'genap_start_month' => 2,
+        'timezone' => 'Asia/Jakarta',
+    ],
+
 ];

@@ -26,18 +26,31 @@
                 </div>
                 <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80">
                     <span class="text-xs font-semibold text-slate-400 block">Total Kegiatan</span>
-                    <span class="text-2xl font-black text-emerald-400 mt-1 block">{{ number_format($stats['total_activities']) }}</span>
-                    <span class="text-[10px] text-slate-500 mt-0.5 block">Seminar, Workshop & Agenda</span>
+                    <span class="text-2xl font-black text-emerald-400 mt-1 block">{{ number_format($stats['total_kegiatan']) }}</span>
+                    <span class="text-[10px] text-slate-500 mt-0.5 block">{{ number_format($stats['kegiatan_aktif']) }} dipublikasikan / berlangsung</span>
+                    @if($stats['legacy']['kegiatan'] > 0)
+                        <span class="text-[10px] text-slate-500 mt-1 block" title="Tabel activities (model warisan), tidak termasuk angka di atas">Data lama: {{ number_format($stats['legacy']['kegiatan']) }} kegiatan</span>
+                    @endif
                 </div>
                 <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80">
                     <span class="text-xs font-semibold text-slate-400 block">Sertifikat Terbit</span>
-                    <span class="text-2xl font-black text-blue-400 mt-1 block">{{ number_format($stats['total_certificates']) }}</span>
-                    <span class="text-[10px] text-slate-500 mt-0.5 block">Terverifikasi Digital</span>
+                    <span class="text-2xl font-black text-blue-400 mt-1 block">{{ number_format($stats['sertifikat_terbit']) }}</span>
+                    <span class="text-[10px] text-slate-500 mt-0.5 block">Sertifikat valid</span>
+                    @if($stats['sertifikat_dicabut'] > 0)
+                        <span class="text-[10px] text-slate-500 mt-0.5 block">{{ number_format($stats['sertifikat_dicabut']) }} dicabut</span>
+                    @endif
+                    @if($stats['legacy']['sertifikat'] > 0)
+                        <span class="text-[10px] text-slate-500 mt-1 block" title="Tabel certificates (model warisan), tidak termasuk angka di atas">Data lama: {{ number_format($stats['legacy']['sertifikat']) }} sertifikat</span>
+                    @endif
                 </div>
                 <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80">
-                    <span class="text-xs font-semibold text-slate-400 block">Presensi Tercatat</span>
-                    <span class="text-2xl font-black text-purple-400 mt-1 block">{{ number_format($stats['total_attendances']) }}</span>
-                    <span class="text-[10px] text-slate-500 mt-0.5 block">Kehadiran Valid Peserta</span>
+                    <span class="text-xs font-semibold text-slate-400 block">Kehadiran Peserta</span>
+                    <span class="text-2xl font-black text-purple-400 mt-1 block">{{ number_format($stats['presensi_akhir']) }}</span>
+                    <span class="text-[10px] text-slate-500 mt-0.5 block">Presensi akhir (form + tanda tangan)</span>
+                    <span class="text-[10px] text-slate-500 mt-0.5 block">{{ number_format($stats['tiket_hadir']) }} tiket tercatat hadir</span>
+                    @if($stats['legacy']['presensi'] > 0)
+                        <span class="text-[10px] text-slate-500 mt-1 block" title="Tabel attendances (model warisan), tidak termasuk angka di atas">Data lama: {{ number_format($stats['legacy']['presensi']) }} presensi</span>
+                    @endif
                 </div>
             </div>
 
@@ -47,11 +60,17 @@
                         <span class="material-symbols-outlined text-base">payments</span>
                     </div>
                     <div>
-                        <span class="font-bold text-white block">Status Pencairan KIP-K Periode Ini:</span>
-                        <span class="text-[11px] text-slate-400">Verifikasi berkas & pengajuan mahasiswa</span>
+                        <span class="font-bold text-white block">Pencairan KIP-K Semester {{ $stats['pencairan']['periode'] }}</span>
+                        <span class="text-[11px] text-slate-400">Pengajuan {{ $stats['pencairan']['mulai']->translatedFormat('j M Y') }} &ndash; {{ $stats['pencairan']['selesai']->translatedFormat('j M Y') }}</span>
                     </div>
                 </div>
-                <span class="font-bold text-amber-400 bg-amber-950/60 px-3 py-1.5 rounded-xl border border-amber-800/40">{{ $stats['pencairan_status'] }}</span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-bold text-amber-400 bg-amber-950/60 px-3 py-1.5 rounded-xl border border-amber-800/40">{{ number_format($stats['pencairan']['menunggu']) }} Menunggu Review</span>
+                    <span class="font-bold text-emerald-400 bg-emerald-950/60 px-3 py-1.5 rounded-xl border border-emerald-800/40">{{ number_format($stats['pencairan']['disetujui']) }} Disetujui</span>
+                    @if($stats['pencairan']['menunggu_sebelumnya'] > 0)
+                        <span class="font-semibold text-slate-300 px-3 py-1.5 rounded-xl border border-slate-700">+{{ number_format($stats['pencairan']['menunggu_sebelumnya']) }} menunggu dari periode sebelumnya</span>
+                    @endif
+                </div>
             </div>
         </div>
 
@@ -91,18 +110,18 @@
                         <span class="material-symbols-outlined text-emerald-400 text-lg">camera_enhance</span>
                         Presensi Terkini
                     </h3>
-                    <a href="{{ route('admin.attendances') }}" class="text-xs font-bold text-amber-500 hover:underline">Verifikasi Semua</a>
+                    <a href="{{ route('admin.kegiatan') }}" class="text-xs font-bold text-amber-500 hover:underline">Lihat Kegiatan</a>
                 </div>
 
                 <div class="divide-y divide-slate-800/60">
-                    @forelse($recentAttendances as $att)
+                    @forelse($recentPresensi as $presensi)
                         <div class="py-3 flex items-center justify-between text-xs">
                             <div>
-                                <span class="font-bold text-white block">{{ $att->student_name }}</span>
-                                <span class="text-slate-400">{{ $att->activity_title }}</span>
+                                <span class="font-bold text-white block">{{ $presensi->nama_lengkap }}</span>
+                                <span class="text-slate-400">{{ $presensi->kegiatan?->nama_kegiatan ?? 'Kegiatan' }} &bull; {{ $presensi->nim }}</span>
                             </div>
-                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400">
-                                {{ $att->status }}
+                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 whitespace-nowrap">
+                                {{ $presensi->check_in_at?->timezone('Asia/Jakarta')->translatedFormat('j M Y H:i') }} WIB
                             </span>
                         </div>
                     @empty

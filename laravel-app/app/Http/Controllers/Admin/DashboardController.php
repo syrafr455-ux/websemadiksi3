@@ -2,14 +2,20 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\AttendanceStatus;
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\Activity;
 use App\Models\Attendance;
 use App\Models\Certificate;
-use App\Models\CustomForm;
 use App\Models\CustomFormSubmission;
+use App\Models\Kegiatan;
+use App\Models\KegiatanPresensi;
+use App\Models\KegiatanRegistration;
 use App\Models\KipkDocument;
+use App\Models\Sertifikat;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -37,32 +43,85 @@ class DashboardController extends Controller
             abort(403, 'Akses terbatas untuk Super Administrator.');
         }
 
-        $pencairanForm = CustomForm::where('form_key', 'pencairan')->first();
-        $pencairanCount = $pencairanForm ? CustomFormSubmission::where('custom_form_id', $pencairanForm->id)->count() : 0;
-        $pencairanPending = $pencairanForm ? CustomFormSubmission::where('custom_form_id', $pencairanForm->id)->where('status', 'Menunggu Review')->count() : 0;
-        $pendingDocs = KipkDocument::where('status', 'Menunggu Review')->count();
+        $mahasiswa = User::where('role', UserRole::MahasiswaKipk->value);
+
+        // Sumber tunggal pencairan: submisi formulir 'pencairan', difilter per semester berjalan (created_at).
+        $periode = $this->periodeSemesterBerjalan();
+        $pencairan = fn () => CustomFormSubmission::whereHas('form', fn ($q) => $q->where('form_key', 'pencairan'));
+        $dalamPeriode = fn () => $pencairan()
+            ->where('created_at', '>=', $periode['mulai']->copy()->utc())
+            ->where('created_at', '<', $periode['selesai']->copy()->utc());
 
         $stats = [
-            'total_students' => User::whereIn('role', [\App\Enums\UserRole::MahasiswaKipk->value, 'student'])->count(),
-            'active_students' => User::whereIn('role', [\App\Enums\UserRole::MahasiswaKipk->value, 'student'])->where('is_blocked', false)->count(),
+            'total_students' => (clone $mahasiswa)->count(),
+            'active_students' => (clone $mahasiswa)->where('is_blocked', false)->count(),
             'pending_verifications' => User::where('verification_status', 'Pending')->count(),
-            'total_activities' => Activity::count(),
-            'total_certificates' => Certificate::count(),
-            'total_attendances' => Attendance::count(),
-            'pending_documents' => $pendingDocs,
+            'total_kegiatan' => Kegiatan::count(),
+            'kegiatan_aktif' => Kegiatan::bookable()->count(),
+            'sertifikat_terbit' => Sertifikat::where('is_valid', true)->count(),
+            'sertifikat_dicabut' => Sertifikat::where('is_valid', false)->count(),
+            'presensi_akhir' => KegiatanPresensi::count(),
+            'tiket_hadir' => KegiatanRegistration::where('status_kehadiran', AttendanceStatus::CheckedIn->value)->count(),
+            'pending_documents' => KipkDocument::where('status', 'Menunggu Review')->count(),
             'total_submissions' => CustomFormSubmission::count(),
-            'pencairan_count' => $pencairanCount,
-            'pencairan_pending' => $pencairanPending,
-            'pencairan_status' => $pencairanPending > 0
-                ? "{$pencairanPending} Pengajuan Menunggu Review (Total {$pencairanCount})"
-                : ($pencairanCount > 0 ? "Semua Terverifikasi ({$pencairanCount} Pengajuan)" : "Jalur Aktif UNUSA (Belum ada antrean baru)"),
+            'pencairan' => [
+                'periode' => $periode['label'],
+                'mulai' => $periode['mulai'],
+                'selesai' => $periode['selesai']->copy()->subSecond(),
+                'menunggu' => $dalamPeriode()->where('status', 'Menunggu Review')->count(),
+                'disetujui' => $dalamPeriode()->where('status', 'Disetujui')->count(),
+                'menunggu_sebelumnya' => $pencairan()
+                    ->where('status', 'Menunggu Review')
+                    ->where('created_at', '<', $periode['mulai']->copy()->utc())
+                    ->count(),
+            ],
+            // Tabel model warisan yang masih ditulis fitur lama; ditampilkan terpisah, tidak dijumlahkan.
+            'legacy' => [
+                'kegiatan' => Activity::count(),
+                'sertifikat' => Certificate::count(),
+                'presensi' => Attendance::count(),
+            ],
         ];
 
-        $recentStudents = User::whereIn('role', [\App\Enums\UserRole::MahasiswaKipk->value, 'student'])->latest('id')->take(5)->get();
-        $recentAttendances = Attendance::latest('id')->take(5)->get();
+        $recentStudents = (clone $mahasiswa)->latest('id')->take(5)->get();
+        $recentPresensi = KegiatanPresensi::with('kegiatan')->latest('check_in_at')->latest('id')->take(5)->get();
         $recentDocs = KipkDocument::latest('id')->take(5)->get();
 
-        return view('admin.dashboard', compact('stats', 'recentStudents', 'recentAttendances', 'recentDocs'));
+        return view('admin.dashboard', compact('stats', 'recentStudents', 'recentPresensi', 'recentDocs'));
+    }
+
+    /**
+     * Semester akademik yang sedang berjalan menurut config('unusa.semester').
+     *
+     * @return array{label: string, mulai: Carbon, selesai: Carbon} 'selesai' eksklusif (awal semester berikutnya).
+     */
+    private function periodeSemesterBerjalan(): array
+    {
+        $tz = config('unusa.semester.timezone', 'Asia/Jakarta');
+        $gasalMonth = (int) config('unusa.semester.gasal_start_month', 8);
+        $genapMonth = (int) config('unusa.semester.genap_start_month', 2);
+        $now = Carbon::now($tz);
+
+        $awal = collect([$now->year - 1, $now->year, $now->year + 1])
+            ->flatMap(fn (int $year) => [
+                ['nama' => 'Gasal', 'mulai' => Carbon::create($year, $gasalMonth, 1, 0, 0, 0, $tz)],
+                ['nama' => 'Genap', 'mulai' => Carbon::create($year, $genapMonth, 1, 0, 0, 0, $tz)],
+            ])
+            ->sortBy(fn (array $s) => $s['mulai']->getTimestamp())
+            ->values();
+
+        // Rentang tahun-1..tahun+1 menjamin selalu ada semester berjalan (index >= 1) dan semester berikutnya.
+        $index = $awal->filter(fn (array $s) => $s['mulai']->lte($now))->keys()->last();
+        $berjalan = $awal[$index];
+
+        // Tahun akademik dimulai pada semester Gasal; Genap ikut tahun akademik Gasal tepat sebelumnya.
+        $tahunAwal = $berjalan['nama'] === 'Gasal' ? $berjalan['mulai']->year : $awal[$index - 1]['mulai']->year;
+
+        return [
+            'label' => sprintf('%s %d/%d', $berjalan['nama'], $tahunAwal, $tahunAwal + 1),
+            'mulai' => $berjalan['mulai'],
+            'selesai' => $awal[$index + 1]['mulai'],
+        ];
     }
 
     /**

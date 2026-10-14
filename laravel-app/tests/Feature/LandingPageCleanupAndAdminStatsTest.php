@@ -162,8 +162,13 @@ class LandingPageCleanupAndAdminStatsTest extends TestCase
         $response->assertSee('Mahasiswa Aktif');
         $response->assertSee('Total Kegiatan');
         $response->assertSee('Sertifikat Terbit');
-        $response->assertSee('Presensi Tercatat');
-        $response->assertSee('Status Pencairan KIP-K Periode Ini');
+        $response->assertSee('Kehadiran Peserta');
+        $response->assertSee('Pencairan KIP-K Semester');
+
+        // Data model warisan di atas tampil terpisah, tidak dijumlahkan ke kartu utama
+        // (rincian angka diuji di AdminDashboardStatsTest).
+        $response->assertSee('Data lama: 2 kegiatan');
+        $response->assertSee('Data lama: 1 sertifikat');
 
         // Pastikan label palsu tidak ada
         $response->assertDontSee('Sinkronisasi PostgreSQL Real-Time');

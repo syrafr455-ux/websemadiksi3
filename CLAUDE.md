@@ -21,6 +21,11 @@ Aturan ini berlaku untuk setiap tugas di repo ini.
 
 - Jangan mengubah file `.env` (di root maupun `laravel-app/.env`), `database/semadiksi.db`, dan aplikasi Next.js di root. Aplikasi Next.js boleh DIBACA sebagai acuan desain. Pekerjaan dilakukan di `laravel-app/`.
 - Jangan menjalankan `migrate:fresh`, `db:wipe`, atau migrasi apa pun ke Supabase tanpa izin pemilik proyek.
+- Pengembangan saat ini memakai PostgreSQL lokal; Supabase adalah target nanti. Sebelum Laravel menyentuh Supabase, semua syarat ini harus terpenuhi:
+  - Pakai skema terpisah (`DB_SEARCH_PATH=laravel`) atau project Supabase terpisah, jangan skema `public` milik aplikasi Next.js.
+  - Pakai user database terbatas yang hanya punya hak di skema tersebut.
+  - Jalankan `SHOW search_path` dan pastikan hasilnya benar sebelum migrasi apa pun.
+  - `migrate:fresh` dan `db:seed` dilarang di Supabase.
 - Jangan menjalankan `git checkout`, `git restore`, `git reset`, atau `git clean` yang membuang perubahan.
 - Jangan memasang paket baru (composer maupun npm) tanpa izin.
 - Tes memakai SQLite in-memory (`phpunit.xml`). Jangan arahkan tes ke koneksi lain.
@@ -53,7 +58,7 @@ vendor/bin/pint         # code style
 php artisan semadiksi:migrate-legacy-activities       # copy old `activities` rows into `kegiatan`
 ```
 
-The DB is PostgreSQL on Supabase (`.env.example`). `DB_SEARCH_PATH` selects the schema. Use a separate schema or Supabase project, because the Next.js app already owns a `public.users` table with a different shape. Tests are PHPUnit feature tests in `tests/Feature`. `phpunit.xml` forces SQLite `:memory:` so `RefreshDatabase` never wipes Supabase; keep it that way.
+Development currently runs on a **local PostgreSQL** (`laravel-app/.env`: `127.0.0.1:5432`, database `semadiksi`, schema `public`). Supabase is the later target; `.env.example` shows that target setup, where `DB_SEARCH_PATH` selects the schema. Laravel is not connected to Supabase yet, and its `users` table is not shared with the Next.js app: the Next.js `public.users` on Supabase has a different shape (camelCase columns, string `id`, old `student`/`admin` roles). See "Aturan Kerja" for the conditions before Laravel may touch Supabase. Tests are PHPUnit feature tests in `tests/Feature`. `phpunit.xml` forces SQLite `:memory:` so `RefreshDatabase` never wipes Supabase; keep it that way.
 
 Architecture notes:
 
