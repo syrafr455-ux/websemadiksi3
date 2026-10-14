@@ -54,6 +54,9 @@ class Kegiatan extends Model
         'poin_xp',
         'biaya',
         'is_seat_booking_active',
+        'booking_opens_at',
+        'booking_closes_at',
+        'venue_change_count',
         'seat_layout_config',
         'is_submission_active',
         'submission_instructions',
@@ -70,12 +73,15 @@ class Kegiatan extends Model
             'tanggal_selesai' => 'datetime',
             'registration_deadline' => 'datetime',
             'submission_deadline' => 'datetime',
+            'booking_opens_at' => 'datetime',
+            'booking_closes_at' => 'datetime',
             'narasumber' => 'array',
             'seat_layout_config' => 'array',
             'certificate_schema_config' => 'array',
             'kuota' => 'integer',
             'kuota_terisi' => 'integer',
             'poin_xp' => 'integer',
+            'venue_change_count' => 'integer',
             'biaya' => 'decimal:2',
             'is_seat_booking_active' => 'boolean',
             'is_submission_active' => 'boolean',
@@ -174,6 +180,39 @@ class Kegiatan extends Model
         }
 
         if ($this->submission_deadline && now()->greaterThan($this->submission_deadline)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Apakah kegiatan ini menggunakan denah kursi interaktif?
+     */
+    public function hasSeatLayout(): bool
+    {
+        return (bool) $this->is_seat_booking_active || $this->seats()->exists();
+    }
+
+    /**
+     * Single source of truth untuk jadwal dan status aktif booking kursi.
+     * HANYA gate untuk kegiatan yang memakai denah kursi.
+     * True hanya bila is_seat_booking_active = true DAN waktu sekarang berada di dalam jendela booking_opens_at s.d. booking_closes_at.
+     * Batas yang null dianggap tidak membatasi.
+     */
+    public function isSeatBookingOpen(): bool
+    {
+        if (! (bool) $this->is_seat_booking_active) {
+            return false;
+        }
+
+        $now = now();
+
+        if ($this->booking_opens_at && $now->lt($this->booking_opens_at)) {
+            return false;
+        }
+
+        if ($this->booking_closes_at && $now->gt($this->booking_closes_at)) {
             return false;
         }
 

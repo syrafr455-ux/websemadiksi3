@@ -88,6 +88,7 @@ Route::middleware('auth')->prefix('dashboard')->name('dashboard.')->group(functi
 // Event Show & Booking Checkout Routes
 Route::get('/kegiatan/{slugOrId}', [\App\Http\Controllers\KegiatanBookingController::class, 'show'])->name('kegiatan.detail');
 Route::post('/kegiatan/{id}/checkout', [\App\Http\Controllers\KegiatanBookingController::class, 'checkout'])->name('kegiatan.checkout')->middleware('auth');
+Route::post('/kegiatan/{id}/reselect-seat', [\App\Http\Controllers\KegiatanBookingController::class, 'reselectSeat'])->name('kegiatan.reselect-seat')->middleware('auth');
 
 // Admin & Staff Dashboard Routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -101,6 +102,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/kegiatan/{id}', [\App\Http\Controllers\Admin\KegiatanController::class, 'show'])->name('kegiatan.show');
         Route::match(['put', 'patch'], '/kegiatan/{id}', [\App\Http\Controllers\Admin\KegiatanController::class, 'update'])->name('kegiatan.update');
         Route::delete('/kegiatan/{id}', [\App\Http\Controllers\Admin\KegiatanController::class, 'destroy'])->name('kegiatan.delete');
+
+        // Dynamic Venue Layout & Booking Lifecycle Config (Super Admin Only)
+        Route::match(['put', 'patch'], '/kegiatan/{id}/venue-config', [\App\Http\Controllers\Admin\KegiatanSeatController::class, 'updateVenueConfig'])->name('kegiatan.venue-config');
 
         // Certificate Template & Dynamic Generator Routes (Admin)
         Route::post('/kegiatan/{id}/template-sertifikat', [\App\Http\Controllers\CertificateController::class, 'uploadTemplate'])->name('kegiatan.certificate-template');

@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class AuthAndDashboardTest extends TestCase
 {
+    use RefreshDatabase;
     public function test_unauthenticated_user_redirected_to_login(): void
     {
         $response = $this->get(route('dashboard.index'));

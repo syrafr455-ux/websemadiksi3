@@ -36,58 +36,61 @@
                                 Masuk ke Akun
                             </a>
                         @endauth
-                        <a href="{{ route('verifikasi.sertifikat') }}" class="px-4 py-3 rounded-2xl text-xs font-bold text-outline hover:text-primary flex items-center gap-1.5 transition-colors">
-                            <span class="material-symbols-outlined text-lg">verified</span>
-                            Cek Validitas Sertifikat
-                        </a>
                     </div>
                 </div>
 
-                {{-- Hero Visual Stat Card --}}
+                {{-- Hero Visual Service Info Card (Static) --}}
                 <div class="lg:col-span-5 relative">
                     <div class="relative mx-auto max-w-md bg-surface/90 backdrop-blur-xl border border-surface-variant/50 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
                         <div class="flex items-center justify-between pb-4 border-b border-surface-variant/40">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-                                    <span class="material-symbols-outlined">analytics</span>
+                                    <span class="material-symbols-outlined text-xl">verified_user</span>
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-bold text-on-surface">Data Terkini Sistem</h4>
-                                    <p class="text-xs text-outline">Sinkronisasi PostgreSQL Real-Time</p>
+                                    <h4 class="text-sm font-bold text-on-surface">Layanan Terpadu Mahasiswa</h4>
+                                    <p class="text-xs text-outline">Portal Resmi KIP-Kuliah UNUSA</p>
                                 </div>
                             </div>
-                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                                Live
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
+                                Resmi
                             </span>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
                             <div class="p-4 rounded-2xl bg-surface-container border border-surface-variant/30">
-                                <span class="text-xs font-semibold text-outline block">Mahasiswa Aktif</span>
-                                <span class="text-2xl font-black text-primary mt-1 block">{{ number_format($stats['students'] ?? 0) }}</span>
-                                <span class="text-[10px] text-outline/80 mt-0.5 block">Penerima Beasiswa</span>
+                                <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-2">
+                                    <span class="material-symbols-outlined text-lg">folder_shared</span>
+                                </div>
+                                <span class="text-xs font-bold text-on-surface block">Pelaporan KIP-K</span>
+                                <span class="text-[11px] text-outline mt-0.5 block">Monev & Berkas Berkala</span>
                             </div>
                             <div class="p-4 rounded-2xl bg-surface-container border border-surface-variant/30">
-                                <span class="text-xs font-semibold text-outline block">Total Kegiatan</span>
-                                <span class="text-2xl font-black text-amber-600 mt-1 block">{{ number_format($stats['activities'] ?? 0) }}</span>
-                                <span class="text-[10px] text-outline/80 mt-0.5 block">Seminar & Workshop</span>
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center mb-2">
+                                    <span class="material-symbols-outlined text-lg">event</span>
+                                </div>
+                                <span class="text-xs font-bold text-on-surface block">Agenda Kegiatan</span>
+                                <span class="text-[11px] text-outline mt-0.5 block">Seminar, Workshop & Lomba</span>
                             </div>
                             <div class="p-4 rounded-2xl bg-surface-container border border-surface-variant/30">
-                                <span class="text-xs font-semibold text-outline block">Sertifikat Terbit</span>
-                                <span class="text-2xl font-black text-blue-600 mt-1 block">{{ number_format($stats['certificates'] ?? 0) }}</span>
-                                <span class="text-[10px] text-outline/80 mt-0.5 block">Terverifikasi Digital</span>
+                                <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center mb-2">
+                                    <span class="material-symbols-outlined text-lg">workspace_premium</span>
+                                </div>
+                                <span class="text-xs font-bold text-on-surface block">E-Sertifikat Digital</span>
+                                <span class="text-[11px] text-outline mt-0.5 block">Terverifikasi Resmi</span>
                             </div>
                             <div class="p-4 rounded-2xl bg-surface-container border border-surface-variant/30">
-                                <span class="text-xs font-semibold text-outline block">Presensi Tercatat</span>
-                                <span class="text-2xl font-black text-emerald-600 mt-1 block">{{ number_format($stats['attendances'] ?? 0) }}</span>
-                                <span class="text-[10px] text-outline/80 mt-0.5 block">Kehadiran Valid</span>
+                                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-2">
+                                    <span class="material-symbols-outlined text-lg">how_to_reg</span>
+                                </div>
+                                <span class="text-xs font-bold text-on-surface block">Presensi Mandiri</span>
+                                <span class="text-[11px] text-outline mt-0.5 block">Kehadiran Kegiatan Terpadu</span>
                             </div>
                         </div>
 
                         <div class="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 flex items-center justify-between text-xs">
-                            <span class="font-medium text-on-surface">Pencairan KIP-K Periode Ini:</span>
-                            <span class="font-bold text-primary">Jalur Aktif UNUSA</span>
+                            <span class="font-medium text-on-surface">Pusat Layanan Mahasiswa:</span>
+                            <span class="font-bold text-primary">SEMADIKSI UNUSA</span>
                         </div>
                     </div>
                 </div>

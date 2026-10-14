@@ -32,6 +32,8 @@ class KegiatanRegistration extends Model
         'payment_status',
         'payment_id',
         'checked_in_at',
+        'needs_seat_reselection',
+        'seat_history',
     ];
 
     protected function casts(): array
@@ -42,6 +44,8 @@ class KegiatanRegistration extends Model
             'checked_in_at' => 'datetime',
             'amount_paid' => 'decimal:2',
             'delegation_data' => 'array',
+            'needs_seat_reselection' => 'boolean',
+            'seat_history' => 'array',
         ];
     }
 

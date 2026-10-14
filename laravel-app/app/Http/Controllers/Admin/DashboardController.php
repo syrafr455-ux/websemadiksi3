@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Activity;
 use App\Models\Attendance;
 use App\Models\Certificate;
+use App\Models\CustomForm;
 use App\Models\CustomFormSubmission;
 use App\Models\KipkDocument;
 use App\Models\User;
@@ -36,14 +37,25 @@ class DashboardController extends Controller
             abort(403, 'Akses terbatas untuk Super Administrator.');
         }
 
+        $pencairanForm = CustomForm::where('form_key', 'pencairan')->first();
+        $pencairanCount = $pencairanForm ? CustomFormSubmission::where('custom_form_id', $pencairanForm->id)->count() : 0;
+        $pencairanPending = $pencairanForm ? CustomFormSubmission::where('custom_form_id', $pencairanForm->id)->where('status', 'Menunggu Review')->count() : 0;
+        $pendingDocs = KipkDocument::where('status', 'Menunggu Review')->count();
+
         $stats = [
             'total_students' => User::whereIn('role', [\App\Enums\UserRole::MahasiswaKipk->value, 'student'])->count(),
+            'active_students' => User::whereIn('role', [\App\Enums\UserRole::MahasiswaKipk->value, 'student'])->where('is_blocked', false)->count(),
             'pending_verifications' => User::where('verification_status', 'Pending')->count(),
             'total_activities' => Activity::count(),
             'total_certificates' => Certificate::count(),
             'total_attendances' => Attendance::count(),
-            'pending_documents' => KipkDocument::where('status', 'Menunggu Review')->count(),
+            'pending_documents' => $pendingDocs,
             'total_submissions' => CustomFormSubmission::count(),
+            'pencairan_count' => $pencairanCount,
+            'pencairan_pending' => $pencairanPending,
+            'pencairan_status' => $pencairanPending > 0
+                ? "{$pencairanPending} Pengajuan Menunggu Review (Total {$pencairanCount})"
+                : ($pencairanCount > 0 ? "Semua Terverifikasi ({$pencairanCount} Pengajuan)" : "Jalur Aktif UNUSA (Belum ada antrean baru)"),
         ];
 
         $recentStudents = User::whereIn('role', [\App\Enums\UserRole::MahasiswaKipk->value, 'student'])->latest('id')->take(5)->get();

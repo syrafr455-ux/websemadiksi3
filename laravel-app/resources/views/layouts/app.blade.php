@@ -43,12 +43,6 @@
                     <a href="{{ route('berita.acara.index') }}" class="px-4 py-2 rounded-xl text-sm font-semibold transition-colors {{ request()->routeIs('berita.acara.*') ? 'bg-primary/10 text-primary' : 'text-on-surface hover:text-primary hover:bg-surface-container' }}">
                         Berita Acara
                     </a>
-                    <a href="{{ route('absensi.public') }}" class="px-4 py-2 rounded-xl text-sm font-semibold transition-colors {{ request()->routeIs('absensi.public') ? 'bg-primary/10 text-primary' : 'text-on-surface hover:text-primary hover:bg-surface-container' }}">
-                        Presensi Cepat
-                    </a>
-                    <a href="{{ route('verifikasi.sertifikat') }}" class="px-4 py-2 rounded-xl text-sm font-semibold transition-colors {{ request()->routeIs('verifikasi.sertifikat') ? 'bg-primary/10 text-primary' : 'text-on-surface hover:text-primary hover:bg-surface-container' }}">
-                        Verifikasi Sertifikat
-                    </a>
                 </nav>
 
                 {{-- Auth Button Action --}}
@@ -87,8 +81,6 @@
                         <a href="{{ route('home') }}" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-on-surface hover:bg-primary/10 hover:text-primary">Beranda</a>
                         <a href="{{ route('profil.semadiksi') }}" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-on-surface hover:bg-primary/10 hover:text-primary">Profil SEMADIKSI</a>
                         <a href="{{ route('berita.acara.index') }}" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-on-surface hover:bg-primary/10 hover:text-primary">Berita Acara</a>
-                        <a href="{{ route('absensi.public') }}" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-on-surface hover:bg-primary/10 hover:text-primary">Presensi Cepat</a>
-                        <a href="{{ route('verifikasi.sertifikat') }}" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-on-surface hover:bg-primary/10 hover:text-primary">Verifikasi Sertifikat</a>
                         <hr class="border-surface-variant/40 my-2">
                         @auth
                             <a href="{{ Auth::user()->isAdmin() ? route('admin.dashboard') : route('dashboard.index') }}" class="px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white text-center">Menuju Dashboard</a>
@@ -156,8 +148,6 @@
                 <div>
                     <h4 class="text-sm font-bold text-on-surface uppercase tracking-wider mb-4">Layanan Cepat</h4>
                     <ul class="space-y-2.5 text-sm text-outline">
-                        <li><a href="{{ route('absensi.public') }}" class="hover:text-primary transition-colors">Presensi Kegiatan</a></li>
-                        <li><a href="{{ route('verifikasi.sertifikat') }}" class="hover:text-primary transition-colors">Validasi Sertifikat</a></li>
                         <li><a href="{{ route('berita.acara.index') }}" class="hover:text-primary transition-colors">Berita Acara</a></li>
                         <li><a href="{{ route('profil.semadiksi') }}" class="hover:text-primary transition-colors">Struktur Organisasi</a></li>
                     </ul>

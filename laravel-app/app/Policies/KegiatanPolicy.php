@@ -50,6 +50,15 @@ class KegiatanPolicy
     }
 
     /**
+     * Boleh memperbarui konfigurasi venue, kapasitas, dan jadwal booking kursi.
+     * HANYA super_admin.
+     */
+    public function updateVenueConfig(User $user, Kegiatan $kegiatan): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
+    /**
      * Boleh menghapus kegiatan.
      * HANYA super_admin.
      */

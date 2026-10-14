@@ -11,11 +11,14 @@ use App\Models\Kegiatan;
 use App\Models\KegiatanRegistration;
 use App\Models\KegiatanSeat;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 class EventEngineAndBookingTest extends TestCase
 {
+    use RefreshDatabase;
+
     protected function getSuperAdmin(): User
     {
         return User::where('role', UserRole::SuperAdmin->value)->first()
@@ -26,6 +29,39 @@ class EventEngineAndBookingTest extends TestCase
     {
         return User::where('role', UserRole::MahasiswaKipk->value)->where('is_blocked', false)->first()
             ?? User::factory()->create(['role' => UserRole::MahasiswaKipk, 'is_blocked' => false]);
+    }
+
+    protected function getOrCreateWorkshopKegiatan(): Kegiatan
+    {
+        $kegiatan = Kegiatan::where('nama_kegiatan', 'Workshop AI & Next-Gen Cloud')->latest()->first();
+        if ($kegiatan) {
+            return $kegiatan;
+        }
+
+        $admin = $this->getSuperAdmin();
+        $this->actingAs($admin)->post(route('admin.kegiatan.store'), [
+            'nama_kegiatan' => 'Workshop AI & Next-Gen Cloud',
+            'kategori' => 'Workshop',
+            'tipe_kegiatan' => 'workshop',
+            'target_peserta' => 'semua',
+            'waktu_mulai' => now()->addDays(5)->format('Y-m-d H:i:s'),
+            'lokasi_type' => 'unusa_campus',
+            'lokasi_kampus' => 'Kampus B (Jemursari)',
+            'lokasi_gedung' => 'Tower UNUSA',
+            'lokasi_ruangan' => 'Auditorium Lt. 9',
+            'lokasi_nama' => 'Tower UNUSA - Kampus B',
+            'lokasi_detail' => 'Auditorium Lt. 9',
+            'biaya' => 0,
+            'kuota_total' => 50,
+            'has_seat_selection' => true,
+            'seat_layout' => [
+                'rows' => ['A', 'B', 'C'],
+                'cols_per_row' => 5,
+                'vip_rows' => ['A'],
+            ],
+        ]);
+
+        return Kegiatan::where('nama_kegiatan', 'Workshop AI & Next-Gen Cloud')->latest()->firstOrFail();
     }
 
     public function test_super_admin_can_access_kegiatan_index(): void
@@ -84,7 +120,7 @@ class EventEngineAndBookingTest extends TestCase
         Event::fake([KegiatanUpdatedEvent::class]);
 
         $admin = $this->getSuperAdmin();
-        $kegiatan = Kegiatan::where('nama_kegiatan', 'Workshop AI & Next-Gen Cloud')->first();
+        $kegiatan = $this->getOrCreateWorkshopKegiatan();
         $this->assertNotNull($kegiatan);
 
         $newTime = now()->addDays(7)->format('Y-m-d H:i:s');
@@ -110,7 +146,7 @@ class EventEngineAndBookingTest extends TestCase
     public function test_participant_can_checkout_multi_delegation_seats(): void
     {
         $student = $this->getMahasiswaKipk();
-        $kegiatan = Kegiatan::where('nama_kegiatan', 'Workshop AI & Next-Gen Cloud')->latest()->first();
+        $kegiatan = $this->getOrCreateWorkshopKegiatan();
         $this->assertNotNull($kegiatan);
 
         KegiatanRegistration::where('kegiatan_id', $kegiatan->id)
@@ -158,7 +194,7 @@ class EventEngineAndBookingTest extends TestCase
     public function test_cannot_double_book_occupied_seat(): void
     {
         $student = $this->getMahasiswaKipk();
-        $kegiatan = Kegiatan::where('nama_kegiatan', 'Workshop AI & Next-Gen Cloud')->latest()->first();
+        $kegiatan = $this->getOrCreateWorkshopKegiatan();
         $this->assertNotNull($kegiatan);
 
         $seatB1 = $kegiatan->seats()->where('seat_code', 'B01')->first();

@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class AdminPenggunaTest extends TestCase
 {
+    use RefreshDatabase;
     protected function getSuperAdmin(): User
     {
         return User::where('role', \App\Enums\UserRole::SuperAdmin->value)->first()

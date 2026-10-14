@@ -28,14 +28,7 @@ class HomeController extends Controller
             ->take(3)
             ->get();
 
-        $stats = [
-            'students' => User::where('role', 'student')->count(),
-            'activities' => Activity::count(),
-            'certificates' => Certificate::count(),
-            'attendances' => Attendance::count(),
-        ];
-
-        return view('home', compact('activities', 'beritaAcara', 'stats'));
+        return view('home', compact('activities', 'beritaAcara'));
     }
 
     /**

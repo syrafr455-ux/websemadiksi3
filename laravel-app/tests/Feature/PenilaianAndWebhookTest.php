@@ -14,12 +14,14 @@ use App\Models\KegiatanSeat;
 use App\Models\KegiatanSubmission;
 use App\Models\Payment;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class PenilaianAndWebhookTest extends TestCase
 {
+    use RefreshDatabase;
     protected function getSuperAdmin(): User
     {
         return User::where('role', UserRole::SuperAdmin->value)->first()
@@ -126,6 +128,23 @@ class PenilaianAndWebhookTest extends TestCase
         $kegiatan = $this->getOrCreateTestKegiatan();
 
         $submission = KegiatanSubmission::where('kegiatan_id', $kegiatan->id)->latest()->first();
+        if (! $submission) {
+            $reg = KegiatanRegistration::create([
+                'kegiatan_id' => $kegiatan->id,
+                'booker_user_id' => $this->getSuperAdmin()->id,
+                'participant_user_id' => null,
+                'nomor_tiket' => KegiatanRegistration::generateTicketNumber($kegiatan->id, 'GEN'),
+                'participant_name' => 'Peserta Inovatif',
+                'status_pembayaran' => RegistrationPaymentStatus::Free,
+            ]);
+
+            $submission = KegiatanSubmission::create([
+                'registration_id' => $reg->id,
+                'kegiatan_id' => $kegiatan->id,
+                'nama_kelompok_peserta' => 'Aplikasi Pendeteksi Citra Medis AI',
+                'file_karya_url' => 'https://example.com/submission.pdf',
+            ]);
+        }
         $this->assertNotNull($submission);
 
         // Test Export

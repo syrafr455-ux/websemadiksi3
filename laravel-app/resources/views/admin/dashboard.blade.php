@@ -1,45 +1,57 @@
-<x-layouts.admin title="Dashboard Pengelola" pageTitle="Dashboard Utama Pengurus" pageSubtitle="Ringkasan aktivitas beasiswa & basis data PostgreSQL">
+<x-layouts.admin title="Dashboard Pengelola" pageTitle="Dashboard Utama Pengurus" pageSubtitle="Ringkasan Utama aktivitas beasiswa & basis data PostgreSQL">
     <div class="space-y-8">
-        {{-- Stats Grid --}}
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-5">
-            <div class="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center gap-4">
-                <div class="w-12 h-12 rounded-xl bg-blue-950 text-blue-400 flex items-center justify-center font-bold">
-                    <span class="material-symbols-outlined text-2xl">group</span>
+        {{-- Kartu Data Terkini Sistem (Pindahan dari Landing Page, Khusus Super Admin) --}}
+        <div class="bg-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+                        <span class="material-symbols-outlined text-xl">analytics</span>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white">Data Terkini Sistem</h3>
+                        <p class="text-xs text-slate-400">Statistik internal basis data untuk Super Administrator</p>
+                    </div>
                 </div>
-                <div>
-                    <span class="text-xs text-slate-400 block font-medium">Total Mahasiswa</span>
-                    <span class="text-xl font-bold text-white mt-0.5 block">{{ number_format($stats['total_students']) }}</span>
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-slate-300 text-[11px] font-semibold">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    Super Admin
+                </span>
+            </div>
+
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+                    <span class="text-xs font-semibold text-slate-400 block">Mahasiswa Aktif</span>
+                    <span class="text-2xl font-black text-amber-400 mt-1 block">{{ number_format($stats['active_students']) }}</span>
+                    <span class="text-[10px] text-slate-500 mt-0.5 block">Dari total {{ number_format($stats['total_students']) }} terdaftar</span>
+                </div>
+                <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+                    <span class="text-xs font-semibold text-slate-400 block">Total Kegiatan</span>
+                    <span class="text-2xl font-black text-emerald-400 mt-1 block">{{ number_format($stats['total_activities']) }}</span>
+                    <span class="text-[10px] text-slate-500 mt-0.5 block">Seminar, Workshop & Agenda</span>
+                </div>
+                <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+                    <span class="text-xs font-semibold text-slate-400 block">Sertifikat Terbit</span>
+                    <span class="text-2xl font-black text-blue-400 mt-1 block">{{ number_format($stats['total_certificates']) }}</span>
+                    <span class="text-[10px] text-slate-500 mt-0.5 block">Terverifikasi Digital</span>
+                </div>
+                <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+                    <span class="text-xs font-semibold text-slate-400 block">Presensi Tercatat</span>
+                    <span class="text-2xl font-black text-purple-400 mt-1 block">{{ number_format($stats['total_attendances']) }}</span>
+                    <span class="text-[10px] text-slate-500 mt-0.5 block">Kehadiran Valid Peserta</span>
                 </div>
             </div>
 
-            <div class="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center gap-4">
-                <div class="w-12 h-12 rounded-xl bg-amber-950 text-amber-400 flex items-center justify-center font-bold">
-                    <span class="material-symbols-outlined text-2xl">pending_actions</span>
+            <div class="p-4 rounded-2xl bg-amber-950/20 border border-amber-800/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                        <span class="material-symbols-outlined text-base">payments</span>
+                    </div>
+                    <div>
+                        <span class="font-bold text-white block">Status Pencairan KIP-K Periode Ini:</span>
+                        <span class="text-[11px] text-slate-400">Verifikasi berkas & pengajuan mahasiswa</span>
+                    </div>
                 </div>
-                <div>
-                    <span class="text-xs text-slate-400 block font-medium">Perlu Verifikasi</span>
-                    <span class="text-xl font-bold text-amber-400 mt-0.5 block">{{ number_format($stats['pending_verifications']) }}</span>
-                </div>
-            </div>
-
-            <div class="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center gap-4">
-                <div class="w-12 h-12 rounded-xl bg-emerald-950 text-emerald-400 flex items-center justify-center font-bold">
-                    <span class="material-symbols-outlined text-2xl">event</span>
-                </div>
-                <div>
-                    <span class="text-xs text-slate-400 block font-medium">Kegiatan Aktif</span>
-                    <span class="text-xl font-bold text-emerald-400 mt-0.5 block">{{ number_format($stats['total_activities']) }}</span>
-                </div>
-            </div>
-
-            <div class="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center gap-4">
-                <div class="w-12 h-12 rounded-xl bg-purple-950 text-purple-400 flex items-center justify-center font-bold">
-                    <span class="material-symbols-outlined text-2xl">workspace_premium</span>
-                </div>
-                <div>
-                    <span class="text-xs text-slate-400 block font-medium">Sertifikat Terbit</span>
-                    <span class="text-xl font-bold text-purple-400 mt-0.5 block">{{ number_format($stats['total_certificates']) }}</span>
-                </div>
+                <span class="font-bold text-amber-400 bg-amber-950/60 px-3 py-1.5 rounded-xl border border-amber-800/40">{{ $stats['pencairan_status'] }}</span>
             </div>
         </div>
 

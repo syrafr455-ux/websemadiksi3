@@ -112,6 +112,14 @@ class KegiatanBookingController extends Controller
             $seatIds = array_filter(array_column($delegates, 'seat_id'));
             $lockedSeats = [];
 
+            // Gate isSeatBookingOpen() HANYA untuk kegiatan yang memakai denah kursi
+            if ($kegiatan->hasSeatLayout()) {
+                if (! $kegiatan->isSeatBookingOpen()) {
+                    DB::rollBack();
+                    return back()->with('error', 'Pemilihan kursi untuk kegiatan ini sedang ditutup atau berada di luar jadwal booking.');
+                }
+            }
+
             if (! empty($seatIds)) {
                 // Pessimistic locking: lockForUpdate()
                 $lockedSeats = KegiatanSeat::where('kegiatan_id', $kegiatan->id)
@@ -249,6 +257,76 @@ class KegiatanBookingController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
             return back()->with('error', 'Terjadi kesalahan saat memproses pendaftaran: '.$e->getMessage())->withInput();
+        }
+    }
+
+    /**
+     * Memungkinkan pemesan (booker) untuk memilih ulang kursi (baik untuk diri sendiri maupun delegasinya)
+     * akibat pemindahan ruangan dan reset denah.
+     */
+    public function reselectSeat(Request $request, int $id)
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return redirect()->route('login')->with('error', 'Silakan masuk terlebih dahulu.');
+        }
+
+        $kegiatan = Kegiatan::findOrFail($id);
+
+        // Gate: Pemilihan kursi harus sedang terbuka
+        if (! $kegiatan->isSeatBookingOpen()) {
+            return back()->with('error', 'Pemilihan kursi untuk kegiatan ini sedang ditutup atau berada di luar jadwal booking.');
+        }
+
+        $validated = $request->validate([
+            'registration_id' => ['required', 'integer'],
+            'seat_id' => ['required', 'integer'],
+        ]);
+
+        DB::beginTransaction();
+        try {
+            // 1. Revisi 4 & 5: Validasi registrasi harus milik kegiatan ini dan booker-nya adalah user yang login
+            $registration = KegiatanRegistration::where('id', $validated['registration_id'])
+                ->where('kegiatan_id', $kegiatan->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $registration || (int) $registration->booker_user_id !== (int) $user->id) {
+                DB::rollBack();
+                return back()->with('error', 'Registrasi tidak valid atau Anda bukan pemesan tiket/delegasi ini.');
+            }
+
+            // 2. Revisi 5: Validasi kursi harus berasal dari kegiatan ini (tolak kursi dari kegiatan lain)
+            $seat = KegiatanSeat::where('id', $validated['seat_id'])
+                ->lockForUpdate()
+                ->first();
+
+            if (! $seat || (int) $seat->kegiatan_id !== (int) $kegiatan->id) {
+                DB::rollBack();
+                return back()->with('error', 'Kursi yang dipilih tidak valid atau berasal dari kegiatan lain.');
+            }
+
+            // 3. Revisi 5: Validasi status kursi harus Available (tolak kursi tidak available)
+            if ($seat->status !== SeatStatus::Available) {
+                DB::rollBack();
+                return back()->with('error', 'Kursi yang dipilih tidak tersedia atau baru saja diambil. Silakan pilih kursi lain.');
+            }
+
+            // Kunci status kursi baru
+            $seat->update(['status' => SeatStatus::Booked]);
+
+            // Hubungkan registrasi ke kursi baru dan kembalikan flag needs_seat_reselection ke false
+            $registration->update([
+                'seat_id' => $seat->id,
+                'needs_seat_reselection' => false,
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('dashboard.kegiatan.saya')->with('success', 'Kursi berhasil dipilih kembali. Selamat menikmati kegiatan!');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()->with('error', 'Gagal memilih ulang kursi: '.$e->getMessage());
         }
     }
 }
