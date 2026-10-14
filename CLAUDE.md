@@ -15,6 +15,19 @@ The repo holds **two separate implementations of the same portal**, with matchin
 
 Check which app a task is about before editing.
 
+## Aturan Kerja
+
+Aturan ini berlaku untuk setiap tugas di repo ini.
+
+- Jangan mengubah file `.env` (di root maupun `laravel-app/.env`), `database/semadiksi.db`, dan aplikasi Next.js di root. Aplikasi Next.js boleh DIBACA sebagai acuan desain. Pekerjaan dilakukan di `laravel-app/`.
+- Jangan menjalankan `migrate:fresh`, `db:wipe`, atau migrasi apa pun ke Supabase tanpa izin pemilik proyek.
+- Jangan menjalankan `git checkout`, `git restore`, `git reset`, atau `git clean` yang membuang perubahan.
+- Jangan memasang paket baru (composer maupun npm) tanpa izin.
+- Tes memakai SQLite in-memory (`phpunit.xml`). Jangan arahkan tes ke koneksi lain.
+- Satu tugas per giliran.
+- Untuk tugas besar, tulis rencananya dulu dan tunggu persetujuan sebelum mengedit.
+- Setelah mengedit, jalankan seluruh tes dengan `composer test` dari `laravel-app/` (bila bermasalah, gunakan `php vendor/bin/phpunit`) dan laporkan hasilnya, termasuk tes yang gagal.
+
 ## Next.js app (root)
 
 Commands (from the repo root): `npm run dev`, `npm run build`, `npm run lint`. There are no tests.
