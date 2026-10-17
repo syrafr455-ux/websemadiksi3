@@ -60,6 +60,8 @@ php artisan semadiksi:migrate-legacy-activities       # copy old `activities` ro
 
 Development currently runs on a **local PostgreSQL** (`laravel-app/.env`: `127.0.0.1:5432`, database `semadiksi`, schema `public`). Supabase is the later target; `.env.example` shows that target setup, where `DB_SEARCH_PATH` selects the schema. Laravel is not connected to Supabase yet, and its `users` table is not shared with the Next.js app: the Next.js `public.users` on Supabase has a different shape (camelCase columns, string `id`, old `student`/`admin` roles). See "Aturan Kerja" for the conditions before Laravel may touch Supabase. Tests are PHPUnit feature tests in `tests/Feature`. `phpunit.xml` forces SQLite `:memory:` so `RefreshDatabase` never wipes Supabase; keep it that way.
 
+Seeding: `php artisan db:seed` (`DatabaseSeeder`) creates only demo accounts and demo content for local development, and throws in `production` (even with `--force`). Demo passwords come from `SEED_ADMIN_PASSWORD` / `SEED_MAHASISWA_PASSWORD` (read through `config/seeding.php`). When they are empty, new demo accounts get a random password printed once in the terminal, and existing accounts keep their password. The first production `super_admin` will be created through a separate interactive artisan command (not built yet), never through the seeder.
+
 Architecture notes:
 
 - **Hybrid views**: most pages are Blade (`resources/views/**`), while newer screens (admin kegiatan/pengguna/penilaian, `Dashboard/KegiatanSaya`, `Kegiatan/Show`) are React pages in `resources/js/Pages/**` rendered via Inertia, with layouts in `resources/js/Layouts`.

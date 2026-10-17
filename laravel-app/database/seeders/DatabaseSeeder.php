@@ -16,17 +16,59 @@ use App\Models\Scholarship;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use RuntimeException;
 
 class DatabaseSeeder extends Seeder
 {
+    /**
+     * Buat atau perbarui akun demo tanpa password hardcode.
+     *
+     * Password dari config('seeding.*') bila diisi. Bila kosong, akun BARU mendapat password acak
+     * (dicatat ke $generatedPasswords untuk ditampilkan sekali); akun lama tidak diubah passwordnya.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @param  list<array{0: string, 1: string}>  $generatedPasswords
+     */
+    private function seedDemoAccount(string $email, array $attributes, ?string $configuredPassword, array &$generatedPasswords): User
+    {
+        $user = User::firstOrNew(['email' => $email]);
+        $user->fill($attributes);
+
+        if (filled($configuredPassword)) {
+            $user->password = Hash::make($configuredPassword);
+        } elseif (! $user->exists) {
+            $password = Str::random(24);
+            $user->password = Hash::make($password);
+            $generatedPasswords[] = [$email, $password];
+        } else {
+            $this->command?->line("Akun {$email} sudah ada; password tidak diubah.");
+        }
+
+        $user->save();
+
+        return $user;
+    }
+
     /**
      * Seed the application's database.
      */
     public function run(): void
     {
+        // Seluruh isi seeder ini adalah akun & data demo. Super admin production dibuat lewat
+        // perintah artisan interaktif tersendiri, bukan seeder.
+        if (app()->isProduction()) {
+            throw new RuntimeException(
+                'DatabaseSeeder berisi akun dan data demo dan tidak boleh dijalankan di production.'
+            );
+        }
+
+        /** @var list<array{0: string, 1: string}> $generatedPasswords */
+        $generatedPasswords = [];
+
         // 1. Users (Admin and Demo Students)
-        $admin = User::updateOrCreate(
-            ['email' => 'admin@semadiksi.ac.id'],
+        $admin = $this->seedDemoAccount(
+            'admin@semadiksi.ac.id',
             [
                 'name' => 'Administrator SEMADIKSI',
                 'nim' => 'ADM-001',
@@ -37,13 +79,14 @@ class DatabaseSeeder extends Seeder
                 'kip_status' => 'Umum',
                 'verification_status' => 'Verified',
                 'role' => \App\Enums\UserRole::SuperAdmin,
-                'password' => Hash::make('AdminSemadiksi2026!'),
                 'is_blocked' => false,
-            ]
+            ],
+            config('seeding.admin_password'),
+            $generatedPasswords
         );
 
-        $fauzan = User::updateOrCreate(
-            ['email' => 'fauzan@student.unusa.ac.id'],
+        $fauzan = $this->seedDemoAccount(
+            'fauzan@student.unusa.ac.id',
             [
                 'name' => 'Ahmad Fauzan',
                 'nim' => '2240021001',
@@ -54,13 +97,14 @@ class DatabaseSeeder extends Seeder
                 'kip_status' => 'KIP UNUSA',
                 'verification_status' => 'Verified',
                 'role' => \App\Enums\UserRole::MahasiswaKipk,
-                'password' => Hash::make('Mahasiswa2026!'),
                 'is_blocked' => false,
-            ]
+            ],
+            config('seeding.mahasiswa_password'),
+            $generatedPasswords
         );
 
-        $budi = User::updateOrCreate(
-            ['email' => 'budi@student.unusa.ac.id'],
+        $budi = $this->seedDemoAccount(
+            'budi@student.unusa.ac.id',
             [
                 'name' => 'Budi Santoso',
                 'nim' => '2240021045',
@@ -71,10 +115,16 @@ class DatabaseSeeder extends Seeder
                 'kip_status' => 'KIP UNUSA',
                 'verification_status' => 'Verified',
                 'role' => \App\Enums\UserRole::MahasiswaKipk,
-                'password' => Hash::make('Mahasiswa2026!'),
                 'is_blocked' => false,
-            ]
+            ],
+            config('seeding.mahasiswa_password'),
+            $generatedPasswords
         );
+
+        if ($generatedPasswords !== []) {
+            $this->command?->warn('Password acak dibuat untuk akun demo berikut. Simpan sekarang, password ini tidak akan ditampilkan lagi.');
+            $this->command?->table(['Email', 'Password'], $generatedPasswords);
+        }
 
         // 2. Activities (Kegiatan)
         $act1 = Activity::create([
