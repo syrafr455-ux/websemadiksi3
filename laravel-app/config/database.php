@@ -97,6 +97,8 @@ return [
             'prefix_indexes' => true,
             'search_path' => env('DB_SEARCH_PATH', 'public'),
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Sesi database selalu UTC agar default CURRENT_TIMESTAMP sama dengan waktu yang ditulis aplikasi.
+            'timezone' => 'UTC',
         ],
 
         'sqlsrv' => [

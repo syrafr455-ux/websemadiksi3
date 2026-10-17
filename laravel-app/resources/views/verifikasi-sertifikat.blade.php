@@ -151,7 +151,7 @@
                     <div>
                         <span class="text-xs font-bold text-emerald-800 uppercase tracking-wider block">Tanggal Penerbitan</span>
                         <span class="text-base font-medium text-slate-900 mt-1 block">
-                            {{ $sertifikat->issued_at ? $sertifikat->issued_at->translatedFormat('d F Y, H:i') . ' WIB' : '-' }}
+                            {{ $sertifikat->issued_at ? \App\Support\Wib::dari($sertifikat->issued_at)->translatedFormat('d F Y, H:i') . ' WIB' : '-' }}
                         </span>
                     </div>
                     <div>

@@ -62,7 +62,7 @@
                         @forelse($attendances as $att)
                             <tr class="hover:bg-surface-container/50">
                                 <td class="py-3 px-4 font-bold text-on-surface">{{ $att->activity_title }}</td>
-                                <td class="py-3 px-4 text-outline">{{ $att->submitted_at ? $att->submitted_at->format('d M Y, H:i') : '-' }}</td>
+                                <td class="py-3 px-4 text-outline">{{ $att->submitted_at ? \App\Support\Wib::dari($att->submitted_at)->translatedFormat('d M Y, H:i').' WIB' : '-' }}</td>
                                 <td class="py-3 px-4 text-outline">{{ $att->location_name ?? '-' }}</td>
                                 <td class="py-3 px-4">
                                     <a href="{{ $att->proof_image_url }}" target="_blank" class="font-bold text-primary hover:underline">

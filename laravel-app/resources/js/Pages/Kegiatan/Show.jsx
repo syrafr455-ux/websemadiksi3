@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { usePage, router } from '@inertiajs/react';
 import ParticipantLayout from '@/Layouts/ParticipantLayout';
+import { formatWib } from '@/lib/waktuWib';
 
 export default function KegiatanShow({
     kegiatan = {},
@@ -166,7 +167,7 @@ export default function KegiatanShow({
                                 <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800/80">
                                     <div className="text-[10px] text-slate-400 font-bold uppercase">Waktu Pelaksanaan</div>
                                     <div className="text-xs font-bold text-white mt-1">
-                                        {kegiatan.waktu_mulai ? new Date(kegiatan.waktu_mulai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'} WIB
+                                        {kegiatan.tanggal_mulai ? `${formatWib(kegiatan.tanggal_mulai)} WIB` : '-'}
                                     </div>
                                 </div>
                                 <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800/80">

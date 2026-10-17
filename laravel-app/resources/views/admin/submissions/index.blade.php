@@ -35,7 +35,7 @@
                                 <div class="text-[11px] text-slate-500">{{ $sub->form->category ?? 'Umum' }}</div>
                             </td>
                             <td class="px-6 py-4 text-slate-300">
-                                {{ \Carbon\Carbon::parse($sub->submitted_at)->translatedFormat('d F Y, H:i') }} WIB
+                                {{ \App\Support\Wib::dari($sub->created_at)->translatedFormat('d F Y, H:i') }} WIB
                             </td>
                             <td class="px-6 py-4">
                                 @if($sub->status === 'Disetujui')

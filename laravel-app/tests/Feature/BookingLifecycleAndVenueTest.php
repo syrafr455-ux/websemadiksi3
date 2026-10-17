@@ -821,6 +821,19 @@ class BookingLifecycleAndVenueTest extends TestCase
             // 5. Tepat 1 menit sesudah jam tutup (18:01 WIB / 11:01 UTC) -> Booking DITUTUP
             Carbon::setTestNow(Carbon::parse('2026-10-20 18:01:00', 'Asia/Jakarta'));
             $this->assertFalse($kegiatan->isSeatBookingOpen());
+
+            // 6. Batas detik: jendela booking adalah [buka, tutup).
+            Carbon::setTestNow(Carbon::parse('2026-10-20 09:59:59', 'Asia/Jakarta'));
+            $this->assertFalse($kegiatan->isSeatBookingOpen(), 'Satu detik sebelum jam buka harus tertutup.');
+
+            Carbon::setTestNow(Carbon::parse('2026-10-20 10:00:00', 'Asia/Jakarta'));
+            $this->assertTrue($kegiatan->isSeatBookingOpen(), 'Tepat jam buka harus terbuka.');
+
+            Carbon::setTestNow(Carbon::parse('2026-10-20 17:59:59', 'Asia/Jakarta'));
+            $this->assertTrue($kegiatan->isSeatBookingOpen(), 'Satu detik sebelum jam tutup harus terbuka.');
+
+            Carbon::setTestNow(Carbon::parse('2026-10-20 18:00:00', 'Asia/Jakarta'));
+            $this->assertFalse($kegiatan->isSeatBookingOpen(), 'Tepat jam tutup harus tertutup.');
         } finally {
             Carbon::setTestNow(); // Reset clock
         }

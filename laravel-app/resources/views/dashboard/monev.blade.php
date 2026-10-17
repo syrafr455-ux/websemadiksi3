@@ -65,7 +65,7 @@
                         <div class="p-4 rounded-2xl bg-surface-container flex items-center justify-between text-xs">
                             <div>
                                 <span class="font-bold text-on-surface block">Evaluasi IPK: {{ $sub->answers['ipk'] ?? '-' }} (IPS: {{ $sub->answers['ips'] ?? '-' }})</span>
-                                <span class="text-outline text-[11px]">{{ $sub->created_at->format('d M Y, H:i') }}</span>
+                                <span class="text-outline text-[11px]">{{ \App\Support\Wib::dari($sub->created_at)->translatedFormat('d M Y, H:i') }} WIB</span>
                             </div>
                             <span class="px-2.5 py-1 rounded-full font-bold {{ $sub->status === 'Disetujui' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
                                 {{ $sub->status }}

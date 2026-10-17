@@ -121,7 +121,7 @@
                                 <span class="text-slate-400">{{ $presensi->kegiatan?->nama_kegiatan ?? 'Kegiatan' }} &bull; {{ $presensi->nim }}</span>
                             </div>
                             <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 whitespace-nowrap">
-                                {{ $presensi->check_in_at?->timezone('Asia/Jakarta')->translatedFormat('j M Y H:i') }} WIB
+                                {{ \App\Support\Wib::dari($presensi->check_in_at)?->translatedFormat('j M Y H:i') }} WIB
                             </span>
                         </div>
                     @empty

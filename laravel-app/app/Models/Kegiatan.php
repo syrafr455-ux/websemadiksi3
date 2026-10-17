@@ -163,7 +163,8 @@ class Kegiatan extends Model
             return false;
         }
 
-        if ($this->registration_deadline && now()->greaterThan($this->registration_deadline)) {
+        // Tertutup tepat saat deadline (deadline eksklusif).
+        if ($this->registration_deadline && now()->greaterThanOrEqualTo($this->registration_deadline)) {
             return false;
         }
 
@@ -179,7 +180,8 @@ class Kegiatan extends Model
             return false;
         }
 
-        if ($this->submission_deadline && now()->greaterThan($this->submission_deadline)) {
+        // Tertutup tepat saat deadline (deadline eksklusif).
+        if ($this->submission_deadline && now()->greaterThanOrEqualTo($this->submission_deadline)) {
             return false;
         }
 
@@ -197,7 +199,8 @@ class Kegiatan extends Model
     /**
      * Single source of truth untuk jadwal dan status aktif booking kursi.
      * HANYA gate untuk kegiatan yang memakai denah kursi.
-     * True hanya bila is_seat_booking_active = true DAN waktu sekarang berada di dalam jendela booking_opens_at s.d. booking_closes_at.
+     * True hanya bila is_seat_booking_active = true DAN waktu sekarang berada di dalam jendela
+     * [booking_opens_at, booking_closes_at): dibuka tepat saat booking_opens_at, tertutup tepat saat booking_closes_at.
      * Batas yang null dianggap tidak membatasi.
      */
     public function isSeatBookingOpen(): bool
@@ -212,7 +215,7 @@ class Kegiatan extends Model
             return false;
         }
 
-        if ($this->booking_closes_at && $now->gt($this->booking_closes_at)) {
+        if ($this->booking_closes_at && $now->gte($this->booking_closes_at)) {
             return false;
         }
 

@@ -33,7 +33,7 @@
             <div class="details-box">
                 <div class="details-row">
                     <span class="label">Jadwal Mulai</span>
-                    <span class="value">{{ $kegiatan->waktu_mulai ? $kegiatan->waktu_mulai->translatedFormat('l, d F Y H:i') : '-' }} WIB</span>
+                    <span class="value">{{ $kegiatan->tanggal_mulai ? \App\Support\Wib::dari($kegiatan->tanggal_mulai)->translatedFormat('l, d F Y H:i').' WIB' : '-' }}</span>
                 </div>
                 <div class="details-row">
                     <span class="label">Lokasi</span>

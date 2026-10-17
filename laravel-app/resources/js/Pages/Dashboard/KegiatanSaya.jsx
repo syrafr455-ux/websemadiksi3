@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
 import ParticipantLayout from '@/Layouts/ParticipantLayout';
+import { formatWib } from '@/lib/waktuWib';
 
 export default function KegiatanSaya({
     title = 'Kegiatan Saya & E-Tiket',
@@ -138,7 +139,7 @@ export default function KegiatanSaya({
                                             <div className="text-[11px] text-slate-400 space-y-1">
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="material-symbols-outlined text-xs text-slate-500">schedule</span>
-                                                    <span>{kegiatan.waktu_mulai ? new Date(kegiatan.waktu_mulai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'} WIB</span>
+                                                    <span>{kegiatan.tanggal_mulai ? `${formatWib(kegiatan.tanggal_mulai)} WIB` : '-'}</span>
                                                 </div>
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="material-symbols-outlined text-xs text-slate-500">location_on</span>
@@ -254,7 +255,7 @@ export default function KegiatanSaya({
                                     <div className="flex justify-between py-1.5">
                                         <span className="text-slate-400">Waktu &amp; Tanggal</span>
                                         <span className="font-bold text-white">
-                                            {activeTicket.kegiatan?.waktu_mulai ? new Date(activeTicket.kegiatan.waktu_mulai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'} WIB
+                                            {activeTicket.kegiatan?.tanggal_mulai ? `${formatWib(activeTicket.kegiatan.tanggal_mulai)} WIB` : '-'}
                                         </span>
                                     </div>
                                     <div className="flex justify-between py-1.5">

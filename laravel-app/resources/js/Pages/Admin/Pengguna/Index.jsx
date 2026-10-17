@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
+import { formatWib } from '@/lib/waktuWib';
 
 export default function PenggunaIndex({
     title = 'Data Pengguna & Tracking Akses',
@@ -189,7 +190,7 @@ export default function PenggunaIndex({
                                                 {u.last_login_at ? (
                                                     <div>
                                                         <div className="text-slate-200 font-medium">
-                                                            {new Date(u.last_login_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                            {formatWib(u.last_login_at)} WIB
                                                         </div>
                                                         <div className="text-[11px] font-mono text-emerald-400">IP: {u.last_login_ip || '-'}</div>
                                                     </div>

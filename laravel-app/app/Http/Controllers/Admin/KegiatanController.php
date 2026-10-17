@@ -11,6 +11,7 @@ use App\Models\AuditLog;
 use App\Models\Kegiatan;
 use App\Models\KegiatanSeat;
 use App\Services\UnusaFacilityService;
+use App\Support\Wib;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -153,10 +154,11 @@ class KegiatanController extends Controller
                 'kategori' => $kategoriLower,
                 'metode_pelaksanaan' => $metode,
                 'sasaran_peserta' => $sasaran,
-                'tanggal_mulai' => $validated['waktu_mulai'],
-                'tanggal_selesai' => $validated['waktu_selesai'] ?? null,
-                'registration_deadline' => $validated['registration_deadline'] ?? null,
-                'submission_deadline' => $validated['submission_deadline'] ?? null,
+                // Input jadwal dianggap WIB, disimpan dalam UTC.
+                'tanggal_mulai' => Wib::keUtc($validated['waktu_mulai']),
+                'tanggal_selesai' => Wib::keUtc($validated['waktu_selesai'] ?? null),
+                'registration_deadline' => Wib::keUtc($validated['registration_deadline'] ?? null),
+                'submission_deadline' => Wib::keUtc($validated['submission_deadline'] ?? null),
                 'lokasi_type' => $lokasiType,
                 'lokasi_nama' => trim($validated['lokasi_nama']),
                 'lokasi_detail' => $validated['lokasi_detail'] ?? null,
@@ -254,8 +256,9 @@ class KegiatanController extends Controller
         DB::beginTransaction();
         try {
             $changedAttributes = [];
-            $oldWaktuMulai = $kegiatan->tanggal_mulai?->format('Y-m-d H:i');
-            $newWaktuMulai = date('Y-m-d H:i', strtotime($validated['waktu_mulai']));
+            // Bandingkan jadwal lama dan baru sama-sama dalam WIB.
+            $oldWaktuMulai = Wib::dari($kegiatan->tanggal_mulai)?->format('Y-m-d H:i');
+            $newWaktuMulai = Wib::dari(Wib::keUtc($validated['waktu_mulai']))->format('Y-m-d H:i');
             $oldLokasi = $kegiatan->lokasi_nama.' '.$kegiatan->lokasi_detail;
             $newLokasi = trim($validated['lokasi_nama']).' '.($validated['lokasi_detail'] ?? '');
 
@@ -287,10 +290,11 @@ class KegiatanController extends Controller
                 'nama_kegiatan' => trim($validated['nama_kegiatan']),
                 'deskripsi' => $validated['deskripsi'] ?? null,
                 'kategori' => $kategoriLower,
-                'tanggal_mulai' => $validated['waktu_mulai'],
-                'tanggal_selesai' => $validated['waktu_selesai'] ?? null,
-                'registration_deadline' => $validated['registration_deadline'] ?? $kegiatan->registration_deadline,
-                'submission_deadline' => $validated['submission_deadline'] ?? $kegiatan->submission_deadline,
+                // Input jadwal dianggap WIB, disimpan dalam UTC. Deadline yang tidak dikirim tetap memakai nilai lama (sudah UTC).
+                'tanggal_mulai' => Wib::keUtc($validated['waktu_mulai']),
+                'tanggal_selesai' => Wib::keUtc($validated['waktu_selesai'] ?? null),
+                'registration_deadline' => Wib::keUtc($validated['registration_deadline'] ?? null) ?? $kegiatan->registration_deadline,
+                'submission_deadline' => Wib::keUtc($validated['submission_deadline'] ?? null) ?? $kegiatan->submission_deadline,
                 'lokasi_nama' => trim($validated['lokasi_nama']),
                 'lokasi_detail' => $validated['lokasi_detail'] ?? null,
                 'biaya' => (float) $validated['biaya'],

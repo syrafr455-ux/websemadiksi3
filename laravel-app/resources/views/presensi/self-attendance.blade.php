@@ -40,7 +40,7 @@
                     <span class="text-xs font-bold uppercase tracking-wider text-outline block mb-1">Kegiatan Resmi</span>
                     <h1 class="text-2xl sm:text-3xl font-extrabold text-on-surface">{{ $kegiatan->nama_kegiatan }}</h1>
                     <p class="text-sm text-outline mt-1">
-                        {{ $kegiatan->tanggal_mulai ? $kegiatan->tanggal_mulai->format('d F Y, H:i') : 'Tanggal pelaksanaan' }} WIB
+                        @if($kegiatan->tanggal_mulai){{ \App\Support\Wib::dari($kegiatan->tanggal_mulai)->translatedFormat('d F Y, H:i') }} WIB @else Tanggal pelaksanaan @endif
                         • {{ $kegiatan->lokasi_nama ?: 'Universitas Nahdlatul Ulama Surabaya' }}
                     </p>
                 </div>
@@ -61,7 +61,7 @@
                         <div class="flex-1">
                             <h3 class="text-lg font-bold">Anda Sudah Melakukan Presensi Mandiri</h3>
                             <p class="text-xs text-emerald-800 mt-1">
-                                Dicatat pada {{ $existingPresensi->check_in_at ? $existingPresensi->check_in_at->format('d F Y, H:i') : '-' }} WIB
+                                Dicatat pada {{ $existingPresensi->check_in_at ? \App\Support\Wib::dari($existingPresensi->check_in_at)->translatedFormat('d F Y, H:i').' WIB' : '-' }}
                                 atas nama <strong>{{ $existingPresensi->nama_lengkap }}</strong> (NIM: {{ $existingPresensi->nim }}).
                             </p>
 

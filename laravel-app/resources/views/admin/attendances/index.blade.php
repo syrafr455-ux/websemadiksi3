@@ -54,7 +54,7 @@
                                 <div class="text-[11px] text-slate-500">{{ $att->activity_category ?: 'Kegiatan' }}</div>
                             </td>
                             <td class="px-6 py-4 text-slate-300">
-                                <div class="font-medium">{{ \Carbon\Carbon::parse($att->submitted_at)->translatedFormat('d M Y, H:i') }} WIB</div>
+                                <div class="font-medium">{{ $att->submitted_at ? \App\Support\Wib::dari($att->submitted_at)->translatedFormat('d M Y, H:i').' WIB' : '-' }}</div>
                                 <div class="text-[10px] text-slate-500">{{ $att->location_name ?: 'Kampus UNUSA' }}</div>
                             </td>
                             <td class="px-6 py-4">

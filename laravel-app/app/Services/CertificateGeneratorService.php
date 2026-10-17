@@ -8,6 +8,7 @@ use App\Models\KegiatanPresensi;
 use App\Models\KegiatanRegistration;
 use App\Models\Sertifikat;
 use App\Models\User;
+use App\Support\Wib;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -75,11 +76,11 @@ class CertificateGeneratorService
             }
         }
 
-        // Tanggal terbit dan tanggal kegiatan
+        // Tanggal terbit dan tanggal kegiatan, dalam WIB
         Carbon::setLocale('id');
-        $tanggalTerbit = Carbon::now()->translatedFormat('d F Y');
+        $tanggalTerbit = Wib::sekarang()->translatedFormat('d F Y');
         $tanggalKegiatan = $kegiatan->tanggal_mulai
-            ? Carbon::parse($kegiatan->tanggal_mulai)->translatedFormat('d F Y')
+            ? Wib::dari($kegiatan->tanggal_mulai)->translatedFormat('d F Y')
             : $tanggalTerbit;
 
         // Instance dummy sertifikat untuk render awal

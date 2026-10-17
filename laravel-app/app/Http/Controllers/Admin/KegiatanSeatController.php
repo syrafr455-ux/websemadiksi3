@@ -12,7 +12,7 @@ use App\Models\AuditLog;
 use App\Models\Kegiatan;
 use App\Models\KegiatanRegistration;
 use App\Models\KegiatanSeat;
-use Carbon\Carbon;
+use App\Support\Wib;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -32,12 +32,8 @@ class KegiatanSeatController extends Controller
         $isSeatBookingActive = (bool) $validated['is_seat_booking_active'];
 
         // Revisi 6: Jadwal diinput dalam zona waktu Asia/Jakarta dan disimpan dalam UTC
-        $bookingOpensAt = ! empty($validated['booking_opens_at'])
-            ? Carbon::parse($validated['booking_opens_at'], 'Asia/Jakarta')->setTimezone('UTC')
-            : null;
-        $bookingClosesAt = ! empty($validated['booking_closes_at'])
-            ? Carbon::parse($validated['booking_closes_at'], 'Asia/Jakarta')->setTimezone('UTC')
-            : null;
+        $bookingOpensAt = Wib::keUtc($validated['booking_opens_at'] ?? null);
+        $bookingClosesAt = Wib::keUtc($validated['booking_closes_at'] ?? null);
         $layoutConfig = $validated['layout_config'] ?? [];
 
         try {

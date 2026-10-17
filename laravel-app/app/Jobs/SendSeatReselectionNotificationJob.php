@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Mail\SeatReselectionMail;
 use App\Models\Kegiatan;
 use App\Models\KegiatanRegistration;
+use App\Support\Wib;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -37,7 +38,7 @@ class SendSeatReselectionNotificationJob implements ShouldQueue
 
         // Siapkan batas waktu dalam format zona waktu Asia/Jakarta
         $deadlineWib = $this->kegiatan->booking_closes_at
-            ? $this->kegiatan->booking_closes_at->timezone('Asia/Jakarta')->translatedFormat('d F Y H:i').' WIB'
+            ? Wib::dari($this->kegiatan->booking_closes_at)->translatedFormat('d F Y H:i').' WIB'
             : null;
 
         // Tautan pemilihan ulang untuk pemesan (booker)

@@ -58,7 +58,7 @@
                 </tr>
                 <tr>
                     <td class="label">Waktu Pelaksanaan</td>
-                    <td class="value">{{ $registration->kegiatan->waktu_mulai ? $registration->kegiatan->waktu_mulai->translatedFormat('d F Y, H:i') : '-' }} WIB</td>
+                    <td class="value">{{ $registration->kegiatan->tanggal_mulai ? \App\Support\Wib::dari($registration->kegiatan->tanggal_mulai)->translatedFormat('d F Y, H:i').' WIB' : '-' }}</td>
                 </tr>
                 <tr>
                     <td class="label">Lokasi / Gedung</td>

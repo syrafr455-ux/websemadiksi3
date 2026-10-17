@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\PeranSertifikat;
+use App\Support\Wib;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
@@ -89,7 +90,8 @@ class Sertifikat extends Model
      */
     public static function generateNomorSertifikat(int|string $kegiatanCode, ?int $year = null): string
     {
-        $year = $year ?: (int) date('Y');
+        // Tahun terbit menurut WIB: sertifikat 1 Januari 00:30 WIB sudah memakai tahun baru.
+        $year = $year ?: Wib::sekarang()->year;
         $cleanCode = strtoupper(substr(preg_replace('/[^A-Z0-9]/', '', (string) $kegiatanCode), 0, 8)) ?: 'EVT';
 
         do {

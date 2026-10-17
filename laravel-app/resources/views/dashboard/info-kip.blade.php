@@ -6,7 +6,7 @@
                     <span class="px-3 py-1 rounded-full font-bold {{ $info->priority === 'Tinggi' ? 'bg-rose-100 text-rose-800' : 'bg-primary/10 text-primary' }}">
                         {{ $info->category }} &bull; Prioritas {{ $info->priority }}
                     </span>
-                    <span>Diunggah: {{ $info->date_uploaded ?? $info->created_at->format('d M Y') }}</span>
+                    <span>Diunggah: {{ $info->date_uploaded ?? \App\Support\Wib::dari($info->created_at)->translatedFormat('d M Y') }}</span>
                 </div>
 
                 <h3 class="text-lg font-bold text-on-surface">{{ $info->title }}</h3>

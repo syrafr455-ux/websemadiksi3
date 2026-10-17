@@ -29,6 +29,7 @@ Aturan ini berlaku untuk setiap tugas di repo ini.
 - Jangan menjalankan `git checkout`, `git restore`, `git reset`, atau `git clean` yang membuang perubahan.
 - Jangan memasang paket baru (composer maupun npm) tanpa izin.
 - Tes memakai SQLite in-memory (`phpunit.xml`). Jangan arahkan tes ke koneksi lain.
+- Zona waktu (`laravel-app/`): semua waktu disimpan dalam UTC (`config/app.php` dan koneksi `pgsql` sama-sama UTC). Input dari pengguna dianggap WIB (Asia/Jakarta) dan dikonversi ke UTC saat disimpan dengan `App\Support\Wib::keUtc()`. Saat ditampilkan, waktu dikonversi ke WIB: di PHP/Blade/email dengan `Wib::dari()`, di React dengan `formatWib()`/`keInputWib()` dari `resources/js/lib/waktuWib.js`. Label "WIB" hanya boleh muncul bila nilainya sudah dikonversi. Deadline dan batas tutup bersifat eksklusif: tertutup tepat pada detik batasnya.
 - Satu tugas per giliran.
 - Untuk tugas besar, tulis rencananya dulu dan tunggu persetujuan sebelum mengedit.
 - Setelah mengedit, jalankan seluruh tes dengan `composer test` dari `laravel-app/` (bila bermasalah, gunakan `php vendor/bin/phpunit`) dan laporkan hasilnya, termasuk tes yang gagal.

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
+import { formatWib, keInputWib } from '@/lib/waktuWib';
 
 export default function KegiatanIndex({
     title = 'Manajemen Kegiatan Enterprise',
@@ -66,8 +67,8 @@ export default function KegiatanIndex({
             kategori: item.kategori || 'Seminar Nasional',
             tipe_kegiatan: item.tipe_kegiatan || 'seminar',
             target_peserta: item.target_peserta || 'semua',
-            waktu_mulai: item.waktu_mulai ? item.waktu_mulai.substring(0, 16) : '',
-            waktu_selesai: item.waktu_selesai ? item.waktu_selesai.substring(0, 16) : '',
+            waktu_mulai: keInputWib(item.tanggal_mulai),
+            waktu_selesai: keInputWib(item.tanggal_selesai),
             lokasi_type: item.lokasi_type || 'unusa_campus',
             lokasi_kampus: item.metadata?.lokasi_kampus || 'Kampus B (Jemursari)',
             lokasi_gedung: item.metadata?.lokasi_gedung || 'Tower UNUSA',
@@ -81,7 +82,7 @@ export default function KegiatanIndex({
             poin_skp: item.poin_skp || 0,
             has_seat_selection: Boolean(item.has_seat_selection),
             has_submission: Boolean(item.has_submission),
-            submission_deadline: item.submission_deadline ? item.submission_deadline.substring(0, 16) : '',
+            submission_deadline: keInputWib(item.submission_deadline),
             submission_rules: item.submission_rules || '',
             panduan_file: null,
             banner_image: null,
@@ -256,7 +257,7 @@ export default function KegiatanIndex({
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="font-medium text-slate-200">
-                                                    {item.waktu_mulai ? new Date(item.waktu_mulai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                                                    {item.tanggal_mulai ? `${formatWib(item.tanggal_mulai)} WIB` : '-'}
                                                 </div>
                                                 <div className="text-[11px] text-slate-400 truncate max-w-xs">{item.lokasi_nama}</div>
                                             </td>
