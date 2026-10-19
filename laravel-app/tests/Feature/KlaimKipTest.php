@@ -70,6 +70,12 @@ class KlaimKipTest extends TestCase
         Notification::assertSentTo($this->mahasiswa, StatusKipkDiperbarui::class);
         $this->assertTrue(AuditLog::where('action', 'status_kip_berubah')->exists());
 
+        // Pesan hasil tetap terlihat walau kartu klaim tidak tampil lagi (role sudah naik).
+        $this->actingAs($this->mahasiswa)->withSession(['klaim_status' => KlaimKipService::BERHASIL, 'klaim_pesan' => 'Klaim berhasil. Akun Anda kini tercatat sebagai penerima KIP Kuliah.'])
+            ->get(route('dashboard.index'))->assertOk()
+            ->assertSee('Klaim berhasil.')
+            ->assertDontSee('Saya penerima KIP Kuliah');
+
         // Pemilik hanya melihat nomor tersamar.
         $this->actingAs($this->mahasiswa)->get(route('dashboard.index'))->assertOk()
             ->assertSee('****.***.*****.1766.761')

@@ -32,6 +32,13 @@
             </div>
         </div>
 
+        {{-- Hasil klaim ditampilkan di luar kartu: setelah klaim berhasil, role naik dan kartu klaim tidak lagi tampil. --}}
+        @if(session('klaim_pesan'))
+            <div class="p-4 rounded-2xl text-sm font-medium {{ session('klaim_status') === 'berhasil' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-900 border border-amber-200' }}" role="status" data-hasil-klaim="{{ session('klaim_status') }}">
+                {{ session('klaim_pesan') }}
+            </div>
+        @endif
+
         {{-- Klaim status KIP-K: hanya akun user_umum yang berasal dari jalur Mahasiswa UNUSA --}}
         @if($user->isUmumUnusa())
             <div class="p-6 rounded-3xl bg-surface border border-surface-variant/40 shadow-sm space-y-4" data-kartu-klaim-kip>
@@ -46,12 +53,6 @@
                         </p>
                     </div>
                 </div>
-
-                @if(session('klaim_pesan'))
-                    <div class="p-4 rounded-2xl text-sm font-medium {{ session('klaim_status') === 'berhasil' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-900 border border-amber-200' }}" role="status" data-hasil-klaim="{{ session('klaim_status') }}">
-                        {{ session('klaim_pesan') }}
-                    </div>
-                @endif
 
                 @if($klaimDitinjau)
                     <div class="p-4 rounded-2xl text-sm bg-sky-50 text-sky-900 border border-sky-200" data-klaim-ditinjau>
