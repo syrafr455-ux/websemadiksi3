@@ -1,7 +1,18 @@
 import React, { useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { formatWib, keInputWib } from '@/lib/waktuWib';
+import { formatWib } from '@/lib/waktuWib';
+import {
+    KATEGORI_OPTIONS,
+    LOKASI_TYPE_OPTIONS,
+    METODE_OPTIONS,
+    SASARAN_OPTIONS,
+    formatNarasumber,
+    kegiatanKeForm,
+    kegiatanKosong,
+    labelDari,
+    narasumberKosong,
+} from '@/lib/kegiatanForm';
 
 export default function KegiatanIndex({
     title = 'Manajemen Kegiatan Enterprise',
@@ -17,40 +28,8 @@ export default function KegiatanIndex({
     const [editingItem, setEditingItem] = useState(null);
     const [currentStep, setCurrentStep] = useState(1);
 
-    // Form State
-    const { data, setData, post, processing, errors, reset } = useForm({
-        nama_kegiatan: '',
-        deskripsi: '',
-        kategori: 'Seminar Nasional',
-        tipe_kegiatan: 'seminar',
-        target_peserta: 'semua',
-        waktu_mulai: '',
-        waktu_selesai: '',
-        lokasi_type: 'unusa_campus',
-        lokasi_kampus: 'Kampus B (Jemursari)',
-        lokasi_gedung: 'Tower UNUSA',
-        lokasi_ruangan: 'Auditorium Lt. 9',
-        lokasi_nama: 'Tower UNUSA - Kampus B',
-        lokasi_detail: 'Auditorium Lantai 9, Jl. Raya Jemursari No. 57 Surabaya',
-        lokasi_map_url: '',
-        biaya: 0,
-        kuota_total: 100,
-        narasumber: '',
-        poin_skp: 10,
-        has_seat_selection: true,
-        has_submission: false,
-        submission_deadline: '',
-        submission_rules: '',
-        panduan_file: null,
-        banner_image: null,
-        status: 'published',
-        seat_layout: {
-            rows: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'],
-            cols_per_row: 10,
-            vip_rows: ['A', 'B'],
-            panitia_rows: [],
-        },
-    });
+    // Form State (nama field = nama kolom model Kegiatan, lihat resources/js/lib/kegiatanForm.js)
+    const { data, setData, post, processing, errors, reset } = useForm(kegiatanKosong());
 
     const openCreateModal = () => {
         reset();
@@ -61,39 +40,7 @@ export default function KegiatanIndex({
 
     const openEditModal = (item) => {
         setEditingItem(item);
-        setData({
-            nama_kegiatan: item.nama_kegiatan || '',
-            deskripsi: item.deskripsi || '',
-            kategori: item.kategori || 'Seminar Nasional',
-            tipe_kegiatan: item.tipe_kegiatan || 'seminar',
-            target_peserta: item.target_peserta || 'semua',
-            waktu_mulai: keInputWib(item.tanggal_mulai),
-            waktu_selesai: keInputWib(item.tanggal_selesai),
-            lokasi_type: item.lokasi_type || 'unusa_campus',
-            lokasi_kampus: item.metadata?.lokasi_kampus || 'Kampus B (Jemursari)',
-            lokasi_gedung: item.metadata?.lokasi_gedung || 'Tower UNUSA',
-            lokasi_ruangan: item.metadata?.lokasi_ruangan || 'Auditorium Lt. 9',
-            lokasi_nama: item.lokasi_nama || '',
-            lokasi_detail: item.lokasi_detail || '',
-            lokasi_map_url: item.lokasi_map_url || '',
-            biaya: item.biaya || 0,
-            kuota_total: item.kuota_total || 100,
-            narasumber: item.narasumber || '',
-            poin_skp: item.poin_skp || 0,
-            has_seat_selection: Boolean(item.has_seat_selection),
-            has_submission: Boolean(item.has_submission),
-            submission_deadline: keInputWib(item.submission_deadline),
-            submission_rules: item.submission_rules || '',
-            panduan_file: null,
-            banner_image: null,
-            status: item.status || 'published',
-            seat_layout: {
-                rows: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'],
-                cols_per_row: 10,
-                vip_rows: ['A', 'B'],
-                panitia_rows: [],
-            },
-        });
+        setData(kegiatanKeForm(item));
         setCurrentStep(1);
         setModalOpen(true);
     };
@@ -103,6 +50,14 @@ export default function KegiatanIndex({
             router.delete(`/admin/kegiatan/${id}`);
         }
     };
+
+    // Narasumber: daftar {nama, gelar, instansi, ...}; kunci lain (mis. foto) ikut dipertahankan.
+    const tambahNarasumber = () => setData('narasumber', [...data.narasumber, narasumberKosong()]);
+    const hapusNarasumber = (index) => setData('narasumber', data.narasumber.filter((_, i) => i !== index));
+    const ubahNarasumber = (index, field, value) => setData(
+        'narasumber',
+        data.narasumber.map((n, i) => (i === index ? { ...n, [field]: value } : n)),
+    );
 
     const handleFileChange = (e, field) => {
         const file = e.target.files[0];
@@ -200,11 +155,9 @@ export default function KegiatanIndex({
                                 className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
                             >
                                 <option value="">Semua Kategori</option>
-                                <option value="Seminar Nasional">Seminar Nasional</option>
-                                <option value="Workshop">Workshop</option>
-                                <option value="Kompetisi Mahasiswa">Kompetisi Mahasiswa</option>
-                                <option value="Pelatihan KIP-K">Pelatihan KIP-K</option>
-                                <option value="Sosialisasi">Sosialisasi</option>
+                                {KATEGORI_OPTIONS.map((o) => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                ))}
                             </select>
                         </div>
                         <div className="flex gap-2">
@@ -250,9 +203,9 @@ export default function KegiatanIndex({
                                         <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
                                             <td className="px-6 py-4">
                                                 <div className="font-bold text-white text-sm">{item.nama_kegiatan}</div>
-                                                <div className="text-[11px] text-emerald-400 font-medium mt-0.5">{item.kategori} • {item.tipe_kegiatan}</div>
-                                                {item.narasumber && (
-                                                    <div className="text-[11px] text-slate-400 mt-1">Speaker: {item.narasumber}</div>
+                                                <div className="text-[11px] text-emerald-400 font-medium mt-0.5">{labelDari(KATEGORI_OPTIONS, item.kategori)} • {labelDari(METODE_OPTIONS, item.metode_pelaksanaan)}</div>
+                                                {formatNarasumber(item.narasumber) && (
+                                                    <div className="text-[11px] text-slate-400 mt-1">Speaker: {formatNarasumber(item.narasumber)}</div>
                                                 )}
                                             </td>
                                             <td className="px-6 py-4">
@@ -266,19 +219,19 @@ export default function KegiatanIndex({
                                                     {item.biaya > 0 ? `Rp ${Number(item.biaya).toLocaleString('id-ID')}` : 'Gratis'}
                                                 </div>
                                                 <div className="text-[11px] text-slate-400">
-                                                    {item.kuota_terisi} / {item.kuota_total} Peserta ({item.registrations_count || 0} Tiket)
+                                                    {item.kuota_terisi} / {item.kuota} Peserta ({item.registrations_count || 0} Tiket)
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                                    {item.has_seat_selection ? (
+                                                    {item.is_seat_booking_active ? (
                                                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-500/15 text-teal-400 border border-teal-500/20">
                                                             {item.seats_count || 0} Kursi
                                                         </span>
                                                     ) : (
                                                         <span className="px-2 py-0.5 rounded-md text-[10px] text-slate-500 bg-slate-800">Tanpa Kursi</span>
                                                     )}
-                                                    {item.has_submission && (
+                                                    {item.is_submission_active && (
                                                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20">
                                                             {item.submissions_count || 0} Karya
                                                         </span>
@@ -403,66 +356,82 @@ export default function KegiatanIndex({
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-300 mb-1">Kategori *</label>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={data.kategori}
                                                     onChange={(e) => setData('kategori', e.target.value)}
                                                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
                                                     required
-                                                />
+                                                >
+                                                    {KATEGORI_OPTIONS.map((o) => (
+                                                        <option key={o.value} value={o.value}>{o.label}</option>
+                                                    ))}
+                                                </select>
+                                                {errors.kategori && <span className="text-[10px] text-rose-400">{errors.kategori}</span>}
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-1">Tipe Kegiatan *</label>
+                                                <label className="block text-xs font-bold text-slate-300 mb-1">Sasaran Peserta *</label>
                                                 <select
-                                                    value={data.tipe_kegiatan}
-                                                    onChange={(e) => setData('tipe_kegiatan', e.target.value)}
+                                                    value={data.sasaran_peserta}
+                                                    onChange={(e) => setData('sasaran_peserta', e.target.value)}
                                                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
                                                 >
-                                                    <option value="seminar">Seminar</option>
-                                                    <option value="workshop">Workshop</option>
-                                                    <option value="lomba">Lomba / Kompetisi</option>
-                                                    <option value="pelatihan">Pelatihan</option>
-                                                    <option value="sosialisasi">Sosialisasi</option>
-                                                    <option value="lainnya">Lainnya</option>
+                                                    {SASARAN_OPTIONS.map((o) => (
+                                                        <option key={o.value} value={o.value}>{o.label}</option>
+                                                    ))}
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-1">Target Peserta *</label>
+                                                <label className="block text-xs font-bold text-slate-300 mb-1">Metode Pelaksanaan *</label>
                                                 <select
-                                                    value={data.target_peserta}
-                                                    onChange={(e) => setData('target_peserta', e.target.value)}
+                                                    value={data.metode_pelaksanaan}
+                                                    onChange={(e) => setData('metode_pelaksanaan', e.target.value)}
                                                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
                                                 >
-                                                    <option value="semua">Semua Peserta (Terbuka)</option>
-                                                    <option value="kipk_only">Khusus Mahasiswa KIP-K</option>
-                                                    <option value="umum_only">Khusus Umum</option>
+                                                    {METODE_OPTIONS.map((o) => (
+                                                        <option key={o.value} value={o.value}>{o.label}</option>
+                                                    ))}
                                                 </select>
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-1">Waktu Mulai *</label>
+                                                <label className="block text-xs font-bold text-slate-300 mb-1">Waktu Mulai (WIB) *</label>
                                                 <input
                                                     type="datetime-local"
-                                                    value={data.waktu_mulai}
-                                                    onChange={(e) => setData('waktu_mulai', e.target.value)}
+                                                    step="1"
+                                                    value={data.tanggal_mulai}
+                                                    onChange={(e) => setData('tanggal_mulai', e.target.value)}
                                                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
                                                     required
                                                 />
+                                                {errors.tanggal_mulai && <span className="text-[10px] text-rose-400">{errors.tanggal_mulai}</span>}
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-1">Waktu Selesai</label>
+                                                <label className="block text-xs font-bold text-slate-300 mb-1">Waktu Selesai (WIB)</label>
                                                 <input
                                                     type="datetime-local"
-                                                    value={data.waktu_selesai}
-                                                    onChange={(e) => setData('waktu_selesai', e.target.value)}
+                                                    step="1"
+                                                    value={data.tanggal_selesai}
+                                                    onChange={(e) => setData('tanggal_selesai', e.target.value)}
                                                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
                                                 />
+                                                {errors.tanggal_selesai && <span className="text-[10px] text-rose-400">{errors.tanggal_selesai}</span>}
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-300 mb-1">Batas Pendaftaran (WIB)</label>
+                                                <input
+                                                    type="datetime-local"
+                                                    step="1"
+                                                    value={data.registration_deadline}
+                                                    onChange={(e) => setData('registration_deadline', e.target.value)}
+                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                                />
+                                                <span className="text-[10px] text-slate-500">Kosongkan bila tidak ada batas. Tertutup tepat pada jam ini.</span>
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-300 mb-1">Biaya Tiket (Rp) *</label>
                                                 <input
@@ -480,32 +449,82 @@ export default function KegiatanIndex({
                                                 <input
                                                     type="number"
                                                     min="1"
-                                                    value={data.kuota_total}
-                                                    onChange={(e) => setData('kuota_total', e.target.value)}
+                                                    value={data.kuota}
+                                                    onChange={(e) => setData('kuota', e.target.value)}
                                                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
                                                     required
                                                 />
+                                                {errors.kuota && <span className="text-[10px] text-rose-400">{errors.kuota}</span>}
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-1">Narasumber</label>
-                                                <input
-                                                    type="text"
-                                                    value={data.narasumber}
-                                                    onChange={(e) => setData('narasumber', e.target.value)}
-                                                    placeholder="Nama pemateri"
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-1">Poin SKP</label>
+                                                <label className="block text-xs font-bold text-slate-300 mb-1">Poin XP / SKP</label>
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    value={data.poin_skp}
-                                                    onChange={(e) => setData('poin_skp', e.target.value)}
+                                                    value={data.poin_xp}
+                                                    onChange={(e) => setData('poin_xp', e.target.value)}
                                                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
                                                 />
                                             </div>
+                                        </div>
+
+                                        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs font-bold text-slate-300">Narasumber</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={tambahNarasumber}
+                                                    className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-[11px] font-bold flex items-center gap-1"
+                                                >
+                                                    <span className="material-symbols-outlined text-sm">person_add</span>
+                                                    Tambah Narasumber
+                                                </button>
+                                            </div>
+                                            {data.narasumber.length === 0 && (
+                                                <p className="text-[11px] text-slate-500">Belum ada narasumber.</p>
+                                            )}
+                                            {data.narasumber.map((n, index) => (
+                                                <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-start">
+                                                    <div>
+                                                        <input
+                                                            type="text"
+                                                            value={n.nama ?? ''}
+                                                            onChange={(e) => ubahNarasumber(index, 'nama', e.target.value)}
+                                                            placeholder="Nama narasumber *"
+                                                            aria-label={`Nama narasumber ${index + 1}`}
+                                                            className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                                                            required
+                                                        />
+                                                        {errors[`narasumber.${index}.nama`] && (
+                                                            <span className="text-[10px] text-rose-400">{errors[`narasumber.${index}.nama`]}</span>
+                                                        )}
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        value={n.gelar ?? ''}
+                                                        onChange={(e) => ubahNarasumber(index, 'gelar', e.target.value)}
+                                                        placeholder="Gelar (mis. Dr., M.Kom.)"
+                                                        aria-label={`Gelar narasumber ${index + 1}`}
+                                                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={n.instansi ?? ''}
+                                                        onChange={(e) => ubahNarasumber(index, 'instansi', e.target.value)}
+                                                        placeholder="Instansi"
+                                                        aria-label={`Instansi narasumber ${index + 1}`}
+                                                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => hapusNarasumber(index)}
+                                                        className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400"
+                                                        title="Hapus narasumber"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">delete</span>
+                                                    </button>
+                                                </div>
+                                            ))}
                                         </div>
 
                                         <div>
@@ -525,11 +544,7 @@ export default function KegiatanIndex({
                                         <div>
                                             <label className="block text-xs font-bold text-slate-300 mb-2">Tipe Lokasi *</label>
                                             <div className="grid grid-cols-3 gap-3">
-                                                {[
-                                                    { id: 'unusa_campus', label: 'Kampus UNUSA', icon: 'school' },
-                                                    { id: 'external_venue', label: 'Venue Eksternal', icon: 'location_on' },
-                                                    { id: 'online', label: 'Online (Zoom / Meet)', icon: 'videocam' },
-                                                ].map((lt) => (
+                                                {LOKASI_TYPE_OPTIONS.map((lt) => (
                                                     <button
                                                         key={lt.id}
                                                         type="button"
@@ -644,18 +659,6 @@ export default function KegiatanIndex({
                                                 Format PDF resmi akan ditampilkan dan dapat diunduh langsung oleh calon peserta kegiatan.
                                             </p>
                                         </div>
-
-                                        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-                                            <label className="block text-xs font-bold text-slate-300">
-                                                Banner / Gambar Kegiatan (JPG, PNG, Maks. 5MB)
-                                            </label>
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={(e) => handleFileChange(e, 'banner_image')}
-                                                className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-white hover:file:bg-slate-700"
-                                            />
-                                        </div>
                                     </div>
                                 )}
 
@@ -668,13 +671,13 @@ export default function KegiatanIndex({
                                             </div>
                                             <input
                                                 type="checkbox"
-                                                checked={data.has_seat_selection}
-                                                onChange={(e) => setData('has_seat_selection', e.target.checked)}
+                                                checked={data.is_seat_booking_active}
+                                                onChange={(e) => setData('is_seat_booking_active', e.target.checked)}
                                                 className="w-5 h-5 rounded text-emerald-600 bg-slate-900 border-slate-700 focus:ring-emerald-500"
                                             />
                                         </div>
 
-                                        {data.has_seat_selection && (
+                                        {data.is_seat_booking_active && (
                                             <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
                                                 <div className="text-xs font-bold text-slate-300">Konfigurasi Denah Kursi Baris A – I</div>
                                                 <div className="grid grid-cols-2 gap-3">
@@ -684,9 +687,9 @@ export default function KegiatanIndex({
                                                             type="number"
                                                             min="4"
                                                             max="20"
-                                                            value={data.seat_layout.cols_per_row}
-                                                            onChange={(e) => setData('seat_layout', {
-                                                                ...data.seat_layout,
+                                                            value={data.seat_layout_config.cols_per_row}
+                                                            onChange={(e) => setData('seat_layout_config', {
+                                                                ...data.seat_layout_config,
                                                                 cols_per_row: parseInt(e.target.value) || 10,
                                                             })}
                                                             className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
@@ -696,9 +699,9 @@ export default function KegiatanIndex({
                                                         <label className="block text-[11px] text-slate-400 mb-1">Baris VIP</label>
                                                         <input
                                                             type="text"
-                                                            value={data.seat_layout.vip_rows.join(', ')}
-                                                            onChange={(e) => setData('seat_layout', {
-                                                                ...data.seat_layout,
+                                                            value={data.seat_layout_config.vip_rows.join(', ')}
+                                                            onChange={(e) => setData('seat_layout_config', {
+                                                                ...data.seat_layout_config,
                                                                 vip_rows: e.target.value.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
                                                             })}
                                                             placeholder="Contoh: A, B"
@@ -714,11 +717,11 @@ export default function KegiatanIndex({
                                                     </div>
 
                                                     <div className="space-y-2 overflow-x-auto pb-2">
-                                                        {data.seat_layout.rows.map((r) => (
+                                                        {data.seat_layout_config.rows.map((r) => (
                                                             <div key={r} className="flex items-center justify-center gap-1.5">
                                                                 <span className="w-5 text-[11px] font-bold text-slate-400">{r}</span>
-                                                                {Array.from({ length: data.seat_layout.cols_per_row }, (_, i) => i + 1).map((c) => {
-                                                                    const isVip = data.seat_layout.vip_rows.includes(r);
+                                                                {Array.from({ length: data.seat_layout_config.cols_per_row }, (_, i) => i + 1).map((c) => {
+                                                                    const isVip = data.seat_layout_config.vip_rows.includes(r);
                                                                     return (
                                                                         <div
                                                                             key={c}
@@ -766,18 +769,19 @@ export default function KegiatanIndex({
                                             </div>
                                             <input
                                                 type="checkbox"
-                                                checked={data.has_submission}
-                                                onChange={(e) => setData('has_submission', e.target.checked)}
+                                                checked={data.is_submission_active}
+                                                onChange={(e) => setData('is_submission_active', e.target.checked)}
                                                 className="w-5 h-5 rounded text-emerald-600 bg-slate-900 border-slate-700 focus:ring-emerald-500"
                                             />
                                         </div>
 
-                                        {data.has_submission && (
+                                        {data.is_submission_active && (
                                             <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
                                                 <div>
-                                                    <label className="block text-xs font-bold text-slate-300 mb-1">Tenggat Waktu Pengumpulan (Deadline)</label>
+                                                    <label className="block text-xs font-bold text-slate-300 mb-1">Tenggat Waktu Pengumpulan (WIB)</label>
                                                     <input
                                                         type="datetime-local"
+                                                        step="1"
                                                         value={data.submission_deadline}
                                                         onChange={(e) => setData('submission_deadline', e.target.value)}
                                                         className="w-full px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
@@ -787,8 +791,8 @@ export default function KegiatanIndex({
                                                     <label className="block text-xs font-bold text-slate-300 mb-1">Ketentuan &amp; Format Karya</label>
                                                     <textarea
                                                         rows="3"
-                                                        value={data.submission_rules}
-                                                        onChange={(e) => setData('submission_rules', e.target.value)}
+                                                        value={data.submission_instructions}
+                                                        onChange={(e) => setData('submission_instructions', e.target.value)}
                                                         placeholder="Contoh: Format berkas PDF maksimal 20MB, mencakup lembar orisinalitas dan abstrak..."
                                                         className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
                                                     ></textarea>

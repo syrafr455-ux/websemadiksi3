@@ -113,17 +113,16 @@ class TimezoneConsistencyTest extends TestCase
         return array_merge([
             'nama_kegiatan' => 'Seminar Zona Waktu',
             'kategori' => 'Seminar',
-            'tipe_kegiatan' => 'seminar',
-            'target_peserta' => 'semua',
-            'waktu_mulai' => '2026-11-01T08:00',
-            'waktu_selesai' => '2026-11-01T12:00',
+            'sasaran_peserta' => 'umum',
+            'tanggal_mulai' => '2026-11-01T08:00',
+            'tanggal_selesai' => '2026-11-01T12:00',
             'registration_deadline' => '2026-10-25T23:59',
             'submission_deadline' => '2026-10-30T17:00',
-            'lokasi_type' => 'external_venue',
+            'lokasi_type' => 'external',
             'lokasi_nama' => 'Gedung Serbaguna',
             'biaya' => 0,
-            'kuota_total' => 50,
-            'has_seat_selection' => false,
+            'kuota' => 50,
+            'is_seat_booking_active' => false,
         ], $overrides);
     }
 
@@ -153,8 +152,8 @@ class TimezoneConsistencyTest extends TestCase
 
         $payload = $this->adminPayload([
             'status' => KegiatanStatus::Published->value,
-            'waktu_mulai' => '2026-11-02T09:30',
-            'waktu_selesai' => '2026-11-02T12:00',
+            'tanggal_mulai' => '2026-11-02T09:30',
+            'tanggal_selesai' => '2026-11-02T12:00',
         ]);
         unset($payload['registration_deadline'], $payload['submission_deadline']);
 
@@ -168,7 +167,7 @@ class TimezoneConsistencyTest extends TestCase
         $this->assertSame('2026-10-25 16:59:00', $this->rawUtc($kegiatan, 'registration_deadline'));
 
         // Notifikasi perubahan jadwal membandingkan jam WIB lama dan baru.
-        Event::assertDispatched(KegiatanUpdatedEvent::class, fn (KegiatanUpdatedEvent $event) => $event->changedAttributes['waktu_mulai'] === ['old' => '2026-11-01 08:00', 'new' => '2026-11-02 09:30']);
+        Event::assertDispatched(KegiatanUpdatedEvent::class, fn (KegiatanUpdatedEvent $event) => $event->changedAttributes['tanggal_mulai'] === ['old' => '2026-11-01 08:00', 'new' => '2026-11-02 09:30']);
     }
 
     public function test_admin_update_with_same_wib_schedule_does_not_report_schedule_change(): void
@@ -177,6 +176,7 @@ class TimezoneConsistencyTest extends TestCase
         $admin = User::factory()->superAdmin()->create();
         $kegiatan = $this->createKegiatan([
             'kategori' => 'seminar',
+            'lokasi_type' => 'external',
             'lokasi_nama' => 'Gedung Serbaguna',
             'lokasi_detail' => null,
         ]);

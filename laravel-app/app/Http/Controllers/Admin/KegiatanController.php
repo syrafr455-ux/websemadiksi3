@@ -17,6 +17,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -74,36 +76,8 @@ class KegiatanController extends Controller
     {
         \Illuminate\Support\Facades\Gate::authorize('create', Kegiatan::class);
 
-        $validated = $request->validate([
-            'nama_kegiatan' => ['required', 'string', 'max:255'],
-            'deskripsi' => ['nullable', 'string'],
-            'kategori' => ['required', 'string', 'max:100'],
-            'tipe_kegiatan' => ['required', 'string', 'in:seminar,workshop,lomba,pelatihan,sosialisasi,lainnya'],
-            'target_peserta' => ['required', 'string', 'in:semua,kipk_only,umum_only'],
-            'waktu_mulai' => ['required', 'date'],
-            'waktu_selesai' => ['nullable', 'date', 'after_or_equal:waktu_mulai'],
-            'lokasi_type' => ['required', 'string', 'in:unusa_campus,external_venue,online'],
-            'lokasi_kampus' => ['nullable', 'string'],
-            'lokasi_gedung' => ['nullable', 'string'],
-            'lokasi_ruangan' => ['nullable', 'string'],
-            'lokasi_nama' => ['required', 'string', 'max:255'],
-            'lokasi_detail' => ['nullable', 'string', 'max:255'],
-            'lokasi_map_url' => ['nullable', 'url', 'max:500'],
-            'biaya' => ['required', 'numeric', 'min:0'],
-            'kuota_total' => ['required', 'integer', 'min:1'],
-            'narasumber' => ['nullable', 'string', 'max:255'],
-            'poin_skp' => ['nullable', 'integer', 'min:0'],
-            'has_seat_selection' => ['boolean'],
-            'has_submission' => ['boolean'],
-            'registration_deadline' => ['nullable', 'date'],
-            'submission_deadline' => ['nullable', 'date'],
-            'submission_rules' => ['nullable', 'string'],
-            'panduan_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
-            'banner_image' => ['nullable', 'image', 'max:5120'],
-            'certificate_template_file' => ['nullable', 'file', 'mimes:png,jpg,jpeg,pdf', 'max:10240'],
-            'certificate_schema_config' => ['nullable', 'array'],
-            'seat_layout' => ['nullable', 'array'],
-        ]);
+        $this->normalizeKegiatanInput($request);
+        $validated = $request->validate($this->kegiatanRules());
 
         // Validasi fasilitas UNUSA jika lokasi_type adalah unusa_campus
         if ($validated['lokasi_type'] === 'unusa_campus') {
@@ -117,11 +91,6 @@ class KegiatanController extends Controller
             $panduanPath = $request->file('panduan_file')->store('kegiatan/panduan', 'public');
         }
 
-        $bannerPath = null;
-        if ($request->hasFile('banner_image')) {
-            $bannerPath = $request->file('banner_image')->store('kegiatan/banner', 'public');
-        }
-
         $certTemplatePath = null;
         if ($request->hasFile('certificate_template_file')) {
             $certTemplatePath = $request->file('certificate_template_file')->store('kegiatan/templates', 'public');
@@ -129,57 +98,41 @@ class KegiatanController extends Controller
 
         DB::beginTransaction();
         try {
-            $kategoriLower = strtolower(str_replace(' ', '_', $validated['kategori']));
-            if (! in_array($kategoriLower, Kegiatan::KATEGORI, true)) {
-                $kategoriLower = in_array(strtolower($validated['tipe_kegiatan']), Kegiatan::KATEGORI, true)
-                    ? strtolower($validated['tipe_kegiatan'])
-                    : 'seminar';
-            }
-
-            $sasaran = $validated['target_peserta'];
-            if (! in_array($sasaran, Kegiatan::SASARAN, true)) {
-                $sasaran = 'umum';
-            }
-
             $lokasiType = $validated['lokasi_type'];
-            if (! in_array($lokasiType, Kegiatan::LOKASI_TYPES, true)) {
-                $lokasiType = $lokasiType === 'external_venue' ? 'external' : 'unusa_campus';
-            }
-
-            $metode = $lokasiType === 'online' ? 'online' : 'offline';
+            $seatBookingActive = $request->boolean('is_seat_booking_active');
+            $seatLayout = $this->normalizeSeatLayout($validated['seat_layout_config'] ?? null);
 
             $kegiatan = Kegiatan::create([
                 'nama_kegiatan' => trim($validated['nama_kegiatan']),
                 'deskripsi' => $validated['deskripsi'] ?? null,
-                'kategori' => $kategoriLower,
-                'metode_pelaksanaan' => $metode,
-                'sasaran_peserta' => $sasaran,
+                'kategori' => $validated['kategori'],
+                'metode_pelaksanaan' => $validated['metode_pelaksanaan'] ?? ($lokasiType === 'online' ? 'online' : 'offline'),
+                'sasaran_peserta' => $validated['sasaran_peserta'] ?? 'umum',
                 // Input jadwal dianggap WIB, disimpan dalam UTC.
-                'tanggal_mulai' => Wib::keUtc($validated['waktu_mulai']),
-                'tanggal_selesai' => Wib::keUtc($validated['waktu_selesai'] ?? null),
+                'tanggal_mulai' => Wib::keUtc($validated['tanggal_mulai']),
+                'tanggal_selesai' => Wib::keUtc($validated['tanggal_selesai'] ?? null),
                 'registration_deadline' => Wib::keUtc($validated['registration_deadline'] ?? null),
                 'submission_deadline' => Wib::keUtc($validated['submission_deadline'] ?? null),
                 'lokasi_type' => $lokasiType,
                 'lokasi_nama' => trim($validated['lokasi_nama']),
                 'lokasi_detail' => $validated['lokasi_detail'] ?? null,
                 'biaya' => (float) $validated['biaya'],
-                'kuota' => (int) $validated['kuota_total'],
-                'narasumber' => ! empty($validated['narasumber']) ? [['nama' => $validated['narasumber']]] : null,
-                'poin_xp' => (int) ($validated['poin_skp'] ?? 0),
+                'kuota' => (int) $validated['kuota'],
+                'narasumber' => $this->normalizeNarasumber($validated['narasumber'] ?? null),
+                'poin_xp' => (int) ($validated['poin_xp'] ?? 0),
                 'file_panduan_pdf' => $panduanPath ?? 'kegiatan/panduan/default_panduan.pdf',
                 'certificate_template_path' => $certTemplatePath,
-                'certificate_schema_config' => $request->input('certificate_schema_config'),
-                'is_seat_booking_active' => $request->boolean('has_seat_selection'),
-                'is_submission_active' => $request->boolean('has_submission'),
-                'submission_instructions' => $validated['submission_rules'] ?? null,
-                'status' => KegiatanStatus::Published,
-                'seat_layout_config' => $request->input('seat_layout', []),
+                'certificate_schema_config' => $validated['certificate_schema_config'] ?? null,
+                'is_seat_booking_active' => $seatBookingActive,
+                'is_submission_active' => $request->boolean('is_submission_active'),
+                'submission_instructions' => $validated['submission_instructions'] ?? null,
+                'status' => KegiatanStatus::tryFrom($validated['status'] ?? '') ?? KegiatanStatus::Published,
+                'seat_layout_config' => $seatBookingActive ? $seatLayout : null,
             ]);
 
-            // Buat generator denah kursi interaktif jika has_seat_selection aktif
-            if ($request->boolean('has_seat_selection')) {
-                $layout = $request->input('seat_layout', []);
-                $this->generateSeatsForKegiatan($kegiatan, $layout);
+            // Buat denah kursi interaktif jika booking kursi aktif
+            if ($seatBookingActive) {
+                $this->generateSeatsForKegiatan($kegiatan, $seatLayout);
             }
 
             AuditLog::record(
@@ -221,103 +174,62 @@ class KegiatanController extends Controller
         $kegiatan = Kegiatan::with('seats')->findOrFail($id);
         \Illuminate\Support\Facades\Gate::authorize('update', $kegiatan);
 
-        $validated = $request->validate([
-            'nama_kegiatan' => ['required', 'string', 'max:255'],
-            'deskripsi' => ['nullable', 'string'],
-            'kategori' => ['required', 'string', 'max:100'],
-            'tipe_kegiatan' => ['nullable', 'string'],
-            'target_peserta' => ['nullable', 'string'],
-            'waktu_mulai' => ['required', 'date'],
-            'waktu_selesai' => ['nullable', 'date', 'after_or_equal:waktu_mulai'],
-            'lokasi_type' => ['required', 'string'],
-            'lokasi_kampus' => ['nullable', 'string'],
-            'lokasi_gedung' => ['nullable', 'string'],
-            'lokasi_ruangan' => ['nullable', 'string'],
-            'lokasi_nama' => ['required', 'string', 'max:255'],
-            'lokasi_detail' => ['nullable', 'string', 'max:255'],
-            'lokasi_map_url' => ['nullable', 'url', 'max:500'],
-            'biaya' => ['required', 'numeric', 'min:0'],
-            'kuota_total' => ['required', 'integer', 'min:1'],
-            'narasumber' => ['nullable', 'string', 'max:255'],
-            'poin_skp' => ['nullable', 'integer', 'min:0'],
-            'has_seat_selection' => ['boolean'],
-            'has_submission' => ['boolean'],
-            'registration_deadline' => ['nullable', 'date'],
-            'submission_deadline' => ['nullable', 'date'],
-            'submission_rules' => ['nullable', 'string'],
-            'status' => ['required', 'string'],
-            'panduan_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
-            'banner_image' => ['nullable', 'image', 'max:5120'],
-            'certificate_template_file' => ['nullable', 'file', 'mimes:png,jpg,jpeg,pdf', 'max:10240'],
-            'certificate_schema_config' => ['nullable', 'array'],
-            'seat_layout' => ['nullable', 'array'],
-        ]);
+        $this->normalizeKegiatanInput($request);
+        $validated = $request->validate($this->kegiatanRules(update: true));
+
+        // Hanya field yang benar-benar dikirim yang diubah; field yang tidak dikirim tetap memakai nilai lama.
+        $payload = $this->kegiatanUpdatePayload($request, $validated);
+
+        // jsonb PostgreSQL mengurutkan ulang key objek; isi narasumber yang sama tidak boleh dianggap perubahan.
+        if (array_key_exists('narasumber', $payload) && $this->jsonSama($payload['narasumber'], $kegiatan->narasumber)) {
+            unset($payload['narasumber']);
+        }
+
+        $mulai = $payload['tanggal_mulai'] ?? $kegiatan->tanggal_mulai;
+        $selesai = array_key_exists('tanggal_selesai', $payload) ? $payload['tanggal_selesai'] : $kegiatan->tanggal_selesai;
+        if ($mulai && $selesai && $selesai->lt($mulai)) {
+            throw ValidationException::withMessages(['tanggal_selesai' => 'Waktu selesai harus sama dengan atau setelah waktu mulai.']);
+        }
 
         DB::beginTransaction();
         try {
-            $changedAttributes = [];
-            // Bandingkan jadwal lama dan baru sama-sama dalam WIB.
-            $oldWaktuMulai = Wib::dari($kegiatan->tanggal_mulai)?->format('Y-m-d H:i');
-            $newWaktuMulai = Wib::dari(Wib::keUtc($validated['waktu_mulai']))->format('Y-m-d H:i');
-            $oldLokasi = $kegiatan->lokasi_nama.' '.$kegiatan->lokasi_detail;
-            $newLokasi = trim($validated['lokasi_nama']).' '.($validated['lokasi_detail'] ?? '');
-
-            if ($oldWaktuMulai !== $newWaktuMulai) {
-                $changedAttributes['waktu_mulai'] = ['old' => $oldWaktuMulai, 'new' => $newWaktuMulai];
-            }
-            if ($oldLokasi !== $newLokasi) {
-                $changedAttributes['lokasi'] = ['old' => $oldLokasi, 'new' => $newLokasi];
-            }
-
-            $panduanFile = $kegiatan->file_panduan_pdf;
             if ($request->hasFile('panduan_file')) {
-                $panduanFile = $request->file('panduan_file')->store('kegiatan/panduan', 'public');
+                $payload['file_panduan_pdf'] = $request->file('panduan_file')->store('kegiatan/panduan', 'public');
             }
 
-            $certTemplatePath = $kegiatan->certificate_template_path;
             if ($request->hasFile('certificate_template_file')) {
-                $certTemplatePath = $request->file('certificate_template_file')->store('kegiatan/templates', 'public');
+                $payload['certificate_template_path'] = $request->file('certificate_template_file')->store('kegiatan/templates', 'public');
             }
 
-            $kategoriLower = strtolower(str_replace(' ', '_', $validated['kategori']));
-            if (! in_array($kategoriLower, Kegiatan::KATEGORI, true)) {
-                $kategoriLower = $kegiatan->kategori;
+            // Denah kursi hanya dibuat ulang bila konfigurasinya benar-benar berubah (atau belum ada kursi sama sekali).
+            $seatBookingActive = $payload['is_seat_booking_active'] ?? (bool) $kegiatan->is_seat_booking_active;
+            $regenerateSeats = false;
+            if ($seatBookingActive && array_key_exists('seat_layout_config', $validated)) {
+                $layoutBaru = $this->normalizeSeatLayout($validated['seat_layout_config']);
+                if ($layoutBaru !== $this->normalizeSeatLayout($kegiatan->seat_layout_config) || ! $kegiatan->seats()->exists()) {
+                    $payload['seat_layout_config'] = $layoutBaru;
+                    $regenerateSeats = true;
+                }
             }
 
-            $status = KegiatanStatus::tryFrom($validated['status']) ?? KegiatanStatus::Published;
+            $kegiatan->fill($payload);
 
-            $updatePayload = [
-                'nama_kegiatan' => trim($validated['nama_kegiatan']),
-                'deskripsi' => $validated['deskripsi'] ?? null,
-                'kategori' => $kategoriLower,
-                // Input jadwal dianggap WIB, disimpan dalam UTC. Deadline yang tidak dikirim tetap memakai nilai lama (sudah UTC).
-                'tanggal_mulai' => Wib::keUtc($validated['waktu_mulai']),
-                'tanggal_selesai' => Wib::keUtc($validated['waktu_selesai'] ?? null),
-                'registration_deadline' => Wib::keUtc($validated['registration_deadline'] ?? null) ?? $kegiatan->registration_deadline,
-                'submission_deadline' => Wib::keUtc($validated['submission_deadline'] ?? null) ?? $kegiatan->submission_deadline,
-                'lokasi_nama' => trim($validated['lokasi_nama']),
-                'lokasi_detail' => $validated['lokasi_detail'] ?? null,
-                'biaya' => (float) $validated['biaya'],
-                'kuota' => (int) $validated['kuota_total'],
-                'poin_xp' => (int) ($validated['poin_skp'] ?? 0),
-                'file_panduan_pdf' => $panduanFile,
-                'certificate_template_path' => $certTemplatePath,
-                'is_seat_booking_active' => $request->boolean('has_seat_selection'),
-                'is_submission_active' => $request->boolean('has_submission'),
-                'submission_instructions' => $validated['submission_rules'] ?? null,
-                'status' => $status,
-            ];
-
-            if ($request->has('certificate_schema_config')) {
-                $updatePayload['certificate_schema_config'] = $request->input('certificate_schema_config');
+            // Field jadwal/lokasi yang berubah dikabarkan ke peserta; tanggal dibandingkan & dilaporkan dalam WIB.
+            $changedAttributes = [];
+            foreach (Kegiatan::scheduleSensitiveFields() as $field) {
+                if ($kegiatan->isDirty($field)) {
+                    $changedAttributes[$field] = [
+                        'old' => $this->formatChangedValue($kegiatan->getOriginal($field)),
+                        'new' => $this->formatChangedValue($kegiatan->getAttribute($field)),
+                    ];
+                }
             }
 
-            $kegiatan->update($updatePayload);
+            // save() tidak menulis apa pun (termasuk updated_at) bila tidak ada kolom yang berubah.
+            $kegiatan->save();
 
-            // Jika seat layout diubah, update hanya kursi yang belum booked
-            if ($request->boolean('has_seat_selection') && $request->has('seat_layout')) {
-                $layout = $request->input('seat_layout', []);
-                $this->updateSeatsForKegiatan($kegiatan, $layout);
+            if ($regenerateSeats) {
+                $this->updateSeatsForKegiatan($kegiatan, $payload['seat_layout_config']);
             }
 
             // Jika ada perubahan waktu/lokasi, trigger notifikasi email kepada peserta
@@ -484,5 +396,217 @@ class KegiatanController extends Controller
         if (! empty($seatsToInsert)) {
             KegiatanSeat::insert($seatsToInsert);
         }
+    }
+
+    /**
+     * Aturan validasi form kegiatan. Nama field = nama kolom model Kegiatan.
+     * Saat update semua field opsional ('sometimes'): yang tidak dikirim tidak diubah.
+     */
+    protected function kegiatanRules(bool $update = false): array
+    {
+        $wajib = $update ? ['sometimes', 'required'] : ['required'];
+
+        return [
+            'nama_kegiatan' => [...$wajib, 'string', 'max:255'],
+            'deskripsi' => ['nullable', 'string'],
+            'kategori' => [...$wajib, 'string', Rule::in(Kegiatan::KATEGORI)],
+            'sasaran_peserta' => ['nullable', Rule::in(Kegiatan::SASARAN)],
+            'metode_pelaksanaan' => ['nullable', Rule::in(Kegiatan::METODE)],
+            'tanggal_mulai' => [...$wajib, 'date'],
+            // Saat update, urutan mulai/selesai dicek terhadap nilai efektif (lihat update()).
+            'tanggal_selesai' => $update ? ['nullable', 'date'] : ['nullable', 'date', 'after_or_equal:tanggal_mulai'],
+            'registration_deadline' => ['nullable', 'date'],
+            'submission_deadline' => ['nullable', 'date'],
+            'lokasi_type' => [...$wajib, Rule::in(Kegiatan::LOKASI_TYPES)],
+            // Pilihan kampus/gedung/ruangan hanya alat bantu UI untuk mengisi lokasi_nama & lokasi_detail (tidak disimpan).
+            'lokasi_kampus' => ['nullable', 'string'],
+            'lokasi_gedung' => ['nullable', 'string'],
+            'lokasi_ruangan' => ['nullable', 'string'],
+            'lokasi_nama' => [...$wajib, 'string', 'max:255'],
+            'lokasi_detail' => ['nullable', 'string', 'max:255'],
+            'biaya' => [...$wajib, 'numeric', 'min:0'],
+            'kuota' => [...$wajib, 'integer', 'min:1'],
+            'poin_xp' => ['nullable', 'integer', 'min:0'],
+            'narasumber' => ['nullable', 'array'],
+            'narasumber.*' => ['array'],
+            'narasumber.*.nama' => ['required', 'string', 'max:255'],
+            'narasumber.*.gelar' => ['nullable', 'string', 'max:255'],
+            'narasumber.*.instansi' => ['nullable', 'string', 'max:255'],
+            'narasumber.*.foto' => ['nullable', 'string', 'max:500'],
+            'is_seat_booking_active' => ['boolean'],
+            'is_submission_active' => ['boolean'],
+            'submission_instructions' => ['nullable', 'string'],
+            'status' => $update ? ['sometimes', 'required', Rule::enum(KegiatanStatus::class)] : ['nullable', Rule::enum(KegiatanStatus::class)],
+            'panduan_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+            'certificate_template_file' => ['nullable', 'file', 'mimes:png,jpg,jpeg,pdf', 'max:10240'],
+            'certificate_schema_config' => ['nullable', 'array'],
+            'seat_layout_config' => ['nullable', 'array'],
+            'seat_layout_config.rows' => ['sometimes', 'array'],
+            'seat_layout_config.rows.*' => ['string', 'max:3'],
+            'seat_layout_config.cols_per_row' => ['sometimes', 'integer', 'min:1', 'max:50'],
+            'seat_layout_config.vip_rows' => ['sometimes', 'array'],
+            'seat_layout_config.vip_rows.*' => ['string', 'max:3'],
+            'seat_layout_config.panitia_rows' => ['sometimes', 'array'],
+            'seat_layout_config.panitia_rows.*' => ['string', 'max:3'],
+        ];
+    }
+
+    /**
+     * Seragamkan nilai input lama sebelum validasi: kategori "Workshop" -> "workshop",
+     * lokasi "external_venue" (nama lama di form) -> "external" (nilai kolom).
+     */
+    protected function normalizeKegiatanInput(Request $request): void
+    {
+        if ($request->filled('kategori')) {
+            $request->merge(['kategori' => strtolower(str_replace(' ', '_', trim((string) $request->input('kategori'))))]);
+        }
+
+        if ($request->input('lokasi_type') === 'external_venue') {
+            $request->merge(['lokasi_type' => 'external']);
+        }
+    }
+
+    /**
+     * Payload update berisi HANYA kolom yang dikirim di request.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    protected function kegiatanUpdatePayload(Request $request, array $validated): array
+    {
+        $payload = [];
+        $ada = fn (string $key): bool => array_key_exists($key, $validated);
+
+        foreach (['nama_kegiatan', 'lokasi_nama'] as $key) {
+            if ($ada($key)) {
+                $payload[$key] = trim($validated[$key]);
+            }
+        }
+
+        foreach (['deskripsi', 'kategori', 'lokasi_type', 'lokasi_detail', 'submission_instructions', 'certificate_schema_config'] as $key) {
+            if ($ada($key)) {
+                $payload[$key] = $validated[$key];
+            }
+        }
+
+        // Kolom NOT NULL: nilai kosong tidak boleh menimpa nilai lama.
+        foreach (['sasaran_peserta', 'metode_pelaksanaan'] as $key) {
+            if ($ada($key) && $validated[$key] !== null) {
+                $payload[$key] = $validated[$key];
+            }
+        }
+
+        // Input jadwal dianggap WIB, disimpan dalam UTC. Deadline yang dikirim kosong berarti dihapus.
+        foreach (['tanggal_mulai', 'tanggal_selesai', 'registration_deadline', 'submission_deadline'] as $key) {
+            if ($ada($key)) {
+                $payload[$key] = Wib::keUtc($validated[$key]);
+            }
+        }
+
+        if ($ada('biaya')) {
+            $payload['biaya'] = (float) $validated['biaya'];
+        }
+        if ($ada('kuota')) {
+            $payload['kuota'] = (int) $validated['kuota'];
+        }
+        if ($ada('poin_xp')) {
+            $payload['poin_xp'] = (int) ($validated['poin_xp'] ?? 0);
+        }
+
+        foreach (['is_seat_booking_active', 'is_submission_active'] as $key) {
+            if ($ada($key)) {
+                $payload[$key] = $request->boolean($key);
+            }
+        }
+
+        if ($ada('status')) {
+            $payload['status'] = KegiatanStatus::from($validated['status']);
+        }
+
+        if ($ada('narasumber')) {
+            $payload['narasumber'] = $this->normalizeNarasumber($validated['narasumber']);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Narasumber disimpan sebagai array of {nama, gelar?, instansi?, foto?}. Baris tanpa nama dibuang;
+     * kunci yang dikirim dipertahankan (urutan tetap) agar data tersimpan kembali utuh.
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    protected function normalizeNarasumber(?array $narasumber): ?array
+    {
+        $hasil = [];
+
+        foreach ($narasumber ?? [] as $item) {
+            $nama = trim((string) ($item['nama'] ?? ''));
+            if ($nama === '') {
+                continue;
+            }
+
+            $entry = ['nama' => $nama];
+            foreach (['gelar', 'instansi', 'foto'] as $key) {
+                if (array_key_exists($key, $item)) {
+                    $entry[$key] = $item[$key];
+                }
+            }
+            $hasil[] = $entry;
+        }
+
+        return $hasil === [] ? null : $hasil;
+    }
+
+    /**
+     * Bentuk baku denah kursi agar konfigurasi lama dan baru bisa dibandingkan.
+     *
+     * @return array{rows: list<string>, cols_per_row: int, vip_rows: list<string>, panitia_rows: list<string>}
+     */
+    protected function normalizeSeatLayout(?array $layout): array
+    {
+        $baris = fn ($rows): array => array_values(array_map(
+            fn ($row) => strtoupper(trim((string) $row)),
+            is_array($rows) ? $rows : []
+        ));
+
+        return [
+            'rows' => $baris($layout['rows'] ?? ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']),
+            'cols_per_row' => (int) ($layout['cols_per_row'] ?? 10),
+            'vip_rows' => $baris($layout['vip_rows'] ?? ['A', 'B']),
+            'panitia_rows' => $baris($layout['panitia_rows'] ?? []),
+        ];
+    }
+
+    /**
+     * Bandingkan dua nilai JSON tanpa memedulikan urutan key objek (urutan elemen list tetap berarti).
+     */
+    protected function jsonSama(mixed $a, mixed $b): bool
+    {
+        $urutkan = function (mixed $value) use (&$urutkan): mixed {
+            if (! is_array($value)) {
+                return $value;
+            }
+            $value = array_map($urutkan, $value);
+            if (! array_is_list($value)) {
+                ksort($value);
+            }
+
+            return $value;
+        };
+
+        return $urutkan($a) === $urutkan($b);
+    }
+
+    /**
+     * Nilai untuk notifikasi perubahan: tanggal dalam WIB ("Y-m-d H:i"), selain itu apa adanya.
+     */
+    protected function formatChangedValue(mixed $value): mixed
+    {
+        if ($value instanceof \Carbon\CarbonInterface) {
+            return Wib::dari($value)->format('Y-m-d H:i');
+        }
+
+        return $value instanceof \BackedEnum ? $value->value : $value;
     }
 }

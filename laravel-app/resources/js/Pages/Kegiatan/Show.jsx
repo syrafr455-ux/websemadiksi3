@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { usePage, router } from '@inertiajs/react';
 import ParticipantLayout from '@/Layouts/ParticipantLayout';
 import { formatWib } from '@/lib/waktuWib';
+import { formatNarasumber } from '@/lib/kegiatanForm';
 
 export default function KegiatanShow({
     kegiatan = {},
@@ -151,10 +152,10 @@ export default function KegiatanShow({
                                 {kegiatan.nama_kegiatan}
                             </h1>
 
-                            {kegiatan.narasumber && (
+                            {formatNarasumber(kegiatan.narasumber) && (
                                 <p className="text-sm font-semibold text-emerald-400 flex items-center gap-2">
                                     <span className="material-symbols-outlined text-base">mic</span>
-                                    Narasumber: {kegiatan.narasumber}
+                                    Narasumber: {formatNarasumber(kegiatan.narasumber)}
                                 </p>
                             )}
 

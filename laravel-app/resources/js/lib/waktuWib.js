@@ -31,6 +31,7 @@ export function formatWib(iso, kosong = '-') {
 
 /**
  * Ubah waktu UTC dari server menjadi nilai <input type="datetime-local"> dalam WIB ("YYYY-MM-DDTHH:mm").
+ * Detik ikut disertakan ("...:ss") bila bukan 00, agar membuka lalu menyimpan form tidak memotong detik.
  */
 export function keInputWib(iso) {
     const date = keDate(iso);
@@ -44,11 +45,14 @@ export function keInputWib(iso) {
             day: '2-digit',
             hour: '2-digit',
             minute: '2-digit',
+            second: '2-digit',
             hourCycle: 'h23',
         })
             .formatToParts(date)
             .map(({ type, value }) => [type, value]),
     );
 
-    return `${bagian.year}-${bagian.month}-${bagian.day}T${bagian.hour}:${bagian.minute}`;
+    const detik = bagian.second && bagian.second !== '00' ? `:${bagian.second}` : '';
+
+    return `${bagian.year}-${bagian.month}-${bagian.day}T${bagian.hour}:${bagian.minute}${detik}`;
 }

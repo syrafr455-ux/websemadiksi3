@@ -42,9 +42,7 @@ class EventEngineAndBookingTest extends TestCase
         $this->actingAs($admin)->post(route('admin.kegiatan.store'), [
             'nama_kegiatan' => 'Workshop AI & Next-Gen Cloud',
             'kategori' => 'Workshop',
-            'tipe_kegiatan' => 'workshop',
-            'target_peserta' => 'semua',
-            'waktu_mulai' => now()->addDays(5)->format('Y-m-d H:i:s'),
+            'tanggal_mulai' => now()->addDays(5)->format('Y-m-d H:i:s'),
             'lokasi_type' => 'unusa_campus',
             'lokasi_kampus' => 'Kampus B (Jemursari)',
             'lokasi_gedung' => 'Tower UNUSA',
@@ -52,9 +50,9 @@ class EventEngineAndBookingTest extends TestCase
             'lokasi_nama' => 'Tower UNUSA - Kampus B',
             'lokasi_detail' => 'Auditorium Lt. 9',
             'biaya' => 0,
-            'kuota_total' => 50,
-            'has_seat_selection' => true,
-            'seat_layout' => [
+            'kuota' => 50,
+            'is_seat_booking_active' => true,
+            'seat_layout_config' => [
                 'rows' => ['A', 'B', 'C'],
                 'cols_per_row' => 5,
                 'vip_rows' => ['A'],
@@ -81,9 +79,7 @@ class EventEngineAndBookingTest extends TestCase
         $response = $this->actingAs($admin)->post(route('admin.kegiatan.store'), [
             'nama_kegiatan' => 'Workshop AI & Next-Gen Cloud',
             'kategori' => 'Workshop',
-            'tipe_kegiatan' => 'workshop',
-            'target_peserta' => 'semua',
-            'waktu_mulai' => now()->addDays(5)->format('Y-m-d H:i:s'),
+            'tanggal_mulai' => now()->addDays(5)->format('Y-m-d H:i:s'),
             'lokasi_type' => 'unusa_campus',
             'lokasi_kampus' => 'Kampus B (Jemursari)',
             'lokasi_gedung' => 'Tower UNUSA',
@@ -91,9 +87,9 @@ class EventEngineAndBookingTest extends TestCase
             'lokasi_nama' => 'Tower UNUSA - Kampus B',
             'lokasi_detail' => 'Auditorium Lt. 9',
             'biaya' => 0,
-            'kuota_total' => 50,
-            'has_seat_selection' => true,
-            'seat_layout' => [
+            'kuota' => 50,
+            'is_seat_booking_active' => true,
+            'seat_layout_config' => [
                 'rows' => ['A', 'B', 'C'],
                 'cols_per_row' => 5,
                 'vip_rows' => ['A'],
@@ -128,15 +124,13 @@ class EventEngineAndBookingTest extends TestCase
         $response = $this->actingAs($admin)->put(route('admin.kegiatan.update', $kegiatan->id), [
             'nama_kegiatan' => $kegiatan->nama_kegiatan,
             'kategori' => $kegiatan->kategori,
-            'tipe_kegiatan' => $kegiatan->tipe_kegiatan,
-            'target_peserta' => $kegiatan->target_peserta,
-            'waktu_mulai' => $newTime,
+            'tanggal_mulai' => $newTime,
             'lokasi_type' => $kegiatan->lokasi_type,
             'lokasi_nama' => 'Tower UNUSA - Kampus B Baru',
             'biaya' => $kegiatan->biaya,
-            'kuota_total' => $kegiatan->kuota_total,
+            'kuota' => $kegiatan->kuota,
             'status' => KegiatanStatus::Published->value,
-            'has_seat_selection' => false,
+            'is_seat_booking_active' => false,
         ]);
 
         $response->assertRedirect();
