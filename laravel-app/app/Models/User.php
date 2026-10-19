@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -36,6 +37,9 @@ class User extends Authenticatable
         'password',
         'fakultas_id',
         'program_studi_id',
+        'asal_kampus',
+        'program_studi_teks',
+        'verifikator_level',
     ];
 
     /**
@@ -163,5 +167,13 @@ class User extends Authenticatable
     public function programStudi(): BelongsTo
     {
         return $this->belongsTo(ProgramStudi::class, 'program_studi_id');
+    }
+
+    /**
+     * Lomba yang ditugaskan untuk dijuri (khusus penilai_karya).
+     */
+    public function lombaDinilai(): BelongsToMany
+    {
+        return $this->belongsToMany(Kegiatan::class, 'kegiatan_penilai', 'user_id', 'kegiatan_id')->withTimestamps();
     }
 }

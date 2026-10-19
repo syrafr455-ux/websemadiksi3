@@ -117,6 +117,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         // User Matrix & Tracking
         Route::get('/pengguna', [\App\Http\Controllers\Admin\UserManagementController::class, 'index'])->name('users');
         Route::post('/pengguna', [\App\Http\Controllers\Admin\UserManagementController::class, 'store'])->name('users.store');
+        Route::match(['put', 'patch'], '/pengguna/{id}', [\App\Http\Controllers\Admin\UserManagementController::class, 'update'])->whereNumber('id')->name('users.update');
         Route::match(['post', 'patch'], '/pengguna/{id}/toggle-block', [\App\Http\Controllers\Admin\UserManagementController::class, 'toggleBlock'])->name('users.toggle-block');
         Route::match(['post', 'patch'], '/pengguna/{id}/toggle_block', [\App\Http\Controllers\Admin\UserManagementController::class, 'toggleBlock'])->name('users.toggle_block');
         Route::match(['post', 'patch'], '/pengguna/{id}/verify', [\App\Http\Controllers\Admin\UserManagementController::class, 'verify'])->name('users.verify');

@@ -4,16 +4,30 @@
         <div class="organic-blob w-96 h-96 bg-primary top-10 right-10"></div>
         <div class="organic-blob w-96 h-96 bg-secondary bottom-10 left-10"></div>
 
-        <div class="max-w-2xl mx-auto bg-surface/90 backdrop-blur-xl border border-surface-variant/40 rounded-3xl p-8 sm:p-12 shadow-2xl relative z-10" x-data="{ showPass: false, showConfirmPass: false }">
+        <div class="max-w-2xl mx-auto bg-surface/90 backdrop-blur-xl border border-surface-variant/40 rounded-3xl p-8 sm:p-12 shadow-2xl relative z-10" x-data="{ showPass: false, showConfirmPass: false, jenis: @js(old('jenis_akun', 'mahasiswa_kipk')) }">
             <div class="text-center mb-8">
                 <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-primary-container mx-auto flex items-center justify-center text-white shadow-lg shadow-primary/20 mb-4">
                     <span class="material-symbols-outlined text-3xl">how_to_reg</span>
                 </div>
-                <h2 class="text-2xl font-extrabold tracking-tight text-on-surface">Registrasi Mahasiswa KIP-K</h2>
-                <p class="text-sm text-outline mt-1.5">Lengkapi formulir di bawah ini dengan data identitas akademik valid UNUSA.</p>
+                <h2 class="text-2xl font-extrabold tracking-tight text-on-surface" x-text="jenis === 'user_umum' ? 'Registrasi Mahasiswa Umum' : 'Registrasi Mahasiswa KIP-K'">Registrasi Mahasiswa KIP-K</h2>
+                <p class="text-sm text-outline mt-1.5" x-text="jenis === 'user_umum' ? 'Untuk mahasiswa dari kampus mana pun yang ingin mengikuti kegiatan SEMADIKSI.' : 'Lengkapi formulir di bawah ini dengan data identitas akademik valid UNUSA.'">Lengkapi formulir di bawah ini dengan data identitas akademik valid UNUSA.</p>
             </div>
 
-            <form action="{{ route('register.post') }}" method="POST" class="space-y-6">
+            {{-- Pilihan jenis akun --}}
+            <div class="grid grid-cols-2 gap-2 p-1 mb-8 rounded-2xl bg-surface-container border border-surface-variant/40" role="tablist">
+                <button type="button" role="tab" @click="jenis = 'mahasiswa_kipk'" :aria-selected="jenis === 'mahasiswa_kipk'"
+                    :class="jenis === 'mahasiswa_kipk' ? 'bg-primary text-white shadow' : 'text-on-surface hover:bg-surface-variant/40'"
+                    class="py-2.5 rounded-xl text-sm font-bold transition-colors">
+                    Mahasiswa KIP-K UNUSA
+                </button>
+                <button type="button" role="tab" @click="jenis = 'user_umum'" :aria-selected="jenis === 'user_umum'"
+                    :class="jenis === 'user_umum' ? 'bg-primary text-white shadow' : 'text-on-surface hover:bg-surface-variant/40'"
+                    class="py-2.5 rounded-xl text-sm font-bold transition-colors">
+                    Mahasiswa Umum
+                </button>
+            </div>
+
+            <form action="{{ route('register.post') }}" method="POST" class="space-y-6" x-show="jenis === 'mahasiswa_kipk'" @if(old('jenis_akun') === 'user_umum') style="display: none" @endif>
                 @csrf
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -232,6 +246,96 @@
                     >
                         <span class="material-symbols-outlined text-xl">check_circle</span>
                         Daftar Akun Mahasiswa
+                    </button>
+                </div>
+            </form>
+
+            {{-- Mahasiswa Umum: field & validasi sama dengan form admin (App\Http\Requests\Pengguna\UserUmumRequest) --}}
+            <form action="{{ route('register.post') }}" method="POST" class="space-y-6" x-show="jenis === 'user_umum'" @if(old('jenis_akun') !== 'user_umum') style="display: none" @endif>
+                @csrf
+                <input type="hidden" name="jenis_akun" value="user_umum">
+
+                @php($kelasInput = 'w-full px-4 py-3 bg-surface-container rounded-2xl border border-surface-variant/40 focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm font-medium transition-all')
+                @php($umum = old('jenis_akun') === 'user_umum')
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div class="sm:col-span-2">
+                        <label for="umum_name" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
+                            Nama Lengkap <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="text" id="umum_name" name="name" value="{{ $umum ? old('name') : '' }}" required autocomplete="name"
+                            placeholder="Contoh: Siti Aminah" class="{{ $kelasInput }} @if($umum) @error('name') border-rose-500 @enderror @endif">
+                        <p class="text-xs text-outline mt-1">Ditulis persis seperti yang akan tercetak di sertifikat.</p>
+                        @if($umum) @error('name') <p class="text-xs text-rose-600 font-medium mt-1">{{ $message }}</p> @enderror @endif
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label for="umum_asal_kampus" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
+                            Asal Kampus <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="text" id="umum_asal_kampus" name="asal_kampus" value="{{ old('asal_kampus') }}" required
+                            placeholder="Contoh: Universitas Airlangga" class="{{ $kelasInput }} @error('asal_kampus') border-rose-500 @enderror">
+                        @error('asal_kampus') <p class="text-xs text-rose-600 font-medium mt-1">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div>
+                        <label for="umum_nim" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
+                            NIM <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="text" id="umum_nim" name="nim" value="{{ $umum ? old('nim') : '' }}" required
+                            placeholder="NIM di kampus asal" class="{{ $kelasInput }} @if($umum) @error('nim') border-rose-500 @enderror @endif">
+                        @if($umum) @error('nim') <p class="text-xs text-rose-600 font-medium mt-1">{{ $message }}</p> @enderror @endif
+                    </div>
+
+                    <div>
+                        <label for="umum_program_studi_teks" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
+                            Program Studi <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="text" id="umum_program_studi_teks" name="program_studi_teks" value="{{ old('program_studi_teks') }}" required
+                            placeholder="Contoh: S1 Teknik Informatika" class="{{ $kelasInput }} @error('program_studi_teks') border-rose-500 @enderror">
+                        @error('program_studi_teks') <p class="text-xs text-rose-600 font-medium mt-1">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div>
+                        <label for="umum_email" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
+                            Email <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="email" id="umum_email" name="email" value="{{ $umum ? old('email') : '' }}" required autocomplete="email"
+                            placeholder="nama@email.com" class="{{ $kelasInput }} @if($umum) @error('email') border-rose-500 @enderror @endif">
+                        @if($umum) @error('email') <p class="text-xs text-rose-600 font-medium mt-1">{{ $message }}</p> @enderror @endif
+                    </div>
+
+                    <div>
+                        <label for="umum_phone" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
+                            Nomor Handphone <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="tel" id="umum_phone" name="phone" value="{{ $umum ? old('phone') : '' }}" required autocomplete="tel"
+                            placeholder="081234567890" class="{{ $kelasInput }} @if($umum) @error('phone') border-rose-500 @enderror @endif">
+                        @if($umum) @error('phone') <p class="text-xs text-rose-600 font-medium mt-1">{{ $message }}</p> @enderror @endif
+                    </div>
+
+                    <div>
+                        <label for="umum_password" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
+                            Kata Sandi Baru <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="password" id="umum_password" name="password" required autocomplete="new-password"
+                            placeholder="Minimal 8 karakter, huruf & angka" class="{{ $kelasInput }} @if($umum) @error('password') border-rose-500 @enderror @endif">
+                        @if($umum) @error('password') <p class="text-xs text-rose-600 font-medium mt-1">{{ $message }}</p> @enderror @endif
+                    </div>
+
+                    <div>
+                        <label for="umum_password_confirmation" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
+                            Konfirmasi Kata Sandi <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="password" id="umum_password_confirmation" name="password_confirmation" required autocomplete="new-password"
+                            placeholder="Ulangi kata sandi" class="{{ $kelasInput }}">
+                    </div>
+                </div>
+
+                <div class="pt-4">
+                    <button type="submit" class="w-full py-4 px-6 rounded-2xl bg-primary hover:bg-primary-container text-white font-bold text-base shadow-lg shadow-primary/25 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined text-xl">check_circle</span>
+                        Daftar sebagai Mahasiswa Umum
                     </button>
                 </div>
             </form>

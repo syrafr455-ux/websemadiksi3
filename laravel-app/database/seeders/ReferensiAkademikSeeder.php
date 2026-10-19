@@ -16,8 +16,9 @@ use Illuminate\Database\Seeder;
 class ReferensiAkademikSeeder extends Seeder
 {
     /**
+     * Kode fakultas => nama fakultas + daftar program studi [kode prodi, jenjang, nama prodi].
+     *
      * @var array<string, array{nama: string, program_studi: list<array{0: string, 1: string, 2: string}>}>
-     *                                                                                                      kode fakultas => [nama, daftar [kode prodi, jenjang, nama prodi]]
      */
     public const DATA = [
         'FK' => [

@@ -44,4 +44,16 @@ return [
         'timezone' => 'Asia/Jakarta',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Domain Email Verifikator Berkas
+    |--------------------------------------------------------------------------
+    |
+    | Akun verifikator (Admin Fakultas / Admin Prodi) wajib memakai email dengan
+    | domain persis salah satu dari daftar ini (subdomain tidak otomatis ikut).
+    |
+    */
+
+    'verifikator_email_domains' => ['unusa.ac.id'],
+
 ];

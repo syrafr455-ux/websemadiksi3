@@ -6,6 +6,7 @@ use App\Enums\KegiatanStatus;
 use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
@@ -87,6 +88,14 @@ class Kegiatan extends Model
             'is_submission_active' => 'boolean',
             'status' => KegiatanStatus::class,
         ];
+    }
+
+    /**
+     * Juri (penilai_karya) yang ditugaskan menilai karya lomba ini.
+     */
+    public function penilai(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'kegiatan_penilai', 'kegiatan_id', 'user_id')->withTimestamps();
     }
 
     public function seats(): HasMany

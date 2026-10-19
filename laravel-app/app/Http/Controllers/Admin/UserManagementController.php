@@ -4,12 +4,20 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Pengguna\MahasiswaKipkRequest;
+use App\Http\Requests\Pengguna\PenggunaRequest;
+use App\Http\Requests\Pengguna\PenilaiKaryaRequest;
+use App\Http\Requests\Pengguna\SuperAdminRequest;
+use App\Http\Requests\Pengguna\UserUmumRequest;
+use App\Http\Requests\Pengguna\VerifikatorBerkasRequest;
 use App\Models\AuditLog;
+use App\Models\Kegiatan;
 use App\Models\User;
+use App\Services\UnusaAcademicService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules\Password;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -22,7 +30,9 @@ class UserManagementController extends Controller
     {
         \Illuminate\Support\Facades\Gate::authorize('viewAny', User::class);
 
-        $query = User::query()->latest('id');
+        $query = User::query()
+            ->with(['programStudi:id,nama,fakultas_id', 'fakultas:id,nama', 'lombaDinilai:id,nama_kegiatan'])
+            ->latest('id');
 
         // Pencarian case-insensitive (PostgreSQL ILIKE / SQLite LIKE)
         if ($request->filled('q')) {
@@ -33,6 +43,8 @@ class UserManagementController extends Controller
                   ->orWhere('email', $likeOp, "%{$q}%")
                   ->orWhere('nim', $likeOp, "%{$q}%")
                   ->orWhere('prodi', $likeOp, "%{$q}%")
+                  ->orWhere('asal_kampus', $likeOp, "%{$q}%")
+                  ->orWhere('program_studi_teks', $likeOp, "%{$q}%")
                   ->orWhere('last_login_ip', $likeOp, "%{$q}%");
             });
         }
@@ -67,6 +79,9 @@ class UserManagementController extends Controller
             'filters' => $request->only(['q', 'role', 'is_blocked', 'verification_status']),
             'stats' => $stats,
             'roleOptions' => UserRole::options(),
+            'fakultasOptions' => app(UnusaAcademicService::class)->fakultasDenganProdi(),
+            'lombaOptions' => Kegiatan::where('kategori', 'lomba')->orderBy('nama_kegiatan')->get(['id', 'nama_kegiatan', 'status']),
+            'verifikatorEmailDomains' => VerifikatorBerkasRequest::domainEmail(),
         ]);
     }
 
@@ -77,34 +92,26 @@ class UserManagementController extends Controller
     {
         \Illuminate\Support\Facades\Gate::authorize('create', User::class);
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email:rfc,dns', 'max:255', 'unique:users,email'],
-            'nim' => ['nullable', 'string', 'max:50', 'unique:users,nim'],
-            'phone' => ['nullable', 'string', 'max:20'],
-            'angkatan' => ['nullable', 'string', 'max:10'],
-            'prodi' => ['nullable', 'string', 'max:100'],
-            'university' => ['nullable', 'string', 'max:255'],
-            'role' => ['required', 'string', 'in:'.implode(',', UserRole::values())],
-            'password' => ['required', Password::min(8)],
-        ]);
+        $request->validate(['role' => ['required', Rule::enum(UserRole::class)]]);
+        $roleEnum = UserRole::from($request->input('role'));
 
-        $roleEnum = UserRole::from($validated['role']);
+        // Validasi sesuai role (Form Request per role).
+        $form = $this->formUntuk($roleEnum);
 
-        $user = User::create([
-            'name' => trim($validated['name']),
-            'email' => strtolower(trim($validated['email'])),
-            'nim' => ! empty($validated['nim']) ? trim($validated['nim']) : null,
-            'phone' => ! empty($validated['phone']) ? trim($validated['phone']) : null,
-            'angkatan' => $validated['angkatan'] ?? null,
-            'prodi' => $validated['prodi'] ?? null,
-            'university' => $validated['university'] ?? 'Universitas Nahdlatul Ulama Surabaya',
-            'kip_status' => $roleEnum === UserRole::MahasiswaKipk ? 'KIP UNUSA' : 'Umum',
-            'verification_status' => 'Verified',
-            'role' => $roleEnum,
-            'is_blocked' => false,
-            'password' => Hash::make($validated['password']),
-        ]);
+        $user = DB::transaction(function () use ($form, $roleEnum) {
+            $user = new User($form->atributPengguna());
+            $user->forceFill([
+                'role' => $roleEnum,
+                'verification_status' => 'Verified',
+                'is_blocked' => false,
+            ])->save();
+
+            if ($form instanceof PenilaiKaryaRequest) {
+                $user->lombaDinilai()->sync($form->lombaIds());
+            }
+
+            return $user;
+        });
 
         AuditLog::record(
             auth()->id(),
@@ -114,6 +121,52 @@ class UserManagementController extends Controller
         );
 
         return back()->with('success', "Akun '{$user->name}' dengan peran {$user->role->label()} berhasil dibuat.");
+    }
+
+    /**
+     * Ubah data pengguna. Role tidak berubah; password kosong berarti tidak diubah.
+     */
+    public function update(int $id): RedirectResponse
+    {
+        $user = User::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('update', $user);
+
+        if ($user->role === UserRole::MahasiswaKipk) {
+            return back()->with('error', 'Edit akun Mahasiswa KIP-K belum tersedia di form ini.');
+        }
+
+        $form = $this->formUntuk($user->role);
+
+        DB::transaction(function () use ($form, $user) {
+            $user->fill($form->atributPengguna())->save();
+
+            if ($form instanceof PenilaiKaryaRequest && $form->mengirimLomba()) {
+                $user->lombaDinilai()->sync($form->lombaIds());
+            }
+        });
+
+        AuditLog::record(
+            auth()->id(),
+            'update_user',
+            "Memperbarui akun pengguna '{$user->name}' dengan role {$user->role->value} (ID: {$user->id})",
+            $user
+        );
+
+        return back()->with('success', "Akun '{$user->name}' berhasil diperbarui.");
+    }
+
+    /**
+     * Form Request sesuai role; validasi berjalan saat di-resolve dari container.
+     */
+    protected function formUntuk(UserRole $role): PenggunaRequest
+    {
+        return app(match ($role) {
+            UserRole::UserUmum => UserUmumRequest::class,
+            UserRole::MahasiswaKipk => MahasiswaKipkRequest::class,
+            UserRole::VerifikatorBerkas => VerifikatorBerkasRequest::class,
+            UserRole::PenilaiKarya => PenilaiKaryaRequest::class,
+            UserRole::SuperAdmin => SuperAdminRequest::class,
+        });
     }
 
     /**

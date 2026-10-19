@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UserRole;
+use App\Http\Requests\Pengguna\RegisterUserUmumRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -94,6 +96,11 @@ class AuthController extends Controller
      */
     public function register(Request $request): RedirectResponse
     {
+        // Mahasiswa Umum: field & validasi identik dengan form admin (UserUmumRequest).
+        if ($request->input('jenis_akun') === UserRole::UserUmum->value) {
+            return $this->registerUserUmum($request);
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email:rfc,dns', 'max:255', 'unique:users,email'],
@@ -133,6 +140,26 @@ class AuthController extends Controller
             'is_blocked' => false,
             'password' => Hash::make($validated['password']),
         ]);
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return redirect()->route('dashboard.index')->with('success', 'Selamat datang di Portal SEMADIKSI UNUSA!');
+    }
+
+    /**
+     * Pendaftaran mandiri Mahasiswa Umum (user_umum).
+     */
+    protected function registerUserUmum(Request $request): RedirectResponse
+    {
+        $form = app(RegisterUserUmumRequest::class);
+
+        $user = new User($form->atributPengguna());
+        $user->forceFill([
+            'role' => UserRole::UserUmum,
+            'verification_status' => 'Pending',
+            'is_blocked' => false,
+        ])->save();
 
         Auth::login($user);
         $request->session()->regenerate();
