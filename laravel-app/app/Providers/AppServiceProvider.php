@@ -19,6 +19,12 @@ class AppServiceProvider extends ServiceProvider
             \App\Contracts\UnusaFacilityProvider::class,
             \App\Services\Facilities\ConfigUnusaFacilityProvider::class
         );
+
+        // Sementara membaca tabel lokal; ganti dengan provider API UNUSA saat tersedia.
+        $this->app->bind(
+            \App\Contracts\UnusaAcademicProvider::class,
+            \App\Services\Academic\DatabaseUnusaAcademicProvider::class
+        );
     }
 
     /**

@@ -1,0 +1,66 @@
+<?php
+
+namespace App\Services\Academic;
+
+use App\Contracts\UnusaAcademicProvider;
+use App\Enums\UserRole;
+use App\Models\Fakultas;
+use App\Models\ProgramStudi;
+use App\Models\User;
+
+/**
+ * IMPLEMENTASI SEMENTARA: membaca master fakultas/prodi dan akun pengguna dari database lokal.
+ * Diganti provider API UNUSA saat tersedia (lihat App\Contracts\UnusaAcademicProvider).
+ */
+class DatabaseUnusaAcademicProvider implements UnusaAcademicProvider
+{
+    public function fakultas(): array
+    {
+        return Fakultas::orderBy('nama')
+            ->get(['id', 'kode', 'nama'])
+            ->map(fn (Fakultas $f): array => ['id' => $f->id, 'kode' => $f->kode, 'nama' => $f->nama])
+            ->all();
+    }
+
+    public function programStudi(?int $fakultasId = null): array
+    {
+        return ProgramStudi::query()
+            ->when($fakultasId, fn ($q) => $q->where('fakultas_id', $fakultasId))
+            ->orderBy('nama')
+            ->get(['id', 'kode', 'nama', 'jenjang', 'fakultas_id'])
+            ->map(fn (ProgramStudi $p): array => [
+                'id' => $p->id,
+                'kode' => $p->kode,
+                'nama' => $p->nama,
+                'jenjang' => $p->jenjang,
+                'fakultas_id' => $p->fakultas_id,
+            ])
+            ->all();
+    }
+
+    public function findMahasiswaByNim(string $nim): ?array
+    {
+        $user = User::where('role', UserRole::MahasiswaKipk->value)->where('nim', trim($nim))->first();
+
+        return $user ? [
+            'nim' => (string) $user->nim,
+            'nama' => $user->name,
+            'email' => $user->email,
+            'program_studi_id' => $user->program_studi_id,
+        ] : null;
+    }
+
+    public function findStaffByEmail(string $email): ?array
+    {
+        $user = User::where('email', strtolower(trim($email)))
+            ->whereIn('role', [UserRole::SuperAdmin->value, UserRole::VerifikatorBerkas->value, UserRole::PenilaiKarya->value])
+            ->first();
+
+        return $user ? [
+            'email' => $user->email,
+            'nama' => $user->name,
+            'fakultas_id' => $user->fakultas_id,
+            'program_studi_id' => $user->program_studi_id,
+        ] : null;
+    }
+}
