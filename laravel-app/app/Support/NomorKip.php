@@ -35,6 +35,19 @@ final class NomorKip
     }
 
     /**
+     * Format nomor lengkap (HANYA untuk super_admin): 19 digit -> 1234.567.89012.1766.761.
+     */
+    public static function format(?string $nomor): string
+    {
+        $digit = self::normalisasi($nomor);
+        if (strlen($digit) !== 19) {
+            return $digit;
+        }
+
+        return implode('.', [substr($digit, 0, 4), substr($digit, 4, 3), substr($digit, 7, 5), substr($digit, 12, 4), substr($digit, 16, 3)]);
+    }
+
+    /**
      * Samarkan: hanya 7 digit terakhir yang terlihat.
      * Nomor 19 digit diformat seperti SIM KIP: ****.***.*****.1766.761
      */

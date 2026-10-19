@@ -26,12 +26,56 @@ function Field({ id, label, wajib = false, keterangan, error, children }) {
     );
 }
 
-function DetailPeran({ u }) {
+const CARA_TERHUBUNG = {
+    nim_saat_daftar: 'NIM saat daftar',
+    klaim_nomor: 'Klaim nomor pendaftaran',
+    impor_nim: 'Impor daftar (NIM)',
+    persetujuan_admin: 'Disetujui admin',
+};
+
+// Status KIP-K: nomor hanya tersamar; nomor lengkap dibuka lewat aksi yang tercatat di audit log.
+function StatusKip({ u, nomorTerbuka, onBukaNomor, onUbahStatus }) {
+    const p = u.penerima_kipk;
+    const bisaDiubah = u.role === 'mahasiswa_kipk' || (u.role === 'user_umum' && u.jalur_pendaftaran === 'unusa');
+
+    return (
+        <div className="mt-2 space-y-1" data-status-kip={u.id}>
+            {p ? (
+                <>
+                    <div className="text-[11px] text-slate-300">
+                        No. KIP: <span className="font-mono" data-nomor-kip>{nomorTerbuka || p.nomor_tersamar}</span>
+                        {!nomorTerbuka && (
+                            <button type="button" onClick={() => onBukaNomor(p.id)} className="ml-2 font-bold text-amber-400 hover:underline">Buka</button>
+                        )}
+                    </div>
+                    <div className="text-[10px] text-slate-500">
+                        Sumber: {p.sumber || '-'} • {CARA_TERHUBUNG[p.cara_terhubung] || p.cara_terhubung || '-'}
+                        {p.dicocokkan_pada ? ` • dicocokkan ${formatWib(p.dicocokkan_pada)} WIB` : ''}
+                    </div>
+                    {p.status_tinjau === 'perlu_ditinjau' && (
+                        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">Perlu ditinjau</span>
+                    )}
+                </>
+            ) : u.role === 'mahasiswa_kipk' ? (
+                <div className="text-[10px] text-slate-500">Belum tertaut ke daftar penerima (status manual/lama)</div>
+            ) : null}
+            {u.klaim_kipk && u.klaim_kipk.status_tinjau === 'perlu_ditinjau' && (
+                <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30">Klaim KIP-K perlu ditinjau</span>
+            )}
+            {bisaDiubah && (
+                <button type="button" onClick={() => onUbahStatus(u)} className="block text-[10px] font-bold text-emerald-400 hover:underline">Ubah status KIP</button>
+            )}
+        </div>
+    );
+}
+
+function DetailPeran({ u, ...aksi }) {
     if (u.role === 'user_umum') {
         return (
             <div>
                 <div className="font-bold text-slate-200">{u.asal_kampus || '-'}</div>
                 <div className="text-[11px] text-slate-400">NIM {u.nim || '-'} • {u.program_studi_teks || '-'}</div>
+                {u.jalur_pendaftaran === 'unusa' && <StatusKip u={u} {...aksi} />}
             </div>
         );
     }
@@ -48,6 +92,7 @@ function DetailPeran({ u }) {
                         Prodi belum diatur
                     </span>
                 )}
+                <StatusKip u={u} {...aksi} />
             </div>
         );
     }
@@ -92,6 +137,23 @@ export default function PenggunaIndex({
     const [modalOpen, setModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const [passwordDibuat, setPasswordDibuat] = useState('');
+    const [nomorTerbuka, setNomorTerbuka] = useState({});
+    const [ubahKip, setUbahKip] = useState(null);
+    const [alasanKip, setAlasanKip] = useState('');
+
+    // Nomor lengkap hanya diambil saat diminta (tercatat di audit log) dan tidak ikut di props halaman.
+    const bukaNomor = async (penerimaId) => {
+        const { data: hasil } = await window.axios.post(`/admin/penerima-kipk/${penerimaId}/nomor`);
+        setNomorTerbuka((lama) => ({ ...lama, [penerimaId]: hasil.nomor }));
+    };
+
+    const simpanStatusKip = (e) => {
+        e.preventDefault();
+        router.post(`/admin/pengguna/${ubahKip.id}/status-kip`, {
+            status: ubahKip.role === 'mahasiswa_kipk' ? 'bukan_kipk' : 'kipk',
+            alasan: alasanKip,
+        }, { preserveScroll: true, onSuccess: () => { setUbahKip(null); setAlasanKip(''); } });
+    };
 
     const { data, setData, post, put, transform, processing, errors, reset, clearErrors } = useForm(penggunaKosong('mahasiswa_kipk'));
 
@@ -293,7 +355,12 @@ export default function PenggunaIndex({
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <DetailPeran u={u} />
+                                                <DetailPeran
+                                                    u={u}
+                                                    nomorTerbuka={u.penerima_kipk ? nomorTerbuka[u.penerima_kipk.id] : null}
+                                                    onBukaNomor={bukaNomor}
+                                                    onUbahStatus={(user) => { setAlasanKip(''); setUbahKip(user); }}
+                                                />
                                             </td>
                                             <td className="px-6 py-4">
                                                 {u.last_login_at ? (
@@ -374,6 +441,29 @@ export default function PenggunaIndex({
                         </table>
                     </div>
                 </div>
+
+                {/* Modal Ubah Status KIP-K (wajib alasan, tercatat di audit log) */}
+                {ubahKip && (
+                    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+                        <form onSubmit={simpanStatusKip} className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 space-y-4 text-xs" data-form-status-kip>
+                            <h3 className="text-base font-black text-white">Ubah Status KIP-K: {ubahKip.name}</h3>
+                            <p className="text-slate-300">
+                                {ubahKip.role === 'mahasiswa_kipk'
+                                    ? 'Cabut status penerima KIP-K (role menjadi user_umum, tautan daftar penerima dilepas).'
+                                    : 'Tetapkan sebagai penerima KIP-K secara manual (role menjadi mahasiswa_kipk).'}
+                            </p>
+                            <div>
+                                <label htmlFor="alasan-kip" className="block font-bold text-slate-300 mb-1">Alasan <span className="text-rose-400">*</span></label>
+                                <textarea id="alasan-kip" value={alasanKip} onChange={(e) => setAlasanKip(e.target.value)} required minLength={5} rows={3}
+                                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white" />
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <button type="button" onClick={() => setUbahKip(null)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold">Batal</button>
+                                <button type="submit" className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold">Simpan</button>
+                            </div>
+                        </form>
+                    </div>
+                )}
 
                 {/* Modal Tambah / Edit Pengguna */}
                 {modalOpen && (

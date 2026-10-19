@@ -151,6 +151,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/penerima-kipk/pratinjau', [\App\Http\Controllers\Admin\PenerimaKipkController::class, 'pratinjau'])->name('penerima-kipk.pratinjau');
         Route::post('/penerima-kipk/impor', [\App\Http\Controllers\Admin\PenerimaKipkController::class, 'simpan'])->name('penerima-kipk.impor');
         Route::post('/penerima-kipk/batal', [\App\Http\Controllers\Admin\PenerimaKipkController::class, 'batal'])->name('penerima-kipk.batal');
+        Route::post('/penerima-kipk/{id}/nomor', [\App\Http\Controllers\Admin\PenerimaKipkController::class, 'bukaNomor'])->whereNumber('id')->name('penerima-kipk.nomor');
+        Route::post('/penerima-kipk/{id}/tinjau', [\App\Http\Controllers\Admin\PenerimaKipkController::class, 'tinjau'])->whereNumber('id')->name('penerima-kipk.tinjau');
+        Route::post('/pengguna/{id}/status-kip', [\App\Http\Controllers\Admin\UserManagementController::class, 'statusKip'])->whereNumber('id')->name('users.status-kip');
 
         // Legacy & Admin Certificates
         Route::get('/sertifikat', [\App\Http\Controllers\Admin\DashboardController::class, 'certificates'])->name('certificates');

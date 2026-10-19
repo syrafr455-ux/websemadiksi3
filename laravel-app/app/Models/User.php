@@ -206,6 +206,14 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasOne(PenerimaKipk::class, 'user_id');
     }
 
+    /**
+     * Baris daftar penerima yang sedang diklaim akun ini (menunggu tinjauan admin).
+     */
+    public function klaimKipk(): HasOne
+    {
+        return $this->hasOne(PenerimaKipk::class, 'klaim_user_id');
+    }
+
     public function isVerifikator(): bool
     {
         return $this->role === UserRole::VerifikatorBerkas;

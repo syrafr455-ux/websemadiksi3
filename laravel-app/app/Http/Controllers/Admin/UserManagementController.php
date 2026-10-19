@@ -13,6 +13,7 @@ use App\Http\Requests\Pengguna\VerifikatorBerkasRequest;
 use App\Models\AuditLog;
 use App\Models\Kegiatan;
 use App\Models\User;
+use App\Services\Kip\StatusKipService;
 use App\Services\UnusaAcademicService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,7 +32,7 @@ class UserManagementController extends Controller
         \Illuminate\Support\Facades\Gate::authorize('viewAny', User::class);
 
         $query = User::query()
-            ->with(['programStudi:id,nama,fakultas_id', 'fakultas:id,nama', 'lombaDinilai:id,nama_kegiatan'])
+            ->with(['programStudi:id,nama,fakultas_id', 'fakultas:id,nama', 'lombaDinilai:id,nama_kegiatan', 'penerimaKipk', 'klaimKipk'])
             ->latest('id');
 
         // Pencarian case-insensitive (PostgreSQL ILIKE / SQLite LIKE)
@@ -153,6 +154,35 @@ class UserManagementController extends Controller
         );
 
         return back()->with('success', "Akun '{$user->name}' berhasil diperbarui.");
+    }
+
+    /**
+     * Ubah status KIP-K akun secara manual (super_admin), wajib beralasan dan tercatat di audit log.
+     */
+    public function statusKip(Request $request, int $id, StatusKipService $statusKip): RedirectResponse
+    {
+        $user = User::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('update', $user);
+        abort_unless(in_array($user->role, [UserRole::MahasiswaKipk, UserRole::UserUmum], true), 422, 'Status KIP-K hanya untuk akun mahasiswa.');
+
+        $data = $request->validate([
+            'status' => ['required', 'in:kipk,bukan_kipk'],
+            'alasan' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'alasan.required' => 'Alasan perubahan status wajib diisi.',
+            'alasan.min' => 'Alasan minimal 5 karakter.',
+        ]);
+
+        $jadiKipk = $data['status'] === 'kipk';
+        if ($jadiKipk === ($user->role === UserRole::MahasiswaKipk)) {
+            return back()->with('error', 'Status KIP-K akun tidak berubah.');
+        }
+
+        DB::transaction(fn () => $jadiKipk
+            ? $statusKip->tetapkanManual($user, $request->user(), $data['alasan'])
+            : $statusKip->cabut($user, $request->user(), $data['alasan']));
+
+        return back()->with('success', "Status KIP-K akun '{$user->name}' diperbarui.");
     }
 
     /**
