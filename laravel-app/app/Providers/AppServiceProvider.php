@@ -20,11 +20,18 @@ class AppServiceProvider extends ServiceProvider
             \App\Services\Facilities\ConfigUnusaFacilityProvider::class
         );
 
-        // Sementara membaca tabel lokal; ganti dengan provider API UNUSA saat tersedia.
-        $this->app->bind(
-            \App\Contracts\UnusaAcademicProvider::class,
-            \App\Services\Academic\DatabaseUnusaAcademicProvider::class
-        );
+        // Sumber data dipilih lewat config/unusa.php ("database" = tabel lokal hasil impor, "api" = kerangka API).
+        $this->app->bind(\App\Contracts\UnusaAcademicProvider::class, fn ($app) => $app->make(
+            config('unusa.academic_provider') === 'api'
+                ? \App\Services\Academic\ApiUnusaAcademicProvider::class
+                : \App\Services\Academic\DatabaseUnusaAcademicProvider::class
+        ));
+
+        $this->app->bind(\App\Contracts\KipRecipientProvider::class, fn ($app) => $app->make(
+            config('unusa.kip_recipient_provider') === 'api'
+                ? \App\Services\Kip\ApiKipRecipientProvider::class
+                : \App\Services\Kip\DatabaseKipRecipientProvider::class
+        ));
     }
 
     /**

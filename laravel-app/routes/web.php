@@ -122,6 +122,22 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::match(['post', 'patch'], '/pengguna/{id}/toggle_block', [\App\Http\Controllers\Admin\UserManagementController::class, 'toggleBlock'])->name('users.toggle_block');
         Route::match(['post', 'patch'], '/pengguna/{id}/verify', [\App\Http\Controllers\Admin\UserManagementController::class, 'verify'])->name('users.verify');
 
+        // Data Mahasiswa UNUSA (master hasil impor CSV)
+        Route::get('/mahasiswa-unusa', [\App\Http\Controllers\Admin\MasterMahasiswaController::class, 'index'])->name('mahasiswa-unusa');
+        Route::get('/mahasiswa-unusa/template', [\App\Http\Controllers\Admin\MasterMahasiswaController::class, 'template'])->name('mahasiswa-unusa.template');
+        Route::post('/mahasiswa-unusa/unggah', [\App\Http\Controllers\Admin\MasterMahasiswaController::class, 'unggah'])->name('mahasiswa-unusa.unggah');
+        Route::get('/mahasiswa-unusa/pratinjau', [\App\Http\Controllers\Admin\MasterMahasiswaController::class, 'pratinjau'])->name('mahasiswa-unusa.pratinjau');
+        Route::post('/mahasiswa-unusa/impor', [\App\Http\Controllers\Admin\MasterMahasiswaController::class, 'simpan'])->name('mahasiswa-unusa.impor');
+        Route::post('/mahasiswa-unusa/batal', [\App\Http\Controllers\Admin\MasterMahasiswaController::class, 'batal'])->name('mahasiswa-unusa.batal');
+
+        // Daftar Penerima KIP-K (impor berbasis nomor pendaftaran SIM KIP Kuliah)
+        Route::get('/penerima-kipk', [\App\Http\Controllers\Admin\PenerimaKipkController::class, 'index'])->name('penerima-kipk');
+        Route::get('/penerima-kipk/template', [\App\Http\Controllers\Admin\PenerimaKipkController::class, 'template'])->name('penerima-kipk.template');
+        Route::post('/penerima-kipk/unggah', [\App\Http\Controllers\Admin\PenerimaKipkController::class, 'unggah'])->name('penerima-kipk.unggah');
+        Route::get('/penerima-kipk/pratinjau', [\App\Http\Controllers\Admin\PenerimaKipkController::class, 'pratinjau'])->name('penerima-kipk.pratinjau');
+        Route::post('/penerima-kipk/impor', [\App\Http\Controllers\Admin\PenerimaKipkController::class, 'simpan'])->name('penerima-kipk.impor');
+        Route::post('/penerima-kipk/batal', [\App\Http\Controllers\Admin\PenerimaKipkController::class, 'batal'])->name('penerima-kipk.batal');
+
         // Legacy & Admin Certificates
         Route::get('/sertifikat', [\App\Http\Controllers\Admin\DashboardController::class, 'certificates'])->name('certificates');
         Route::post('/sertifikat', [\App\Http\Controllers\Admin\DashboardController::class, 'storeCertificate'])->name('certificates.store');

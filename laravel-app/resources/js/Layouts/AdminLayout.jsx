@@ -12,6 +12,8 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
         { label: 'Kegiatan Enterprise', href: '/admin/kegiatan', icon: 'event', active: window.location.pathname.startsWith('/admin/kegiatan') },
         { label: 'Penilaian Karya', href: '/admin/penilaian', icon: 'rate_review', active: window.location.pathname.startsWith('/admin/penilaian') },
         { label: 'Data Pengguna', href: '/admin/pengguna', icon: 'group', active: window.location.pathname.startsWith('/admin/pengguna') },
+        { label: 'Data Mahasiswa UNUSA', href: '/admin/mahasiswa-unusa', icon: 'school', active: window.location.pathname.startsWith('/admin/mahasiswa-unusa') },
+        { label: 'Daftar Penerima KIP-K', href: '/admin/penerima-kipk', icon: 'badge', active: window.location.pathname.startsWith('/admin/penerima-kipk') },
         { label: 'Presensi & Kehadiran', href: '/admin/absensi', icon: 'how_to_reg', active: window.location.pathname.startsWith('/admin/absensi') },
         { label: 'Sertifikat Digital', href: '/admin/sertifikat', icon: 'workspace_premium', active: window.location.pathname.startsWith('/admin/sertifikat') },
         { label: 'Verifikasi Berkas KIP-K', href: '/admin/berkas', icon: 'folder_shared', active: window.location.pathname.startsWith('/admin/berkas') },

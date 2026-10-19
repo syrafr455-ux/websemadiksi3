@@ -23,9 +23,9 @@ class UnusaAcademicService
         );
     }
 
-    public function findMahasiswaByNim(string $nim): ?array
+    public function cariMahasiswaByNim(string $nim): ?array
     {
-        return $this->provider->findMahasiswaByNim($nim);
+        return $this->provider->cariMahasiswaByNim($nim);
     }
 
     public function findStaffByEmail(string $email): ?array

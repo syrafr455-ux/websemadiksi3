@@ -56,4 +56,18 @@ return [
 
     'verifikator_email_domains' => ['unusa.ac.id'],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Sumber Data Akademik & Status KIP-K
+    |--------------------------------------------------------------------------
+    |
+    | "database" = tabel lokal hasil impor CSV oleh super_admin (saat ini).
+    | "api"      = integrasi API (kerangka kosong, belum diimplementasikan).
+    |
+    */
+
+    'academic_provider' => env('UNUSA_ACADEMIC_PROVIDER', 'database'),
+
+    'kip_recipient_provider' => env('KIP_RECIPIENT_PROVIDER', 'database'),
+
 ];

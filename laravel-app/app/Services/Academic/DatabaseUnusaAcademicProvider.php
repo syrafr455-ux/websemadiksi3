@@ -5,11 +5,13 @@ namespace App\Services\Academic;
 use App\Contracts\UnusaAcademicProvider;
 use App\Enums\UserRole;
 use App\Models\Fakultas;
+use App\Models\MasterMahasiswaUnusa;
 use App\Models\ProgramStudi;
 use App\Models\User;
 
 /**
- * IMPLEMENTASI SEMENTARA: membaca master fakultas/prodi dan akun pengguna dari database lokal.
+ * IMPLEMENTASI SEMENTARA: membaca master fakultas/prodi, master_mahasiswa_unusa (impor CSV),
+ * dan akun staf dari database lokal.
  * Diganti provider API UNUSA saat tersedia (lihat App\Contracts\UnusaAcademicProvider).
  */
 class DatabaseUnusaAcademicProvider implements UnusaAcademicProvider
@@ -38,15 +40,20 @@ class DatabaseUnusaAcademicProvider implements UnusaAcademicProvider
             ->all();
     }
 
-    public function findMahasiswaByNim(string $nim): ?array
+    public function cariMahasiswaByNim(string $nim): ?array
     {
-        $user = User::where('role', UserRole::MahasiswaKipk->value)->where('nim', trim($nim))->first();
+        $mahasiswa = MasterMahasiswaUnusa::with('programStudi.fakultas')->where('nim', trim($nim))->first();
 
-        return $user ? [
-            'nim' => (string) $user->nim,
-            'nama' => $user->name,
-            'email' => $user->email,
-            'program_studi_id' => $user->program_studi_id,
+        return $mahasiswa ? [
+            'nim' => $mahasiswa->nim,
+            'nama_lengkap' => $mahasiswa->nama_lengkap,
+            'email_kampus' => $mahasiswa->email_kampus,
+            'program_studi_id' => $mahasiswa->program_studi_id,
+            'program_studi' => $mahasiswa->programStudi?->nama,
+            'fakultas_id' => $mahasiswa->programStudi?->fakultas_id,
+            'fakultas' => $mahasiswa->programStudi?->fakultas?->nama,
+            'angkatan' => $mahasiswa->angkatan,
+            'status_aktif' => $mahasiswa->status_aktif,
         ] : null;
     }
 

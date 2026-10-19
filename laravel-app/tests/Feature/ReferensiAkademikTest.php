@@ -77,9 +77,19 @@ class ReferensiAkademikTest extends TestCase
             'program_studi_id' => $prodi->id,
             'fakultas_id' => $prodi->fakultas_id,
         ]);
-        $this->assertSame($prodi->id, $provider->findMahasiswaByNim('2241010001')['program_studi_id']);
-        $this->assertNull($provider->findMahasiswaByNim('tidak-ada'));
         $this->assertSame('Fakultas Keperawatan dan Kebidanan', $mahasiswa->programStudi->fakultas->nama);
+
+        // cariMahasiswaByNim membaca master_mahasiswa_unusa (bukan tabel users).
+        $this->assertNull($provider->cariMahasiswaByNim('2241010001'));
+        \App\Models\MasterMahasiswaUnusa::create([
+            'nim' => '2241010001', 'nama_lengkap' => 'Mahasiswa Keperawatan', 'email_kampus' => 'kep@student.unusa.ac.id',
+            'program_studi_id' => $prodi->id, 'angkatan' => '2024',
+        ]);
+        $hasil = $provider->cariMahasiswaByNim(' 2241010001 ');
+        $this->assertSame($prodi->id, $hasil['program_studi_id']);
+        $this->assertSame('S1 Keperawatan', $hasil['program_studi']);
+        $this->assertSame('Fakultas Keperawatan dan Kebidanan', $hasil['fakultas']);
+        $this->assertNull($provider->cariMahasiswaByNim('tidak-ada'));
 
         $verifikator = User::factory()->role(UserRole::VerifikatorBerkas)->create(['email' => 'admin.fkk@unusa.ac.id', 'fakultas_id' => $prodi->fakultas_id]);
         $this->assertSame($verifikator->fakultas_id, $provider->findStaffByEmail('ADMIN.FKK@unusa.ac.id')['fakultas_id']);

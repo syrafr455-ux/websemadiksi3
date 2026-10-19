@@ -29,5 +29,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Nomor pendaftaran SIM KIP Kuliah (data sensitif) tidak boleh ikut tersimpan sebagai "old input" di session.
+        $exceptions->dontFlash([
+            'nomor_pendaftaran',
+            'nomor_pendaftaran_kip',
+        ]);
     })->create();

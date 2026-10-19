@@ -52,6 +52,16 @@
                 Data Mahasiswa
             </a>
 
+            <a href="{{ route('admin.mahasiswa-unusa') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.mahasiswa-unusa*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
+                <span class="material-symbols-outlined text-lg">school</span>
+                Data Mahasiswa UNUSA
+            </a>
+
+            <a href="{{ route('admin.penerima-kipk') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.penerima-kipk*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
+                <span class="material-symbols-outlined text-lg">badge</span>
+                Daftar Penerima KIP-K
+            </a>
+
             <a href="{{ route('admin.certificates') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.certificates*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
                 <span class="material-symbols-outlined text-lg">workspace_premium</span>
                 Penerbitan Sertifikat

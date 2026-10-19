@@ -22,11 +22,11 @@ interface UnusaAcademicProvider
     public function programStudi(?int $fakultasId = null): array;
 
     /**
-     * Data mahasiswa berdasarkan NIM, atau null bila tidak ditemukan.
+     * Data mahasiswa UNUSA berdasarkan NIM, atau null bila tidak ditemukan.
      *
-     * @return array{nim: string, nama: string, email: ?string, program_studi_id: ?int}|null
+     * @return array{nim: string, nama_lengkap: string, email_kampus: ?string, program_studi_id: ?int, program_studi: ?string, fakultas_id: ?int, fakultas: ?string, angkatan: ?string, status_aktif: string}|null
      */
-    public function findMahasiswaByNim(string $nim): ?array;
+    public function cariMahasiswaByNim(string $nim): ?array;
 
     /**
      * Data staf (dosen / admin fakultas / admin prodi) berdasarkan email, atau null bila tidak ditemukan.
