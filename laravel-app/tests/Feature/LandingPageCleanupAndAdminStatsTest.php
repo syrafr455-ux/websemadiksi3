@@ -77,7 +77,7 @@ class LandingPageCleanupAndAdminStatsTest extends TestCase
         $response->assertSee('Profil');
         $response->assertSee('Berita Acara');
         $response->assertSee('Masuk');
-        $response->assertSee('Daftar Mahasiswa');
+        $response->assertSee('Daftar Akun');
 
         // Pastikan kartu informasi layanan statis muncul di sisi kanan hero
         $response->assertSee('Layanan Terpadu Mahasiswa');

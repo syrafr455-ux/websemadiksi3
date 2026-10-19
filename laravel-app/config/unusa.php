@@ -70,4 +70,7 @@ return [
 
     'kip_recipient_provider' => env('KIP_RECIPIENT_PROVIDER', 'database'),
 
+    // Masa berlaku link aktivasi pendaftaran jalur Mahasiswa UNUSA (menit).
+    'aktivasi_berlaku_menit' => 60,
+
 ];

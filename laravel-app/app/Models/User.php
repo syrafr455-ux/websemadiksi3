@@ -8,12 +8,22 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-class User extends Authenticatable
+/**
+ * Verifikasi email hanya diwajibkan untuk pendaftaran mandiri jalur Peserta Umum
+ * (lihat wajibVerifikasiEmail() dan middleware EnsureEmailVerifiedForJalurUmum).
+ */
+class User extends Authenticatable implements MustVerifyEmail
 {
+    public const JALUR_UNUSA = 'unusa';
+
+    public const JALUR_UMUM = 'umum';
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
@@ -41,6 +51,7 @@ class User extends Authenticatable
         'asal_kampus',
         'program_studi_teks',
         'verifikator_level',
+        'jalur_pendaftaran',
     ];
 
     /**
@@ -168,6 +179,31 @@ class User extends Authenticatable
     public function programStudi(): BelongsTo
     {
         return $this->belongsTo(ProgramStudi::class, 'program_studi_id');
+    }
+
+    /**
+     * Pendaftar mandiri jalur Peserta Umum wajib memverifikasi email sebelum memakai dashboard.
+     * Akun admin/seeder/jalur UNUSA (sudah terbukti lewat email kampus) tidak terkena aturan ini.
+     */
+    public function wajibVerifikasiEmail(): bool
+    {
+        return $this->jalur_pendaftaran === self::JALUR_UMUM && ! $this->hasVerifiedEmail();
+    }
+
+    /**
+     * Akun user_umum yang berasal dari jalur Mahasiswa UNUSA (boleh mengklaim status KIP-K).
+     */
+    public function isUmumUnusa(): bool
+    {
+        return $this->role === UserRole::UserUmum && $this->jalur_pendaftaran === self::JALUR_UNUSA;
+    }
+
+    /**
+     * Baris daftar penerima KIP-K yang terhubung ke akun ini.
+     */
+    public function penerimaKipk(): HasOne
+    {
+        return $this->hasOne(PenerimaKipk::class, 'user_id');
     }
 
     public function isVerifikator(): bool

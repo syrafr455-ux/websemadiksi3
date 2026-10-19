@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Enums\UserRole;
-use App\Http\Requests\Pengguna\RegisterUserUmumRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,7 +10,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 class AuthController extends Controller
@@ -81,90 +79,6 @@ class AuthController extends Controller
         }
 
         return redirect()->intended(route('dashboard.index'));
-    }
-
-    /**
-     * Show student registration form.
-     */
-    public function showRegister(): View
-    {
-        return view('auth.register');
-    }
-
-    /**
-     * Handle student registration submission.
-     */
-    public function register(Request $request): RedirectResponse
-    {
-        // Mahasiswa Umum: field & validasi identik dengan form admin (UserUmumRequest).
-        if ($request->input('jenis_akun') === UserRole::UserUmum->value) {
-            return $this->registerUserUmum($request);
-        }
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email:rfc,dns', 'max:255', 'unique:users,email'],
-            'nim' => ['required', 'string', 'max:30', 'unique:users,nim'],
-            'phone' => ['nullable', 'string', 'max:20'],
-            'angkatan' => ['required', 'string', 'max:10'],
-            'prodi' => ['required', 'string', 'max:100'],
-            'university' => ['required', 'string', 'max:255'],
-            'kip_status' => ['required', 'string'],
-            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
-        ], [
-            'name.required' => 'Nama lengkap wajib diisi.',
-            'email.required' => 'Email akademik wajib diisi.',
-            'email.unique' => 'Email ini sudah terdaftar di sistem.',
-            'nim.required' => 'NIM wajib diisi.',
-            'nim.unique' => 'NIM ini sudah terdaftar di sistem.',
-            'angkatan.required' => 'Tahun angkatan wajib dipilih.',
-            'prodi.required' => 'Program studi wajib dipilih.',
-            'password.required' => 'Password wajib diisi.',
-            'password.min' => 'Password minimal terdiri dari 8 karakter.',
-            'password.confirmed' => 'Konfirmasi password tidak cocok.',
-        ]);
-
-        $role = \App\Enums\UserRole::MahasiswaKipk;
-
-        $user = User::create([
-            'name' => trim($validated['name']),
-            'email' => strtolower(trim($validated['email'])),
-            'nim' => trim($validated['nim']),
-            'phone' => $validated['phone'] ? trim($validated['phone']) : null,
-            'angkatan' => trim($validated['angkatan']),
-            'prodi' => trim($validated['prodi']),
-            'university' => trim($validated['university']),
-            'kip_status' => $validated['kip_status'],
-            'verification_status' => 'Pending',
-            'role' => $role,
-            'is_blocked' => false,
-            'password' => Hash::make($validated['password']),
-        ]);
-
-        Auth::login($user);
-        $request->session()->regenerate();
-
-        return redirect()->route('dashboard.index')->with('success', 'Selamat datang di Portal SEMADIKSI UNUSA!');
-    }
-
-    /**
-     * Pendaftaran mandiri Mahasiswa Umum (user_umum).
-     */
-    protected function registerUserUmum(Request $request): RedirectResponse
-    {
-        $form = app(RegisterUserUmumRequest::class);
-
-        $user = new User($form->atributPengguna());
-        $user->forceFill([
-            'role' => UserRole::UserUmum,
-            'verification_status' => 'Pending',
-            'is_blocked' => false,
-        ])->save();
-
-        Auth::login($user);
-        $request->session()->regenerate();
-
-        return redirect()->route('dashboard.index')->with('success', 'Selamat datang di Portal SEMADIKSI UNUSA!');
     }
 
     /**

@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
             'role' => \App\Http\Middleware\EnsureRole::class,
+            'email.terverifikasi' => \App\Http\Middleware\EnsureEmailVerifiedForJalurUmum::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

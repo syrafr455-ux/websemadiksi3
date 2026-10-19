@@ -232,7 +232,7 @@ class PenggunaFormPerRoleTest extends TestCase
 
         $this->flushSession();
         auth()->logout();
-        $errorPublik = $kunciError($this->post(route('register.post'), ['jenis_akun' => 'user_umum'] + $salah));
+        $errorPublik = $kunciError($this->post(route('register.post'), ['jalur' => 'umum'] + $salah));
 
         sort($errorAdmin);
         sort($errorPublik);
@@ -243,18 +243,20 @@ class PenggunaFormPerRoleTest extends TestCase
     public function test_public_registration_creates_user_umum_account(): void
     {
         $this->post(route('register.post'), $this->userUmumValid([
-            'jenis_akun' => 'user_umum', 'email' => 'rina@gmail.com', 'nim' => '187003', 'password_confirmation' => 'RahasiaKuat123',
-        ]))->assertRedirect(route('dashboard.index'));
+            'jalur' => 'umum', 'email' => 'rina@gmail.com', 'nim' => '187003', 'password_confirmation' => 'RahasiaKuat123',
+        ]))->assertRedirect(route('verification.notice'));
 
         $user = User::where('email', 'rina@gmail.com')->firstOrFail();
         $this->assertSame(UserRole::UserUmum, $user->role);
         $this->assertSame('Universitas Airlangga', $user->asal_kampus);
         $this->assertSame('081234567890', $user->phone);
         $this->assertSame('Pending', $user->verification_status);
+        $this->assertSame('umum', $user->jalur_pendaftaran);
+        $this->assertFalse($user->hasVerifiedEmail(), 'Akun Peserta Umum aktif setelah verifikasi email.');
         $this->assertAuthenticatedAs($user);
 
         auth()->logout();
-        $this->post(route('register.post'), $this->userUmumValid(['jenis_akun' => 'user_umum', 'password_confirmation' => 'beda']))
+        $this->post(route('register.post'), $this->userUmumValid(['jalur' => 'umum', 'password_confirmation' => 'beda']))
             ->assertSessionHasErrors('password');
     }
 
@@ -293,8 +295,9 @@ class PenggunaFormPerRoleTest extends TestCase
         $this->assertSame('Ahmad Fauzan', $user->fresh()->name);
     }
 
-    public function test_public_kipk_registration_is_unchanged(): void
+    public function test_old_self_selected_kipk_registration_no_longer_creates_kipk_account(): void
     {
+        // Pilihan "Kategori Penerima" dihapus: status KIP-K kini ditentukan sistem (lihat PendaftaranDuaJalurTest).
         $this->post(route('register.post'), [
             'name' => 'Mahasiswa KIP Uji',
             'email' => 'kip.uji@unusa.ac.id',
@@ -306,12 +309,9 @@ class PenggunaFormPerRoleTest extends TestCase
             'kip_status' => 'KIP UNUSA',
             'password' => 'Mahasiswa123',
             'password_confirmation' => 'Mahasiswa123',
-        ])->assertRedirect(route('dashboard.index'));
+        ])->assertSessionHasErrors(['asal_kampus', 'program_studi_teks', 'phone']);
 
-        $user = User::where('email', 'kip.uji@unusa.ac.id')->firstOrFail();
-        $this->assertSame(UserRole::MahasiswaKipk, $user->role);
-        $this->assertSame('S1 Gizi', $user->prodi);
-        $this->assertSame('Pending', $user->verification_status);
+        $this->assertFalse(User::where('email', 'kip.uji@unusa.ac.id')->exists());
     }
 
     public function test_pengguna_page_sends_options_and_role_details(): void

@@ -30,7 +30,7 @@
                         @else
                             <a href="{{ route('register') }}" class="px-6 py-3.5 rounded-2xl bg-primary hover:bg-primary-container text-white font-bold text-sm shadow-xl shadow-primary/25 transition-all hover:scale-105 active:scale-95 flex items-center gap-2">
                                 <span class="material-symbols-outlined text-xl">how_to_reg</span>
-                                Registrasi Mahasiswa
+                                Daftar Akun SEMADIKSI
                             </a>
                             <a href="{{ route('login') }}" class="px-6 py-3.5 rounded-2xl bg-surface border border-surface-variant/60 hover:bg-surface-container text-on-surface font-semibold text-sm transition-all hover:scale-105">
                                 Masuk ke Akun
@@ -204,7 +204,7 @@
             </p>
             <div class="pt-2">
                 <a href="{{ route('register') }}" class="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-white text-primary hover:bg-slate-50 font-bold text-sm shadow-2xl hover:scale-105 active:scale-95 transition-all">
-                    Daftar Sebagai Mahasiswa
+                    Daftar Akun SEMADIKSI
                     <span class="material-symbols-outlined text-lg">arrow_forward</span>
                 </a>
             </div>

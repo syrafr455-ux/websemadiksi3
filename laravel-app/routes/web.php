@@ -40,18 +40,29 @@ Route::middleware('guest')->group(function () {
     Route::get('/masuk', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/masuk', [AuthController::class, 'login'])->name('login.post');
 
-    Route::get('/daftar', [AuthController::class, 'showRegister'])->name('register');
-    Route::post('/daftar', [AuthController::class, 'register'])->name('register.post');
+    // Pendaftaran dua jalur: Peserta Umum (isi manual) & Mahasiswa UNUSA (NIM -> link aktivasi ke email kampus).
+    Route::get('/daftar', [\App\Http\Controllers\PendaftaranController::class, 'show'])->name('register');
+    Route::post('/daftar', [\App\Http\Controllers\PendaftaranController::class, 'daftarUmum'])->name('register.post');
+    Route::post('/daftar/unusa', [\App\Http\Controllers\PendaftaranController::class, 'cekNimUnusa'])->name('daftar.unusa.cek');
+    Route::get('/daftar/unusa/aktivasi/{nim}', [\App\Http\Controllers\PendaftaranController::class, 'aktivasi'])->name('daftar.unusa.aktivasi');
+    Route::post('/daftar/unusa/aktivasi/{nim}', [\App\Http\Controllers\PendaftaranController::class, 'selesaikanAktivasi'])->name('daftar.unusa.aktivasi.simpan');
 
     Route::get('/admin/masuk', [AuthController::class, 'showAdminLogin'])->name('admin.login');
     Route::post('/admin/masuk', [AuthController::class, 'adminLogin'])->name('admin.login.post');
+});
+
+// Verifikasi email (pendaftar jalur Peserta Umum)
+Route::middleware('auth')->group(function () {
+    Route::get('/email/verifikasi', [\App\Http\Controllers\VerifikasiEmailController::class, 'pemberitahuan'])->name('verification.notice');
+    Route::get('/email/verifikasi/{id}/{hash}', [\App\Http\Controllers\VerifikasiEmailController::class, 'verifikasi'])->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
+    Route::post('/email/verifikasi/kirim-ulang', [\App\Http\Controllers\VerifikasiEmailController::class, 'kirimUlang'])->middleware('throttle:6,1')->name('verification.send');
 });
 
 // Authenticated Logout
 Route::post('/keluar', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
 
 // Student Dashboard Routes
-Route::middleware('auth')->prefix('dashboard')->name('dashboard.')->group(function () {
+Route::middleware(['auth', 'email.terverifikasi'])->prefix('dashboard')->name('dashboard.')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('index');
 
     Route::get('/kegiatan', [DashboardController::class, 'kegiatan'])->name('kegiatan');
@@ -90,7 +101,7 @@ Route::middleware('auth')->prefix('dashboard')->name('dashboard.')->group(functi
 
 // Event Show & Booking Checkout Routes
 Route::get('/kegiatan/{slugOrId}', [\App\Http\Controllers\KegiatanBookingController::class, 'show'])->name('kegiatan.detail');
-Route::post('/kegiatan/{id}/checkout', [\App\Http\Controllers\KegiatanBookingController::class, 'checkout'])->name('kegiatan.checkout')->middleware('auth');
+Route::post('/kegiatan/{id}/checkout', [\App\Http\Controllers\KegiatanBookingController::class, 'checkout'])->name('kegiatan.checkout')->middleware(['auth', 'email.terverifikasi']);
 Route::post('/kegiatan/{id}/reselect-seat', [\App\Http\Controllers\KegiatanBookingController::class, 'reselectSeat'])->name('kegiatan.reselect-seat')->middleware('auth');
 
 // Admin & Staff Dashboard Routes
