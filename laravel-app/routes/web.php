@@ -32,6 +32,9 @@ Route::post('/presensi/{kegiatan}', [\App\Http\Controllers\PresensiController::c
 Route::get('/absensi', [HomeController::class, 'absensiPublic'])->name('absensi.public');
 Route::post('/absensi', [HomeController::class, 'storeAbsensiPublic'])->name('absensi.public.store');
 
+// Alamat login yang umum diketik; halaman login portal ada di /masuk.
+Route::redirect('/login', '/masuk');
+
 // Guest Authentication Routes
 Route::middleware('guest')->group(function () {
     Route::get('/masuk', [AuthController::class, 'showLogin'])->name('login');
