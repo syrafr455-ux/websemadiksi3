@@ -27,8 +27,14 @@
                     @forelse($submissions as $sub)
                         <tr class="hover:bg-slate-900/50 transition-colors">
                             <td class="px-6 py-4">
-                                <div class="font-bold text-white text-sm">{{ $sub->user_name }}</div>
-                                <div class="text-[11px] text-slate-400 font-mono">NIM: {{ $sub->user_nim ?: '-' }}</div>
+                                <div class="font-bold text-white text-sm">{{ $sub->applicant_name ?: ($sub->user?->name ?? '-') }}</div>
+                                <div class="text-[11px] text-slate-400 font-mono">NIM: {{ $sub->applicant_nim ?: ($sub->user?->nim ?: '-') }}</div>
+                                @if($sub->user?->programStudi)
+                                    <div class="text-[11px] text-slate-500">{{ $sub->user->programStudi->nama }}</div>
+                                @else
+                                    {{-- Hanya super_admin yang bisa melihat mahasiswa tanpa prodi (lihat User::mencakupMahasiswa). --}}
+                                    <span class="inline-block mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">Prodi belum diatur</span>
+                                @endif
                             </td>
                             <td class="px-6 py-4">
                                 <div class="font-semibold text-slate-200">{{ $sub->form->title ?? 'Formulir KIP-K' }}</div>
@@ -59,14 +65,14 @@
                             <td class="px-6 py-4 text-right">
                                 <div class="flex items-center justify-end gap-2">
                                     <button 
-                                        @click="viewDetail = {{ json_encode(['title' => $sub->form->title ?? 'Formulir', 'student' => $sub->user_name, 'answers' => $sub->answers, 'submitted_at' => $sub->submitted_at]) }}"
+                                        @click="viewDetail = {{ json_encode(['title' => $sub->form->title ?? 'Formulir', 'student' => $sub->applicant_name ?: $sub->user?->name, 'answers' => $sub->answers, 'submitted_at' => $sub->submitted_at]) }}"
                                         class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-bold text-[11px] transition-colors"
                                     >
                                         Lihat Isian
                                     </button>
 
                                     <button 
-                                        @click="selectedSub = {{ json_encode(['id' => $sub->id, 'student' => $sub->user_name, 'form' => $sub->form->title ?? 'Formulir', 'status' => $sub->status, 'admin_notes' => $sub->admin_notes]) }}"
+                                        @click="selectedSub = {{ json_encode(['id' => $sub->id, 'student' => $sub->applicant_name ?: $sub->user?->name, 'form' => $sub->form->title ?? 'Formulir', 'status' => $sub->status, 'admin_notes' => $sub->admin_notes]) }}"
                                         class="px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 font-bold text-[11px] transition-colors"
                                     >
                                         Update Status

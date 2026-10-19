@@ -87,6 +87,8 @@ class PenilaianAndWebhookTest extends TestCase
         $juri = $this->getPenilaiKarya();
         $admin = $this->getSuperAdmin();
         $kegiatan = $this->getOrCreateTestKegiatan();
+        // Juri hanya boleh menilai lomba yang ditugaskan kepadanya.
+        $kegiatan->penilai()->syncWithoutDetaching([$juri->id]);
 
         $reg = KegiatanRegistration::create([
             'kegiatan_id' => $kegiatan->id,
@@ -126,6 +128,8 @@ class PenilaianAndWebhookTest extends TestCase
     {
         $juri = $this->getPenilaiKarya();
         $kegiatan = $this->getOrCreateTestKegiatan();
+        // Juri hanya boleh mengekspor/mengimpor nilai lomba yang ditugaskan kepadanya.
+        $kegiatan->penilai()->syncWithoutDetaching([$juri->id]);
 
         $submission = KegiatanSubmission::where('kegiatan_id', $kegiatan->id)->latest()->first();
         if (! $submission) {

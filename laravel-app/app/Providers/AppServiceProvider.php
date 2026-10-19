@@ -54,5 +54,6 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Support\Facades\Gate::policy(\App\Models\Kegiatan::class, \App\Policies\KegiatanPolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\User::class, \App\Policies\UserPolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\KipkDocument::class, \App\Policies\KipkDocumentPolicy::class);
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\CustomFormSubmission::class, \App\Policies\CustomFormSubmissionPolicy::class);
     }
 }

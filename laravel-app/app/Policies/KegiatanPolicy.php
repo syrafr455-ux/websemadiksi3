@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Enums\KegiatanStatus;
+use App\Enums\UserRole;
 use App\Models\Kegiatan;
 use App\Models\User;
 
@@ -74,5 +75,19 @@ class KegiatanPolicy
     public function manageCertificates(User $user, Kegiatan $kegiatan): bool
     {
         return $user->isSuperAdmin();
+    }
+
+    /**
+     * Melihat, menilai, mengekspor, dan mengimpor nilai karya: super_admin semua lomba,
+     * juri hanya lomba yang ditugaskan kepadanya (pivot kegiatan_penilai).
+     */
+    public function nilaiKarya(User $user, Kegiatan $kegiatan): bool
+    {
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->role === UserRole::PenilaiKarya
+            && $kegiatan->penilai()->whereKey($user->id)->exists();
     }
 }

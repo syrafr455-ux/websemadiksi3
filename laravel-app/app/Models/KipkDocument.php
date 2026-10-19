@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -42,5 +43,22 @@ class KipkDocument extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Berkas yang boleh dilihat $viewer: super_admin semua, verifikator sesuai cakupan
+     * fakultas/prodi mahasiswa pemilik berkas, selain itu hanya berkas miliknya sendiri.
+     */
+    public function scopeTerlihatOleh(Builder $query, User $viewer): Builder
+    {
+        if ($viewer->isSuperAdmin()) {
+            return $query;
+        }
+
+        if ($viewer->isVerifikator()) {
+            return $query->whereHas('user', fn (Builder $u) => $u->dalamCakupan($viewer));
+        }
+
+        return $query->where('user_id', $viewer->id);
     }
 }

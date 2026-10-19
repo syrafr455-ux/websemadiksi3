@@ -26,8 +26,13 @@ class KipkDocumentPolicy
      */
     public function view(User $user, KipkDocument $doc): bool
     {
-        if ($user->isSuperAdmin() || $user->role === UserRole::VerifikatorBerkas) {
+        if ($user->isSuperAdmin()) {
             return true;
+        }
+
+        // Verifikator hanya berkas mahasiswa dalam cakupan fakultas/prodinya.
+        if ($user->role === UserRole::VerifikatorBerkas) {
+            return $user->mencakupMahasiswa($doc->user);
         }
 
         return (int) $doc->user_id === (int) $user->id;
@@ -52,7 +57,8 @@ class KipkDocumentPolicy
      */
     public function verify(User $user, KipkDocument $doc): bool
     {
-        return $user->isSuperAdmin() || $user->role === UserRole::VerifikatorBerkas;
+        return $user->isSuperAdmin()
+            || ($user->role === UserRole::VerifikatorBerkas && $user->mencakupMahasiswa($doc->user));
     }
 
     /**

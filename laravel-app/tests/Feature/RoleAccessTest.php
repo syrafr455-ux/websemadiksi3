@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Models\KipkDocument;
+use App\Models\ProgramStudi;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
@@ -257,9 +258,17 @@ class RoleAccessTest extends TestCase
      */
     public function test_kipk_document_policy_allows_verifikator_and_super_admin_to_verify_and_download(): void
     {
-        $verifikator = $this->createVerifikatorBerkas();
+        // Verifikator hanya memproses berkas mahasiswa dalam cakupannya: Admin Prodi Gizi + mahasiswa Gizi.
+        $prodi = ProgramStudi::where('kode', 'FKES-S1-GIZI')->firstOrFail();
+        $verifikator = User::factory()->create([
+            'role' => UserRole::VerifikatorBerkas,
+            'is_blocked' => false,
+            'verifikator_level' => 'prodi',
+            'program_studi_id' => $prodi->id,
+            'fakultas_id' => $prodi->fakultas_id,
+        ]);
         $admin = $this->createSuperAdmin();
-        $student = $this->createMahasiswaKipk();
+        $student = $this->createMahasiswaKipk(['program_studi_id' => $prodi->id, 'fakultas_id' => $prodi->fakultas_id]);
 
         $doc = KipkDocument::create([
             'user_id' => $student->id,

@@ -30,6 +30,12 @@
                             <td class="px-6 py-4">
                                 <div class="font-bold text-white text-sm">{{ $doc->user_name ?: 'Mahasiswa KIP-K' }}</div>
                                 <div class="text-[11px] text-slate-400 font-mono">NIM: {{ $doc->user_nim ?: '-' }}</div>
+                                @if($doc->user?->programStudi)
+                                    <div class="text-[11px] text-slate-500">{{ $doc->user->programStudi->nama }}</div>
+                                @else
+                                    {{-- Hanya super_admin yang bisa melihat mahasiswa tanpa prodi (lihat User::mencakupMahasiswa). --}}
+                                    <span class="inline-block mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">Prodi belum diatur</span>
+                                @endif
                             </td>
                             <td class="px-6 py-4">
                                 <div class="font-semibold text-slate-200">{{ $doc->title }}</div>

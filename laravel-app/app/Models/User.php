@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\UserRole;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -167,6 +168,65 @@ class User extends Authenticatable
     public function programStudi(): BelongsTo
     {
         return $this->belongsTo(ProgramStudi::class, 'program_studi_id');
+    }
+
+    public function isVerifikator(): bool
+    {
+        return $this->role === UserRole::VerifikatorBerkas;
+    }
+
+    /**
+     * Apakah pengguna ini (super_admin / verifikator) boleh melihat & memproses data milik $mahasiswa.
+     *
+     * - super_admin: semua mahasiswa.
+     * - Admin Prodi: mahasiswa dengan program_studi_id yang sama.
+     * - Admin Fakultas: mahasiswa di semua prodi dalam fakultasnya.
+     * - Mahasiswa tanpa program_studi_id hanya terlihat oleh super_admin.
+     * Aturan yang sama dipakai scopeDalamCakupan() untuk query daftar.
+     */
+    public function mencakupMahasiswa(?User $mahasiswa): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! $this->isVerifikator() || ! $mahasiswa || ! $mahasiswa->program_studi_id) {
+            return false;
+        }
+
+        return match ($this->verifikator_level) {
+            'prodi' => $this->program_studi_id !== null
+                && (int) $mahasiswa->program_studi_id === (int) $this->program_studi_id,
+            'fakultas' => $this->fakultas_id !== null
+                && (int) $mahasiswa->programStudi?->fakultas_id === (int) $this->fakultas_id,
+            default => false,
+        };
+    }
+
+    /**
+     * Batasi query pengguna (mahasiswa) ke cakupan $viewer. Lihat mencakupMahasiswa().
+     */
+    public function scopeDalamCakupan(Builder $query, User $viewer): Builder
+    {
+        if ($viewer->isSuperAdmin()) {
+            return $query;
+        }
+
+        $tidakAda = fn (Builder $q): Builder => $q->whereRaw('1 = 0');
+
+        if (! $viewer->isVerifikator()) {
+            return $tidakAda($query);
+        }
+
+        return match ($viewer->verifikator_level) {
+            'prodi' => $viewer->program_studi_id
+                ? $query->where('program_studi_id', $viewer->program_studi_id)
+                : $tidakAda($query),
+            'fakultas' => $viewer->fakultas_id
+                ? $query->whereHas('programStudi', fn (Builder $p) => $p->where('fakultas_id', $viewer->fakultas_id))
+                : $tidakAda($query),
+            default => $tidakAda($query),
+        };
     }
 
     /**

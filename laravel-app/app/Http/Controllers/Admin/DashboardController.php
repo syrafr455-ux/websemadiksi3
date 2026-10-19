@@ -315,7 +315,11 @@ class DashboardController extends Controller
     public function berkas(): View
     {
         \Illuminate\Support\Facades\Gate::authorize('viewAny', KipkDocument::class);
-        $documents = KipkDocument::latest('id')->paginate(15);
+        // Cakupan ditegakkan di query: verifikator hanya melihat berkas mahasiswa fakultas/prodinya.
+        $documents = KipkDocument::terlihatOleh(auth()->user())
+            ->with('user.programStudi')
+            ->latest('id')
+            ->paginate(15);
         return view('admin.berkas.index', compact('documents'));
     }
 
@@ -356,13 +360,19 @@ class DashboardController extends Controller
      */
     public function submissions(): View
     {
-        $submissions = CustomFormSubmission::with('form')->latest('id')->paginate(15);
+        \Illuminate\Support\Facades\Gate::authorize('viewAny', CustomFormSubmission::class);
+        // Verifikator: hanya formulir monev dari mahasiswa dalam cakupannya.
+        $submissions = CustomFormSubmission::terlihatOleh(auth()->user())
+            ->with(['form', 'user.programStudi'])
+            ->latest('id')
+            ->paginate(15);
         return view('admin.submissions.index', compact('submissions'));
     }
 
     public function updateSubmissionStatus(int $id, Request $request): RedirectResponse
     {
         $sub = CustomFormSubmission::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('review', $sub);
         $sub->status = $request->input('status', 'Disetujui');
         $sub->admin_notes = $request->input('admin_notes');
         $sub->save();

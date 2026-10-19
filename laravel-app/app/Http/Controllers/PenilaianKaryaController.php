@@ -8,6 +8,7 @@ use App\Models\KegiatanSubmission;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -19,17 +20,29 @@ class PenilaianKaryaController extends Controller
      */
     public function index(Request $request): Response
     {
-        $kegiatansWithSubmission = Kegiatan::where('is_submission_active', true)
+        $user = $request->user();
+
+        // Juri hanya melihat lomba yang ditugaskan kepadanya; super_admin semua kegiatan berpengumpulan karya.
+        $kegiatansWithSubmission = ($user->isSuperAdmin()
+            ? Kegiatan::where('is_submission_active', true)
+            : Kegiatan::whereHas('penilai', fn ($q) => $q->whereKey($user->id)))
             ->latest('id')
             ->get(['id', 'nama_kegiatan', 'kategori']);
 
         $selectedKegiatanId = $request->input('kegiatan_id', $kegiatansWithSubmission->first()?->id);
+
+        if ($request->filled('kegiatan_id')) {
+            Gate::authorize('nilaiKarya', Kegiatan::findOrFail($selectedKegiatanId));
+        }
 
         $submissionsQuery = KegiatanSubmission::with(['registration.participantUser'])
             ->latest('id');
 
         if ($selectedKegiatanId) {
             $submissionsQuery->where('kegiatan_id', $selectedKegiatanId);
+        } elseif (! $user->isSuperAdmin()) {
+            // Juri tanpa penugasan tidak melihat karya apa pun.
+            $submissionsQuery->whereRaw('1 = 0');
         }
 
         if ($request->filled('q')) {
@@ -68,6 +81,7 @@ class PenilaianKaryaController extends Controller
     public function updateScore(Request $request, int $id): RedirectResponse
     {
         $submission = KegiatanSubmission::findOrFail($id);
+        Gate::authorize('nilaiKarya', Kegiatan::withTrashed()->findOrFail($submission->kegiatan_id));
 
         $validated = $request->validate([
             'final_score' => ['required', 'numeric', 'min:0', 'max:100'],
@@ -100,6 +114,8 @@ class PenilaianKaryaController extends Controller
     public function exportCsv(int $kegiatanId): StreamedResponse
     {
         $kegiatan = Kegiatan::findOrFail($kegiatanId);
+        Gate::authorize('nilaiKarya', $kegiatan);
+
         $submissions = KegiatanSubmission::with('registration')
             ->where('kegiatan_id', $kegiatanId)
             ->orderBy('id', 'asc')
@@ -160,6 +176,7 @@ class PenilaianKaryaController extends Controller
     public function importCsv(Request $request, int $kegiatanId): RedirectResponse
     {
         $kegiatan = Kegiatan::findOrFail($kegiatanId);
+        Gate::authorize('nilaiKarya', $kegiatan);
 
         $request->validate([
             'csv_file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'],
