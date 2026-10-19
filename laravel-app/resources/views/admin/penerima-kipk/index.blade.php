@@ -10,6 +10,10 @@
         </p>
     </div>
 
+    @if(session('info_sinkron'))
+        <div class="p-4 rounded-2xl bg-sky-950 border border-sky-800 text-sky-200 text-xs" role="status">{{ session('info_sinkron') }}</div>
+    @endif
+
     @include('admin.impor._unggah', [
         'routeUnggah' => 'admin.penerima-kipk.unggah',
         'routeTemplate' => 'admin.penerima-kipk.template',

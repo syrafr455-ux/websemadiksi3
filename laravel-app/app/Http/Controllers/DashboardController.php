@@ -48,6 +48,11 @@ class DashboardController extends Controller
             ->take(4)
             ->get();
 
+        // Status KIP-K: baris penerima yang terhubung (nomor hanya tampil tersamar) & klaim yang sedang ditinjau.
+        $penerimaKipk = $user->penerimaKipk;
+        $klaimDitinjau = $user->isUmumUnusa()
+            && \App\Models\PenerimaKipk::where('klaim_user_id', $user->id)->where('status_tinjau', \App\Models\PenerimaKipk::TINJAU_PERLU)->exists();
+
         return view('dashboard.index', compact(
             'user',
             'registrationsCount',
@@ -56,7 +61,9 @@ class DashboardController extends Controller
             'documentsCount',
             'totalXp',
             'upcomingActivities',
-            'myRecentActivities'
+            'myRecentActivities',
+            'penerimaKipk',
+            'klaimDitinjau'
         ));
     }
 

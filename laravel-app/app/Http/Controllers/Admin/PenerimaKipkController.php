@@ -81,6 +81,13 @@ class PenerimaKipkController extends Controller
             return $this->tanpaFile();
         }
 
-        return $this->selesai($this->impor->simpan($file['isi'], $file['nama_file'], $request->user()));
+        $ringkasan = $this->impor->simpan($file['isi'], $file['nama_file'], $request->user(), $request->boolean('daftar_lengkap'));
+
+        return $this->selesai($ringkasan)->with('info_sinkron', sprintf(
+            'Sinkronisasi akun: %d akun dinaikkan menjadi mahasiswa_kipk, %d akun KIP-K ditautkan, %d penerima ditandai perlu ditinjau karena tidak ada di file.',
+            $ringkasan['dinaikkan'] ?? 0,
+            $ringkasan['ditautkan'] ?? 0,
+            $ringkasan['ditandai_hilang'] ?? 0
+        ));
     }
 }

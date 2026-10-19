@@ -65,6 +65,9 @@ Route::post('/keluar', [AuthController::class, 'logout'])->name('logout')->middl
 Route::middleware(['auth', 'email.terverifikasi'])->prefix('dashboard')->name('dashboard.')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('index');
 
+    // Klaim status penerima KIP Kuliah (akun user_umum jalur UNUSA)
+    Route::post('/klaim-kip', [\App\Http\Controllers\KlaimKipController::class, 'store'])->name('klaim-kip');
+
     Route::get('/kegiatan', [DashboardController::class, 'kegiatan'])->name('kegiatan');
     Route::get('/kegiatan/{id}', [DashboardController::class, 'kegiatanShow'])->name('kegiatan.show');
     Route::post('/kegiatan/{id}/daftar', [DashboardController::class, 'registerKegiatan'])->name('kegiatan.daftar');

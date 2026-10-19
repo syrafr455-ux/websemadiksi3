@@ -62,14 +62,51 @@ class StatusKipService
     }
 
     /**
-     * Dipanggil setelah impor daftar penerima. (Penautan akun lewat NIM & penandaan penerima
-     * yang hilang dari daftar ditambahkan bersama alur klaim.)
+     * Setelah impor daftar penerima:
+     * 1. Baris ber-NIM yang belum terhubung dan cocok dengan akun user_umum jalur UNUSA -> akun dinaikkan
+     *    menjadi mahasiswa_kipk (dengan notifikasi). Akun yang sudah mahasiswa_kipk cukup ditautkan.
+     * 2. Bila file adalah daftar lengkap: penerima yang tidak ada di file TIDAK diturunkan, hanya ditandai
+     *    "perlu_ditinjau" (hilang_dari_impor) untuk super_admin.
      *
      * @param  list<string>  $hashDiImpor
      * @return array<string, int>
      */
-    public function sinkronkanSetelahImpor(array $hashDiImpor, User $admin): array
+    public function sinkronkanSetelahImpor(array $hashDiImpor, User $admin, bool $daftarLengkap = true): array
     {
-        return [];
+        $dinaikkan = 0;
+        $ditautkan = 0;
+
+        $kandidat = PenerimaKipk::whereIn('nomor_kip_hash', $hashDiImpor)->whereNull('user_id')->whereNotNull('nim')->get();
+        foreach ($kandidat as $penerima) {
+            $user = User::where('nim', $penerima->nim)->first();
+            if (! $user || $user->penerimaKipk()->exists()) {
+                continue;
+            }
+
+            if ($user->isUmumUnusa()) {
+                $this->hubungkan($penerima, $user, self::CARA_IMPOR_NIM, $admin);
+                $dinaikkan++;
+            } elseif ($user->role === UserRole::MahasiswaKipk) {
+                $this->hubungkan($penerima, $user, self::CARA_IMPOR_NIM, $admin, beriNotifikasi: false);
+                $ditautkan++;
+            }
+        }
+
+        $ditandaiHilang = 0;
+        if ($daftarLengkap && $hashDiImpor !== []) {
+            $ditandaiHilang = PenerimaKipk::whereNotIn('nomor_kip_hash', $hashDiImpor)
+                ->where('status_tinjau', PenerimaKipk::TINJAU_NORMAL)
+                ->update([
+                    'status_tinjau' => PenerimaKipk::TINJAU_PERLU,
+                    'alasan_tinjau' => PenerimaKipk::ALASAN_HILANG,
+                    'updated_at' => now(),
+                ]);
+
+            if ($ditandaiHilang > 0) {
+                AuditLog::record($admin->id, 'penerima_kipk_hilang_dari_impor', "{$ditandaiHilang} penerima KIP-K tidak ada di impor terbaru; ditandai perlu ditinjau (status akun tidak diubah)", null, ['jumlah' => $ditandaiHilang]);
+            }
+        }
+
+        return ['dinaikkan' => $dinaikkan, 'ditautkan' => $ditautkan, 'ditandai_hilang' => $ditandaiHilang];
     }
 }

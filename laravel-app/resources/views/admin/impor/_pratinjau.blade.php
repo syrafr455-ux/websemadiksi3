@@ -14,8 +14,14 @@
                 <button type="submit" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">Batalkan</button>
             </form>
             @if(! $periksa['kolom_hilang'] && ($periksa['ringkasan']['baru'] + $periksa['ringkasan']['perbarui']) > 0)
-                <form action="{{ route($routeSimpan) }}" method="POST">
+                <form action="{{ route($routeSimpan) }}" method="POST" class="flex flex-col items-end gap-2">
                     @csrf
+                    @if(! empty($opsiDaftarLengkap))
+                        <label class="flex items-center gap-2 text-[11px] text-slate-300 max-w-xs text-right">
+                            <input type="checkbox" name="daftar_lengkap" value="1" checked>
+                            File ini daftar lengkap terbaru (penerima yang tidak ada di file ditandai "perlu ditinjau"; status akun tidak diturunkan)
+                        </label>
+                    @endif
                     <button type="submit" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">
                         Simpan {{ $periksa['ringkasan']['baru'] + $periksa['ringkasan']['perbarui'] }} Baris Valid
                     </button>

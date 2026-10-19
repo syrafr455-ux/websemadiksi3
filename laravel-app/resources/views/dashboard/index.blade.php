@@ -7,6 +7,11 @@
                     <span class="material-symbols-outlined text-sm">verified_user</span>
                     Status KIP: {{ $user->kip_status }} ({{ $user->verification_status }})
                 </div>
+                @if($penerimaKipk)
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold ml-1" data-nomor-kip-tersamar>
+                        No. Pendaftaran KIP: <span class="font-mono">{{ $penerimaKipk->nomor_tersamar }}</span>
+                    </div>
+                @endif
                 <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Halo, {{ $user->name }}!</h2>
                 <p class="text-sm text-white/90 leading-relaxed">
                     {{ $user->prodi }} &bull; Angkatan {{ $user->angkatan }} &bull; {{ $user->university }}
@@ -26,6 +31,44 @@
                 <span class="material-symbols-outlined text-[240px]">school</span>
             </div>
         </div>
+
+        {{-- Klaim status KIP-K: hanya akun user_umum yang berasal dari jalur Mahasiswa UNUSA --}}
+        @if($user->isUmumUnusa())
+            <div class="p-6 rounded-3xl bg-surface border border-surface-variant/40 shadow-sm space-y-4" data-kartu-klaim-kip>
+                <div class="flex items-start gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                        <span class="material-symbols-outlined">badge</span>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold text-on-surface">Saya penerima KIP Kuliah</h3>
+                        <p class="text-xs text-outline mt-1">
+                            Masukkan <strong>nomor pendaftaran SIM KIP Kuliah</strong> Anda (bukan kata sandi). SEMADIKSI tidak pernah meminta kata sandi SIM KIP Anda.
+                        </p>
+                    </div>
+                </div>
+
+                @if(session('klaim_pesan'))
+                    <div class="p-4 rounded-2xl text-sm font-medium {{ session('klaim_status') === 'berhasil' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-900 border border-amber-200' }}" role="status" data-hasil-klaim="{{ session('klaim_status') }}">
+                        {{ session('klaim_pesan') }}
+                    </div>
+                @endif
+
+                @if($klaimDitinjau)
+                    <div class="p-4 rounded-2xl text-sm bg-sky-50 text-sky-900 border border-sky-200" data-klaim-ditinjau>
+                        Klaim Anda sedang ditinjau admin. Anda akan diberi tahu setelah ditinjau.
+                    </div>
+                @else
+                    <form action="{{ route('dashboard.klaim-kip') }}" method="POST" class="flex flex-col sm:flex-row gap-3" autocomplete="off">
+                        @csrf
+                        <input type="text" name="nomor_pendaftaran" required maxlength="40" inputmode="numeric" autocomplete="off"
+                            placeholder="Contoh: 1234.567.89012.1766.761"
+                            class="flex-1 px-4 py-3 bg-surface-container rounded-2xl border border-surface-variant/40 focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm font-medium @error('nomor_pendaftaran') border-rose-500 @enderror">
+                        <button type="submit" class="px-5 py-3 rounded-2xl bg-primary text-white text-sm font-bold">Ajukan Klaim</button>
+                    </form>
+                    @error('nomor_pendaftaran') <p class="text-xs text-rose-600 font-medium">{{ $message }}</p> @enderror
+                @endif
+            </div>
+        @endif
 
         {{-- Stats Grid --}}
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

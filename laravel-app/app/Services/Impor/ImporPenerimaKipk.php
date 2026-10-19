@@ -139,12 +139,12 @@ class ImporPenerimaKipk
      *
      * @return array<string, int>
      */
-    public function simpan(string $isi, string $namaFile, User $admin): array
+    public function simpan(string $isi, string $namaFile, User $admin, bool $daftarLengkap = true): array
     {
         $periksa = $this->periksa($isi);
         $ringkasan = $periksa['ringkasan'];
 
-        DB::transaction(function () use ($periksa, $namaFile, $admin, &$ringkasan) {
+        DB::transaction(function () use ($periksa, $namaFile, $admin, $daftarLengkap, &$ringkasan) {
             $hashDiImpor = [];
 
             foreach ($periksa['baris'] as $baris) {
@@ -176,7 +176,7 @@ class ImporPenerimaKipk
                 $hashDiImpor[] = $baris['hash'];
             }
 
-            $ringkasan += $this->statusKip->sinkronkanSetelahImpor($hashDiImpor, $admin);
+            $ringkasan += $this->statusKip->sinkronkanSetelahImpor($hashDiImpor, $admin, $daftarLengkap);
         });
 
         AuditLog::record($admin->id, 'impor_penerima_kipk', "Impor daftar penerima KIP-K dari '{$namaFile}'", null, $ringkasan);

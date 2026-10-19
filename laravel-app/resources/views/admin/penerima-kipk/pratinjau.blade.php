@@ -7,5 +7,6 @@
         'kolom' => ['nomor_tersamar' => 'No. Pendaftaran (tersamar)', 'nama_lengkap' => 'Nama Lengkap', 'nim' => 'NIM', 'program_studi_teks' => 'Program Studi', 'angkatan' => 'Angkatan', 'status_penetapan' => 'Status Penetapan'],
         'routeSimpan' => 'admin.penerima-kipk.impor',
         'routeBatal' => 'admin.penerima-kipk.batal',
+        'opsiDaftarLengkap' => true,
     ])
 @endsection
