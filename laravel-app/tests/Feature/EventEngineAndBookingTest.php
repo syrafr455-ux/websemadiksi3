@@ -71,7 +71,7 @@ class EventEngineAndBookingTest extends TestCase
 
         $response = $this->actingAs($admin)->get(route('admin.kegiatan'));
         $response->assertStatus(200);
-        $response->assertSee('Admin\/Kegiatan\/Index', false);
+        $response->assertSee('<script data-page="app" type="application/json">{"component":"Admin/Kegiatan/Index"', false);
     }
 
     public function test_store_kegiatan_creates_event_and_generates_seat_layout(): void

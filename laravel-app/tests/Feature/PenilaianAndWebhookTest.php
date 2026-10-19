@@ -72,7 +72,7 @@ class PenilaianAndWebhookTest extends TestCase
         $juri = $this->getPenilaiKarya();
         $response = $this->actingAs($juri)->get(route('admin.penilaian'));
         $response->assertStatus(200);
-        $response->assertSee('Admin\/Penilaian\/Index', false);
+        $response->assertSee('<script data-page="app" type="application/json">{"component":"Admin/Penilaian/Index"', false);
     }
 
     public function test_mahasiswa_cannot_access_penilaian_index(): void

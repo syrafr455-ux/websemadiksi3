@@ -56,13 +56,7 @@ class Response implements Responsable
                 continue;
             }
 
-            if ($value instanceof Closure) {
-                $props[$key] = App::call($value);
-            } elseif ($value instanceof LazyProp) {
-                $props[$key] = App::call($value);
-            } elseif ($value instanceof Arrayable) {
-                $props[$key] = $value->toArray();
-            }
+            $props[$key] = $this->resolveProp($value);
         }
 
         $url = $request->getBaseUrl() . $request->getRequestUri();
@@ -84,5 +78,29 @@ class Response implements Responsable
         return ResponseFactory::view($this->rootView, [
             'page' => $page,
         ]);
+    }
+
+    /**
+     * Resolve closure/lazy/Arrayable, termasuk yang bersarang di dalam array
+     * (mis. shared prop 'flash' => ['success' => fn () => ...]). Tanpa ini closure
+     * bersarang ter-encode sebagai {} dan dirender React sebagai child yang tidak valid.
+     */
+    protected function resolveProp(mixed $value): mixed
+    {
+        if ($value instanceof Closure || $value instanceof LazyProp) {
+            $value = App::call($value);
+        }
+
+        if ($value instanceof Arrayable) {
+            $value = $value->toArray();
+        }
+
+        if (is_array($value)) {
+            foreach ($value as $key => $item) {
+                $value[$key] = $this->resolveProp($item);
+            }
+        }
+
+        return $value;
     }
 }
