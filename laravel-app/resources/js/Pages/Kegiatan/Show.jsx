@@ -21,6 +21,7 @@ function Info({ label, children }) {
 
 export default function KegiatanShow({
     kegiatan = {},
+    isDraftPreview = false,
     pendaftaran = {},
     booking: bookingAwal = {},
     kursi: kursiAwal = [],
@@ -221,6 +222,17 @@ export default function KegiatanShow({
     return (
         <ParticipantLayout title={kegiatan.nama_kegiatan}>
             <div className="space-y-6 min-w-0">
+                {/* Banner Pratinjau Draft untuk Super Admin */}
+                {isDraftPreview && (
+                    <div
+                        className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-sm font-bold flex items-center gap-3 shadow-lg"
+                        data-banner-draft-preview
+                    >
+                        <span className="material-symbols-outlined text-amber-400 text-2xl" aria-hidden="true">visibility</span>
+                        <span>Pratinjau: kegiatan ini belum diterbitkan</span>
+                    </div>
+                )}
+
                 {/* Banner pilih ulang kursi */}
                 {perluPilihUlang.length > 0 && (
                     <section className="p-5 rounded-3xl bg-amber-500/10 border border-amber-400/50 space-y-3" aria-labelledby="judul-pilih-ulang" data-banner-pilih-ulang>

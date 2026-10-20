@@ -19,10 +19,43 @@ class HomeController extends Controller
      */
     public function index(): View
     {
-        $activities = Activity::where('is_closed', false)
-            ->latest()
+        if (\App\Models\Kegiatan::whereIn('status', [
+            \App\Enums\KegiatanStatus::Published,
+            \App\Enums\KegiatanStatus::Ongoing,
+            \App\Enums\KegiatanStatus::Completed,
+        ])->exists()) {
+            $kegiatanList = \App\Models\Kegiatan::whereIn('status', [
+                \App\Enums\KegiatanStatus::Published,
+                \App\Enums\KegiatanStatus::Ongoing,
+                \App\Enums\KegiatanStatus::Completed,
+            ])
+            ->latest('id')
             ->take(3)
             ->get();
+
+            $activities = $kegiatanList->map(function (\App\Models\Kegiatan $k) {
+                return (object) [
+                    'id' => $k->id,
+                    'title' => $k->nama_kegiatan,
+                    'category' => ucfirst($k->kategori),
+                    'date_text' => $k->tanggal_mulai ? \App\Support\Wib::dari($k->tanggal_mulai)->translatedFormat('d F Y') : '-',
+                    'description' => $k->deskripsi,
+                    'location' => $k->lokasi_nama ?: 'Kampus UNUSA',
+                    'price' => (float) $k->biaya > 0 ? 'Rp ' . number_format($k->biaya, 0, ',', '.') : 'Gratis',
+                    'image_url' => 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+                    'is_kegiatan' => true,
+                ];
+            });
+        } else {
+            $activities = Activity::where('is_closed', false)
+                ->where(function ($q) {
+                    $q->whereNull('status')
+                      ->orWhereNotIn(\Illuminate\Support\Facades\DB::raw('LOWER(status)'), ['draft', 'cancelled', 'dibatalkan']);
+                })
+                ->latest()
+                ->take(3)
+                ->get();
+        }
 
         $beritaAcara = BeritaAcara::latest()
             ->take(3)

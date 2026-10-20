@@ -139,7 +139,7 @@
                             <span class="text-xs font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-lg">
                                 {{ $act->price }}
                             </span>
-                            <a href="{{ route('dashboard.kegiatan.show', $act->id) }}" class="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
+                            <a href="{{ !empty($act->is_kegiatan) ? route('kegiatan.detail', $act->id) : route('dashboard.kegiatan.show', $act->id) }}" class="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
                                 Rincian Kegiatan
                                 <span class="material-symbols-outlined text-sm">chevron_right</span>
                             </a>

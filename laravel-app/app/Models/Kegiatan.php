@@ -217,6 +217,10 @@ class Kegiatan extends Model
      */
     public function isSeatBookingOpen(): bool
     {
+        if ($this->status === KegiatanStatus::Draft || $this->status === KegiatanStatus::Cancelled) {
+            return false;
+        }
+
         return $this->statusBookingKursi() === self::BOOKING_DIBUKA;
     }
 

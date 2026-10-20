@@ -72,7 +72,11 @@ class DashboardController extends Controller
      */
     public function kegiatan(Request $request): View
     {
-        $query = Activity::query();
+        $query = Activity::where('is_closed', false)
+            ->where(function ($q) {
+                $q->whereNull('status')
+                  ->orWhereNotIn(\Illuminate\Support\Facades\DB::raw('LOWER(status)'), ['draft', 'cancelled', 'dibatalkan']);
+            });
 
         if ($request->filled('q')) {
             $q = trim($request->input('q'));
@@ -99,6 +103,10 @@ class DashboardController extends Controller
     public function kegiatanShow(int $id): View
     {
         $activity = Activity::findOrFail($id);
+        if (strtolower((string) $activity->status) === 'draft' && Auth::user()?->role !== UserRole::SuperAdmin) {
+            abort(404);
+        }
+
         $registration = ActivityRegistration::where('user_id', Auth::id())
             ->where('activity_id', $id)
             ->first();
@@ -118,6 +126,10 @@ class DashboardController extends Controller
     {
         $activity = Activity::findOrFail($id);
         $user = Auth::user();
+
+        if (strtolower((string) $activity->status) === 'draft' || $activity->is_closed) {
+            return back()->with('error', 'Pendaftaran untuk kegiatan ini telah ditutup atau masih berstatus draft.');
+        }
 
         // Check if already registered
         $existing = ActivityRegistration::where('user_id', $user->id)

@@ -43,6 +43,15 @@ class KegiatanBookingController extends Controller
         abort_unless(ctype_digit($slugOrId), 404);
         $kegiatan = Kegiatan::findOrFail((int) $slugOrId);
         $user = $request->user();
+        $isSuperAdmin = $user && $user->role === UserRole::SuperAdmin;
+
+        if ($kegiatan->status === KegiatanStatus::Cancelled) {
+            abort(404);
+        }
+
+        if ($kegiatan->status === KegiatanStatus::Draft) {
+            abort_unless($isSuperAdmin, 404);
+        }
 
         if ($request->boolean('pilih_ulang') && ! $user) {
             return redirect()->guest(route('login'))->with('success', 'Silakan masuk untuk memilih ulang kursi Anda.');
@@ -55,6 +64,7 @@ class KegiatanBookingController extends Controller
                 'tanggal_mulai', 'tanggal_selesai', 'registration_deadline', 'status',
                 'lokasi_type', 'lokasi_nama', 'lokasi_detail', 'narasumber', 'biaya', 'kuota', 'file_panduan_url',
             ]),
+            'isDraftPreview' => $kegiatan->status === KegiatanStatus::Draft,
             'pendaftaran' => [
                 'dibuka' => $kegiatan->isRegistrationOpen(),
                 'kuota_tersisa' => max(0, (int) $kegiatan->kuota - (int) $kegiatan->kuota_terisi),
@@ -74,6 +84,16 @@ class KegiatanBookingController extends Controller
     public function statusKursi(Request $request, int $id): JsonResponse
     {
         $kegiatan = Kegiatan::findOrFail($id);
+        $user = $request->user();
+        $isSuperAdmin = $user && $user->role === UserRole::SuperAdmin;
+
+        if ($kegiatan->status === KegiatanStatus::Cancelled) {
+            abort(404);
+        }
+
+        if ($kegiatan->status === KegiatanStatus::Draft) {
+            abort_unless($isSuperAdmin, 404);
+        }
 
         return response()->json([
             'booking' => $this->statusBooking($kegiatan),
@@ -139,6 +159,15 @@ class KegiatanBookingController extends Controller
         }
 
         $kegiatan = Kegiatan::findOrFail($id);
+
+        // Tolak pendaftaran kegiatan draft atau dibatalkan
+        if ($kegiatan->status === KegiatanStatus::Draft) {
+            return back()->with('error', 'Kegiatan ini masih berstatus draft dan belum dibuka untuk pendaftaran.');
+        }
+
+        if ($kegiatan->status === KegiatanStatus::Cancelled) {
+            return back()->with('error', 'Kegiatan ini telah dibatalkan.');
+        }
 
         // Validasi status kegiatan & batas waktu registrasi
         if (! $kegiatan->isRegistrationOpen()) {
@@ -357,6 +386,14 @@ class KegiatanBookingController extends Controller
         }
 
         $kegiatan = Kegiatan::findOrFail($id);
+
+        if ($kegiatan->status === KegiatanStatus::Draft) {
+            return back()->with('error', 'Kegiatan ini masih berstatus draft.');
+        }
+
+        if ($kegiatan->status === KegiatanStatus::Cancelled) {
+            return back()->with('error', 'Kegiatan ini telah dibatalkan.');
+        }
 
         // Gate: Pemilihan kursi harus sedang terbuka
         if (! $kegiatan->isSeatBookingOpen()) {
