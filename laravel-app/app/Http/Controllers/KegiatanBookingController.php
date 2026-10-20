@@ -22,6 +22,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -381,6 +382,10 @@ class KegiatanBookingController extends Controller
      */
     public function reselectSeat(Request $request, int $id)
     {
+        if ($request->has('allocations')) {
+            return $this->bookSeats($request, $id);
+        }
+
         $user = auth()->user();
         if (! $user) {
             return redirect()->route('login')->with('error', 'Silakan masuk terlebih dahulu.');
@@ -476,5 +481,279 @@ class KegiatanBookingController extends Controller
             DB::rollBack();
             return back()->with('error', 'Gagal memilih ulang kursi: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Endpoint pencarian peserta terdaftar pada kegiatan yang belum memiliki kursi
+     * (atau perlu pilih ulang kursi). Hanya dapat diakses oleh user yang sudah
+     * terautentikasi dan terdaftar di kegiatan ini.
+     */
+    public function pesertaTanpaKursi(Request $request, int $id): JsonResponse
+    {
+        $kegiatan = Kegiatan::findOrFail($id);
+        $user = $request->user();
+
+        if (! $user) {
+            abort(401);
+        }
+
+        // Proteksi: Endpoint hanya dapat diakses oleh user yang sudah terautentikasi dan terdaftar di kegiatan tersebut
+        $isRegistered = KegiatanRegistration::where('kegiatan_id', $kegiatan->id)
+            ->where(fn ($q) => $q->where('participant_user_id', $user->id)->orWhere('booker_user_id', $user->id))
+            ->active()
+            ->exists();
+
+        if (! $isRegistered && $user->role !== UserRole::SuperAdmin) {
+            abort(403, 'Hanya peserta yang telah terdaftar resmi pada kegiatan ini yang dapat mencari peserta.');
+        }
+
+        $likeOp = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
+        $query = KegiatanRegistration::with(['participantUser'])
+            ->where('kegiatan_id', $kegiatan->id)
+            ->whereIn('status_pembayaran', [
+                RegistrationPaymentStatus::Free->value,
+                RegistrationPaymentStatus::Paid->value,
+            ])
+            ->where(fn ($q) => $q->whereNull('seat_id')->orWhere('needs_seat_reselection', true))
+            ->where(function ($q) use ($user) {
+                // Jangan sertakan registrasi atas nama diri sendiri dalam daftar cari teman
+                $q->where('participant_user_id', '!=', $user->id)
+                  ->orWhereNull('participant_user_id');
+            });
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->query('search'));
+            $query->where(function ($q) use ($search, $likeOp) {
+                $q->where('participant_name', $likeOp, "%{$search}%")
+                    ->orWhere('participant_identity', $likeOp, "%{$search}%")
+                    ->orWhereHas('participantUser', function ($u) use ($search, $likeOp) {
+                        $u->where('name', $likeOp, "%{$search}%")
+                            ->orWhere('nim', $likeOp, "%{$search}%")
+                            ->orWhere('email', $likeOp, "%{$search}%");
+                    });
+            });
+        }
+
+        $peserta = $query->limit(50)->get()->map(function (KegiatanRegistration $reg) {
+            $email = $reg->participantUser?->email ?? ($reg->delegation_data['email'] ?? null);
+
+            return [
+                'id' => $reg->id,
+                'user_id' => $reg->participant_user_id,
+                'nama_lengkap' => $reg->ticket_holder_name,
+                'nim' => $reg->participantUser?->nim ?? $reg->participant_identity ?? '-',
+                'email' => $this->maskEmail($email),
+            ];
+        });
+
+        return response()->json($peserta);
+    }
+
+    /**
+     * Alur booking alokasi kursi multi-user (pemesan mandiri + teman terdaftar).
+     * Dibungkus dalam DB::transaction() dengan lockForUpdate pada kegiatan_seats dan kegiatan_registrations.
+     */
+    public function bookSeats(Request $request, int $id): JsonResponse|RedirectResponse
+    {
+        $kegiatan = Kegiatan::findOrFail($id);
+        $user = $request->user();
+
+        if (! $user) {
+            abort(401);
+        }
+
+        // Syarat 1: Saklar manual Super Admin aktif (is_seat_booking_active = true)
+        if (! (bool) $kegiatan->is_seat_booking_active) {
+            abort(403, 'Pemilihan kursi untuk kegiatan ini sedang dinonaktifkan oleh panitia.');
+        }
+
+        if ($kegiatan->status === KegiatanStatus::Draft || $kegiatan->status === KegiatanStatus::Cancelled) {
+            abort(404);
+        }
+
+        // Validasi jendela booking kursi jika ada batas waktu
+        if (! $kegiatan->isSeatBookingOpen()) {
+            abort(403, 'Pemilihan kursi untuk kegiatan ini sedang ditutup atau berada di luar jadwal booking.');
+        }
+
+        // User A (pemesan) harus terdaftar secara resmi pada kegiatan ini
+        $userIsRegistered = KegiatanRegistration::where('kegiatan_id', $kegiatan->id)
+            ->where(fn ($q) => $q->where('participant_user_id', $user->id)->orWhere('booker_user_id', $user->id))
+            ->active()
+            ->exists();
+
+        if (! $userIsRegistered && $user->role !== UserRole::SuperAdmin) {
+            throw ValidationException::withMessages([
+                'allocations' => 'Anda harus terdaftar secara resmi pada kegiatan ini untuk dapat memilih kursi.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'allocations' => ['required', 'array', 'min:1', 'max:10'],
+            'allocations.*.registration_id' => ['required', 'integer'],
+            'allocations.*.seat_id' => ['required', 'integer'],
+        ], [
+            'allocations.required' => 'Daftar alokasi kursi wajib dikirim.',
+            'allocations.*.registration_id.required' => 'Registrasi peserta wajib dipilih.',
+            'allocations.*.seat_id.required' => 'Kursi wajib dipilih untuk setiap peserta.',
+        ]);
+
+        $allocations = $validated['allocations'];
+        $regIds = array_column($allocations, 'registration_id');
+        $seatIds = array_column($allocations, 'seat_id');
+
+        if (count($regIds) !== count(array_unique($regIds))) {
+            throw ValidationException::withMessages([
+                'allocations' => 'Peserta tidak boleh dipilih lebih dari satu kali dalam alokasi kursi.',
+            ]);
+        }
+
+        if (count($seatIds) !== count(array_unique($seatIds))) {
+            throw ValidationException::withMessages([
+                'allocations' => 'Satu kursi hanya dapat dialokasikan untuk satu peserta.',
+            ]);
+        }
+
+        DB::beginTransaction();
+        try {
+            // Lock seats and registrations
+            $lockedSeats = KegiatanSeat::where('kegiatan_id', $kegiatan->id)
+                ->whereIn('id', $seatIds)
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            $lockedRegistrations = KegiatanRegistration::where('kegiatan_id', $kegiatan->id)
+                ->whereIn('id', $regIds)
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            $errors = [];
+
+            foreach ($allocations as $index => $item) {
+                $regId = $item['registration_id'];
+                $sId = $item['seat_id'];
+
+                $reg = $lockedRegistrations->get($regId);
+                if (! $reg) {
+                    $errors["allocations.{$index}.registration_id"] = 'Peserta tidak ditemukan atau belum terdaftar pada kegiatan ini.';
+                    continue;
+                }
+
+                // Syarat: User B sudah terdaftar secara resmi (status pembayaran valid/lunas/gratis)
+                if (! in_array($reg->status_pembayaran?->value, [RegistrationPaymentStatus::Free->value, RegistrationPaymentStatus::Paid->value], true)) {
+                    $errors["allocations.{$index}.registration_id"] = "Pendaftaran untuk peserta {$reg->ticket_holder_name} belum lunas atau tidak aktif.";
+                    continue;
+                }
+
+                // Syarat: User B saat ini BELUM memiliki kursi (seat_id IS NULL atau needs_seat_reselection = true)
+                if ($reg->seat_id !== null && ! $reg->needs_seat_reselection) {
+                    $errors["allocations.{$index}.registration_id"] = "Peserta {$reg->ticket_holder_name} sudah memiliki kursi.";
+                    continue;
+                }
+
+                $seat = $lockedSeats->get($sId);
+                if (! $seat) {
+                    $errors["allocations.{$index}.seat_id"] = 'Kursi yang dipilih tidak valid atau berada pada koordinat gang.';
+                    continue;
+                }
+
+                // Pastikan kursi berstatus available (bukan panitia, VIP tertutup, atau terisi)
+                if ($seat->status !== SeatStatus::Available) {
+                    $errors["allocations.{$index}.seat_id"] = "Kursi {$seat->seat_code} tidak tersedia atau baru saja diambil oleh peserta lain. Silakan pilih kursi lain.";
+                    continue;
+                }
+            }
+
+            if ($errors !== []) {
+                DB::rollBack();
+                throw ValidationException::withMessages($errors);
+            }
+
+            $updatedRegistrations = [];
+
+            foreach ($allocations as $item) {
+                $reg = $lockedRegistrations->get($item['registration_id']);
+                $seat = $lockedSeats->get($item['seat_id']);
+
+                // Lepas kursi lama jika ada
+                if ($reg->seat_id && (int) $reg->seat_id !== (int) $seat->id) {
+                    KegiatanSeat::whereKey($reg->seat_id)
+                        ->where('status', SeatStatus::Booked->value)
+                        ->update(['status' => SeatStatus::Available->value]);
+                }
+
+                // Kunci status kursi
+                $seat->update(['status' => SeatStatus::Booked]);
+
+                // Generate penomoran tiket definitif
+                $nomorTiket = KegiatanRegistration::generateNomorTiket($kegiatan->id, $seat->seat_code);
+
+                // Update baris registrasi
+                $reg->update([
+                    'seat_id' => $seat->id,
+                    'nomor_tiket' => $nomorTiket,
+                    'needs_seat_reselection' => false,
+                ]);
+
+                $updatedRegistrations[] = $reg;
+            }
+
+            DB::commit();
+
+            // Memicu event pengiriman notifikasi/email tiket ke masing-masing peserta
+            foreach ($updatedRegistrations as $reg) {
+                try {
+                    $targetEmail = $reg->participantUser?->email ?? ($reg->delegation_data['email'] ?? null);
+                    if ($targetEmail) {
+                        Mail::to($targetEmail)->send(new TicketIssuedMail($reg));
+                    }
+                } catch (\Throwable $e) {
+                    // ignore mail failure
+                }
+            }
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Kursi berhasil dialokasikan! E-Tiket telah diterbitkan.',
+                    'registrations' => $updatedRegistrations,
+                ]);
+            }
+
+            return redirect()->route('dashboard.kegiatan.saya')
+                ->with('success', 'Kursi berhasil dipilihkan untuk peserta! E-Tiket resmi telah terbit.');
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw ValidationException::withMessages([
+                'allocations' => 'Terjadi kesalahan saat memproses alokasi kursi: '.$e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Samarkan email (misal: "bu***i@gmail.com") untuk menjaga privasi peserta.
+     */
+    protected function maskEmail(?string $email): string
+    {
+        if (! $email || ! str_contains($email, '@')) {
+            return '***@***.com';
+        }
+
+        [$userPart, $domain] = explode('@', $email, 2);
+        $len = strlen($userPart);
+
+        if ($len <= 2) {
+            $maskedUser = substr($userPart, 0, 1).str_repeat('*', 3);
+        } else {
+            $maskedUser = substr($userPart, 0, 2).str_repeat('*', min(4, max(1, $len - 3))).substr($userPart, -1);
+        }
+
+        return $maskedUser.'@'.$domain;
     }
 }

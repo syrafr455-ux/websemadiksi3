@@ -111,8 +111,12 @@ Route::middleware(['auth', 'email.terverifikasi'])->prefix('dashboard')->name('d
 // Event Show & Booking Checkout Routes
 Route::get('/kegiatan/{slugOrId}', [\App\Http\Controllers\KegiatanBookingController::class, 'show'])->name('kegiatan.detail');
 Route::get('/kegiatan/{id}/status-kursi', [\App\Http\Controllers\KegiatanBookingController::class, 'statusKursi'])->whereNumber('id')->middleware('throttle:60,1')->name('kegiatan.status-kursi');
+Route::get('/kegiatan/{id}/peserta-tanpa-kursi', [\App\Http\Controllers\KegiatanBookingController::class, 'pesertaTanpaKursi'])->whereNumber('id')->middleware('auth')->name('kegiatan.peserta-tanpa-kursi');
 Route::post('/kegiatan/{id}/checkout', [\App\Http\Controllers\KegiatanBookingController::class, 'checkout'])->name('kegiatan.checkout')->middleware(['auth', 'email.terverifikasi']);
 Route::post('/kegiatan/{id}/reselect-seat', [\App\Http\Controllers\KegiatanBookingController::class, 'reselectSeat'])->name('kegiatan.reselect-seat')->middleware('auth');
+Route::post('/kegiatan/{id}/pilih-kursi', [\App\Http\Controllers\KegiatanBookingController::class, 'bookSeats'])->whereNumber('id')->middleware('auth')->name('kegiatan.pilih-kursi');
+Route::post('/kegiatan/{id}/book-seats', [\App\Http\Controllers\KegiatanBookingController::class, 'bookSeats'])->whereNumber('id')->middleware('auth')->name('kegiatan.book-seats');
+Route::post('/kegiatan/{id}/alokasi-kursi', [\App\Http\Controllers\KegiatanBookingController::class, 'bookSeats'])->whereNumber('id')->middleware('auth')->name('kegiatan.alokasi-kursi');
 
 // Admin & Staff Dashboard Routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
