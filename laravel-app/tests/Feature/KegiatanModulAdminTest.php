@@ -204,6 +204,25 @@ class KegiatanModulAdminTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_rejected_layout_change_does_not_store_the_uploaded_pdf(): void
+    {
+        $kegiatan = $this->kegiatanBerdenah();
+        $peserta = User::factory()->count(3)->mahasiswaKipk()->create();
+        foreach (['A01', 'A02', 'B01'] as $i => $kode) {
+            $this->pesanKursi($kegiatan, $kode, $peserta[$i]);
+        }
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.kegiatan.update', $kegiatan->id), $this->formEdit($kegiatan, [
+                'seat_layout_config' => ['rows' => ['A'], 'cols_per_row' => 2],
+                'panduan_file' => UploadedFile::fake()->create('panduan-baru.pdf', 80, 'application/pdf'),
+            ]))
+            ->assertSessionHasErrors('capacity');
+
+        $this->assertSame([], Storage::disk('public')->allFiles('kegiatan/panduan'));
+        $this->assertSame('kegiatan/panduan.pdf', $kegiatan->fresh()->file_panduan_pdf);
+    }
+
     public function test_panitia_rows_do_not_count_as_capacity_in_edit_form(): void
     {
         $kegiatan = $this->kegiatanBerdenah();
@@ -300,6 +319,12 @@ class KegiatanModulAdminTest extends TestCase
             'is_seat_booking_active' => false, 'lokasi_ruangan' => 'Aula Utama Kampus A',
         ]))->assertSessionHasNoErrors();
         $this->assertSame('Aula Utama Kampus A', $kegiatan->fresh()->lokasi_ruangan);
+
+        // Pilihan yang dikirim kosong ditolak (tidak diam-diam memakai nilai lama).
+        $this->actingAs($this->admin)->post(route('admin.kegiatan.update', $kegiatan->id), $this->formEdit($kegiatan, [
+            'is_seat_booking_active' => false, 'lokasi_kampus' => '', 'lokasi_nama' => '-',
+        ]))->assertSessionHasErrors('lokasi_gedung');
+        $this->assertSame('Gedung A - Kampus A (Wonokromo)', $kegiatan->fresh()->lokasi_nama);
 
         // Kombinasi yang tidak ada di daftar fasilitas ditolak.
         $this->actingAs($this->admin)->post(route('admin.kegiatan.update', $kegiatan->id), $this->formEdit($kegiatan, [

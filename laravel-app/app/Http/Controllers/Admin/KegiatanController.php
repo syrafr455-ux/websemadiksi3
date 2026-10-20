@@ -227,11 +227,12 @@ class KegiatanController extends Controller
         if ($lokasiType !== 'unusa_campus') {
             $payload = [...$payload, 'lokasi_kampus' => null, 'lokasi_gedung' => null, 'lokasi_ruangan' => null];
         } elseif (array_intersect(['lokasi_kampus', 'lokasi_gedung', 'lokasi_ruangan'], array_keys($validated))) {
-            $payload = [...$payload, ...$this->fasilitasUnusa($lokasiType, [
-                'lokasi_kampus' => $validated['lokasi_kampus'] ?? $kegiatan->lokasi_kampus,
-                'lokasi_gedung' => $validated['lokasi_gedung'] ?? $kegiatan->lokasi_gedung,
-                'lokasi_ruangan' => $validated['lokasi_ruangan'] ?? $kegiatan->lokasi_ruangan,
-            ])];
+            // Field yang dikirim dipakai apa adanya (kosong = ditolak); yang tidak dikirim memakai nilai lama.
+            $pilihan = [];
+            foreach (['lokasi_kampus', 'lokasi_gedung', 'lokasi_ruangan'] as $key) {
+                $pilihan[$key] = array_key_exists($key, $validated) ? $validated[$key] : $kegiatan->{$key};
+            }
+            $payload = [...$payload, ...$this->fasilitasUnusa($lokasiType, $pilihan)];
         }
 
         // jsonb PostgreSQL mengurutkan ulang key objek; isi narasumber yang sama tidak boleh dianggap perubahan.
@@ -247,22 +248,23 @@ class KegiatanController extends Controller
 
         DB::beginTransaction();
         try {
-            if ($request->hasFile('panduan_file')) {
-                $payload['file_panduan_pdf'] = $request->file('panduan_file')->store('kegiatan/panduan', 'public');
-            }
-
-            if ($request->hasFile('certificate_template_file')) {
-                $payload['certificate_template_path'] = $request->file('certificate_template_file')->store('kegiatan/templates', 'public');
-            }
-
             // Denah kursi hanya dibuat ulang bila konfigurasinya benar-benar berubah (atau belum ada kursi sama sekali).
             // Jalurnya sama dengan venue-config: kapasitas dicek, kursi peserta direset, email pilih ulang dikirim.
+            // Dicek sebelum berkas disimpan agar penolakan kapasitas tidak meninggalkan file yatim di disk.
             $seatBookingActive = $payload['is_seat_booking_active'] ?? (bool) $kegiatan->is_seat_booking_active;
             if ($seatBookingActive && array_key_exists('seat_layout_config', $validated)) {
                 $layoutBaru = $this->denah->normalisasi($validated['seat_layout_config']);
                 if ($layoutBaru !== $this->denah->normalisasi($kegiatan->seat_layout_config) || ! $kegiatan->seats()->exists()) {
                     $payload['seat_layout_config'] = $this->denah->ganti($kegiatan, $layoutBaru, ruanganLama: $kegiatan->lokasi_nama);
                 }
+            }
+
+            if ($request->hasFile('panduan_file')) {
+                $payload['file_panduan_pdf'] = $request->file('panduan_file')->store('kegiatan/panduan', 'public');
+            }
+
+            if ($request->hasFile('certificate_template_file')) {
+                $payload['certificate_template_path'] = $request->file('certificate_template_file')->store('kegiatan/templates', 'public');
             }
 
             $kegiatan->fill($payload);
