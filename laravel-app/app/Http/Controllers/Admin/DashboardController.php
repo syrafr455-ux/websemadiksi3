@@ -247,49 +247,83 @@ class DashboardController extends Controller
     }
 
     /**
-     * Manage Certificates.
+     * Manage Certificates (Alur Baru - Tabel sertifikat & Kegiatan).
      */
     public function certificates(): View
     {
-        $certificates = Certificate::with(['user', 'activity'])->latest('id')->paginate(15);
-        $activities = Activity::all();
-        // Penerima sertifikat = peserta (mahasiswa_kipk & user_umum).
-        $students = User::whereIn('role', UserRole::participantValues())->orderBy('name')->get();
+        $sertifikats = Sertifikat::with(['kegiatan', 'user'])->latest('id')->paginate(15);
+        $kegiatans = Kegiatan::with([
+            'presensis:id,kegiatan_id,user_id,nama_lengkap,email',
+            'registrations' => fn ($q) => $q->active()->select('id', 'kegiatan_id', 'participant_user_id', 'participant_name', 'participant_identity'),
+        ])->orderBy('nama_kegiatan')->get();
+        // Penerima sertifikat = mahasiswa_kipk & user_umum (tidak membaca role 'student')
+        $students = User::whereIn('role', [UserRole::MahasiswaKipk->value, UserRole::UserUmum->value])
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'nim']);
 
-        return view('admin.certificates.index', compact('certificates', 'activities', 'students'));
+        return view('admin.certificates.index', compact('sertifikats', 'kegiatans', 'students'));
     }
 
-    public function storeCertificate(Request $request): RedirectResponse
+    public function storeCertificate(Request $request, \App\Services\CertificateGeneratorService $generatorService): RedirectResponse
     {
         $validated = $request->validate([
-            'user_id' => ['required', \Illuminate\Validation\Rule::exists('users', 'id')->whereIn('role', UserRole::participantValues())],
-            'activity_id' => ['required', 'exists:activities,id'],
-            'code' => ['nullable', 'string', 'unique:certificates,code'],
-            'issued_date' => ['required', 'date'],
+            'kegiatan_id' => ['required', 'exists:kegiatan,id'],
+            'nama_lengkap' => ['required', 'string', 'max:255'],
+            'user_id' => ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')->whereIn('role', UserRole::participantValues())],
+            'code' => ['nullable', 'string', 'max:100'],
+            'nomor_sertifikat' => ['nullable', 'string', 'max:100'],
+            'certificate_file' => ['required', 'file', 'mimes:pdf', 'max:10240'],
         ]);
 
-        $user = User::findOrFail($validated['user_id']);
-        $activity = Activity::findOrFail($validated['activity_id']);
+        $kegiatan = Kegiatan::findOrFail($validated['kegiatan_id']);
+        $namaPenerima = trim($validated['nama_lengkap']);
+        $nomorSeri = trim($validated['nomor_sertifikat'] ?? $validated['code'] ?? '');
 
-        $code = $validated['code'] ?: 'SMD-' . strtoupper(Str::slug($activity->category)) . '-' . date('Y') . '-' . rand(1000, 9999);
+        // Cari user jika ada user_id atau berdasarkan nama
+        $user = null;
+        if (! empty($validated['user_id']) && is_numeric($validated['user_id'])) {
+            $user = User::find($validated['user_id']);
+        }
+        if (! $user) {
+            $user = User::where('name', $namaPenerima)->first();
+        }
 
-        Certificate::create([
-            'user_id' => $user->id,
-            'activity_id' => $activity->id,
-            'user_name' => $user->name,
-            'activity_title' => $activity->title,
-            'code' => $code,
-            'status' => 'Berlaku',
-            'issued_date' => $validated['issued_date'],
-        ]);
+        // Validasi keunikan nomor sertifikat jika diisi manual
+        if ($nomorSeri && Sertifikat::where('nomor_sertifikat', $nomorSeri)->exists()) {
+            return back()->withInput()->with('error', "Nomor seri sertifikat {$nomorSeri} sudah pernah digunakan.");
+        }
 
-        return back()->with('success', "Sertifikat dengan kode {$code} berhasil diterbitkan.");
+        $sertifikat = $generatorService->publishFromAdmin(
+            kegiatan: $kegiatan,
+            namaPenerima: $namaPenerima,
+            emailPenerima: $user?->email,
+            user: $user,
+            customNomor: $nomorSeri ?: null,
+            uploadedPdf: $request->file('certificate_file')
+        );
+
+        return back()->with('success', "Sertifikat resmi untuk {$namaPenerima} ({$sertifikat->nomor_sertifikat}) berhasil diterbitkan dan distamp dengan QR validasi.");
     }
 
     public function deleteCertificate(int $id): RedirectResponse
     {
-        Certificate::findOrFail($id)->delete();
-        return back()->with('success', 'Sertifikat berhasil dihapus.');
+        $sertifikat = Sertifikat::find($id);
+        if ($sertifikat) {
+            if ($sertifikat->file_pdf_path && Storage::disk('public')->exists($sertifikat->file_pdf_path)) {
+                Storage::disk('public')->delete($sertifikat->file_pdf_path);
+            }
+            $sertifikat->delete();
+            return back()->with('success', 'Sertifikat resmi berhasil dihapus.');
+        }
+
+        // Fallback jika menghapus ID legacy Certificate
+        $legacy = Certificate::find($id);
+        if ($legacy) {
+            $legacy->delete();
+            return back()->with('success', 'Sertifikat berhasil dihapus.');
+        }
+
+        return back()->with('error', 'Sertifikat tidak ditemukan.');
     }
 
     /**
