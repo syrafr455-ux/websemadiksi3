@@ -186,7 +186,8 @@ class StatusKipService
 
         $kandidat = PenerimaKipk::whereIn('nomor_kip_hash', $hashDiImpor)->whereNull('user_id')->whereNotNull('nim')->get();
         foreach ($kandidat as $penerima) {
-            $user = User::where('nim', $penerima->nim)->first();
+            // Penerima KIP-K hanya ditautkan ke akun UNUSA (NIM unik di antara akun UNUSA).
+            $user = User::where('nim', $penerima->nim)->where('is_unusa', true)->first();
             if (! $user || $user->penerimaKipk()->exists()) {
                 continue;
             }

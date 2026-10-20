@@ -52,7 +52,20 @@ class User extends Authenticatable implements MustVerifyEmail
         'program_studi_teks',
         'verifikator_level',
         'jalur_pendaftaran',
+        'is_unusa',
     ];
+
+    /**
+     * Akun mahasiswa_kipk selalu akun UNUSA (NIM-nya wajib unik, lihat indeks users_nim_unusa_unique).
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (User $user) {
+            if ($user->role === UserRole::MahasiswaKipk) {
+                $user->is_unusa = true;
+            }
+        });
+    }
 
     /**
      * The attributes that should be hidden for serialization.
@@ -76,6 +89,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'last_login_at' => 'datetime',
             'password' => 'hashed',
             'is_blocked' => 'boolean',
+            'is_unusa' => 'boolean',
             'role' => UserRole::class,
         ];
     }
@@ -191,11 +205,11 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Akun user_umum yang berasal dari jalur Mahasiswa UNUSA (boleh mengklaim status KIP-K).
+     * Akun user_umum milik mahasiswa UNUSA (penanda is_unusa; boleh mengklaim status KIP-K).
      */
     public function isUmumUnusa(): bool
     {
-        return $this->role === UserRole::UserUmum && $this->jalur_pendaftaran === self::JALUR_UNUSA;
+        return $this->role === UserRole::UserUmum && (bool) $this->is_unusa;
     }
 
     /**

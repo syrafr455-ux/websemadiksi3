@@ -5,8 +5,9 @@ namespace App\Http\Requests\Pengguna;
 use App\Models\User;
 
 /**
- * Pendaftaran mandiri Mahasiswa Umum di /daftar: aturan field identik dengan form admin
- * (UserUmumRequest::aturan), ditambah konfirmasi kata sandi.
+ * Pendaftaran mandiri jalur Peserta Umum di /daftar: aturan field identik dengan form admin
+ * (UserUmumRequest::aturan), ditambah konfirmasi kata sandi. Akun jalur ini bukan akun UNUSA
+ * (mahasiswa UNUSA mendaftar lewat jalur NIM), jadi NIM tidak wajib unik.
  */
 class RegisterUserUmumRequest extends UserUmumRequest
 {
@@ -20,9 +21,15 @@ class RegisterUserUmumRequest extends UserUmumRequest
         return null;
     }
 
+    public function akunUnusa(): bool
+    {
+        return false;
+    }
+
     public function rules(): array
     {
         $aturan = static::aturan(null, true);
+        // is_unusa dari form publik diabaikan (akunUnusa() selalu false).
         $aturan['password'][] = 'confirmed';
 
         return $aturan;

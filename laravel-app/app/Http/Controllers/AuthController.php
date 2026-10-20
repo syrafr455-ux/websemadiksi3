@@ -45,9 +45,10 @@ class AuthController extends Controller
             ])->onlyInput('identity');
         }
 
-        // Support login by email OR nim OR phone
+        // Login dengan email, NIM, atau nomor HP. NIM hanya unik di antara akun UNUSA,
+        // jadi login dengan NIM hanya untuk akun UNUSA (peserta umum memakai email/nomor HP).
         $user = User::whereRaw('LOWER(email) = ?', [strtolower($identity)])
-            ->orWhere('nim', $identity)
+            ->orWhere(fn ($q) => $q->where('nim', $identity)->where('is_unusa', true))
             ->orWhere('phone', $identity)
             ->first();
 

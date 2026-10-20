@@ -50,7 +50,7 @@ class AdminStatusKipTest extends TestCase
 
     protected function umumUnusa(string $nama, string $nim): User
     {
-        return User::factory()->role(UserRole::UserUmum)->create(['name' => $nama, 'nim' => $nim, 'jalur_pendaftaran' => User::JALUR_UNUSA]);
+        return User::factory()->role(UserRole::UserUmum)->create(['name' => $nama, 'nim' => $nim, 'jalur_pendaftaran' => User::JALUR_UNUSA, 'is_unusa' => true]);
     }
 
     public function test_pengguna_page_shows_masked_kip_details_but_never_the_full_number(): void

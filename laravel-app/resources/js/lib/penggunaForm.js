@@ -16,7 +16,8 @@ export const VERIFIKATOR_LEVELS = [
 
 // Field yang dikirim ke server untuk tiap role (selain "role").
 export const FIELD_PER_ROLE = {
-    user_umum: ['name', 'asal_kampus', 'nim', 'program_studi_teks', 'email', 'phone', 'password'],
+    // is_unusa: penanda akun mahasiswa UNUSA (NIM wajib unik hanya untuk akun UNUSA).
+    user_umum: ['name', 'asal_kampus', 'is_unusa', 'nim', 'program_studi_teks', 'email', 'phone', 'password'],
     // Mahasiswa KIP-K: sama persis dengan form lama (termasuk nilai bawaan angkatan/prodi/university).
     mahasiswa_kipk: ['name', 'email', 'nim', 'phone', 'angkatan', 'prodi', 'university', 'password'],
     verifikator_berkas: ['name', 'email', 'phone', 'password', 'verifikator_level', 'fakultas_id', 'program_studi_id'],
@@ -35,6 +36,7 @@ export function penggunaKosong(role = 'user_umum') {
         nim: '',
         asal_kampus: '',
         program_studi_teks: '',
+        is_unusa: false,
         verifikator_level: 'prodi',
         fakultas_id: '',
         program_studi_id: '',
@@ -56,6 +58,7 @@ export function penggunaKeForm(user) {
         nim: user.nim ?? '',
         asal_kampus: user.asal_kampus ?? '',
         program_studi_teks: user.program_studi_teks ?? '',
+        is_unusa: Boolean(user.is_unusa),
         verifikator_level: user.verifikator_level ?? 'prodi',
         fakultas_id: user.fakultas_id ?? '',
         program_studi_id: user.program_studi_id ?? '',

@@ -13,8 +13,8 @@ class CustomFormSubmissionPolicy
     }
 
     /**
-     * Ubah status/catatan formulir: super_admin semua formulir; verifikator hanya formulir monev
-     * dari mahasiswa dalam cakupan fakultas/prodinya.
+     * Ubah status/catatan formulir: super_admin semua formulir; verifikator hanya formulir di
+     * config('unusa.verifikator_form_keys') (pencairan tidak pernah) dari mahasiswa dalam cakupan fakultas/prodinya.
      */
     public function review(User $user, CustomFormSubmission $submission): bool
     {
@@ -23,7 +23,7 @@ class CustomFormSubmissionPolicy
         }
 
         return $user->isVerifikator()
-            && $submission->form?->form_key === CustomFormSubmission::FORM_VERIFIKATOR
+            && in_array($submission->form?->form_key, CustomFormSubmission::formVerifikator(), true)
             && $user->mencakupMahasiswa($submission->user);
     }
 }

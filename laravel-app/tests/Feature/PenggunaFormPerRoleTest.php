@@ -201,8 +201,9 @@ class PenggunaFormPerRoleTest extends TestCase
 
     public function test_edit_keeps_unique_checks_against_other_users(): void
     {
-        $this->simpan($this->userUmumValid(['email' => 'satu@gmail.com', 'nim' => '187101']))->assertSessionHasNoErrors();
-        $this->simpan($this->userUmumValid(['email' => 'dua@gmail.com', 'nim' => '187102']))->assertSessionHasNoErrors();
+        // NIM wajib unik hanya di antara akun UNUSA (is_unusa); lihat PenyelarasanPenggunaTest.
+        $this->simpan($this->userUmumValid(['email' => 'satu@gmail.com', 'nim' => '187101', 'is_unusa' => true]))->assertSessionHasNoErrors();
+        $this->simpan($this->userUmumValid(['email' => 'dua@gmail.com', 'nim' => '187102', 'is_unusa' => true]))->assertSessionHasNoErrors();
         $dua = User::where('email', 'dua@gmail.com')->firstOrFail();
 
         $this->ubah($dua, $this->userUmumValid(['email' => 'satu@gmail.com', 'nim' => '187101', 'password' => '']))

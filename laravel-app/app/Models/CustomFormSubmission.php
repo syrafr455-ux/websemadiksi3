@@ -41,7 +41,7 @@ class CustomFormSubmission extends Model
 
     /**
      * Formulir yang boleh dilihat $viewer di panel admin: super_admin semua formulir;
-     * verifikator hanya formulir monev dari mahasiswa dalam cakupan fakultas/prodinya.
+     * verifikator hanya formulir di config('unusa.verifikator_form_keys') dari mahasiswa dalam cakupan fakultas/prodinya.
      */
     public function scopeTerlihatOleh(Builder $query, User $viewer): Builder
     {
@@ -51,7 +51,7 @@ class CustomFormSubmission extends Model
 
         if ($viewer->isVerifikator()) {
             return $query
-                ->whereHas('form', fn (Builder $f) => $f->where('form_key', self::FORM_VERIFIKATOR))
+                ->whereHas('form', fn (Builder $f) => $f->whereIn('form_key', self::formVerifikator()))
                 ->whereHas('user', fn (Builder $u) => $u->dalamCakupan($viewer));
         }
 
@@ -59,7 +59,20 @@ class CustomFormSubmission extends Model
     }
 
     /**
-     * Form key yang diverifikasi oleh verifikator berkas (selain berkas KIP-K).
+     * Form key yang hanya boleh diproses super_admin, apa pun isi config.
      */
-    public const FORM_VERIFIKATOR = 'monev';
+    public const FORM_KHUSUS_SUPER_ADMIN = ['pencairan'];
+
+    /**
+     * Form key yang diproses verifikator berkas (selain berkas KIP-K).
+     *
+     * @return list<string>
+     */
+    public static function formVerifikator(): array
+    {
+        return array_values(array_diff(
+            (array) config('unusa.verifikator_form_keys', ['monev', 'pelaporan']),
+            self::FORM_KHUSUS_SUPER_ADMIN
+        ));
+    }
 }

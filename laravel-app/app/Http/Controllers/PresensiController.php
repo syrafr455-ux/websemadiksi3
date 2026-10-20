@@ -100,8 +100,11 @@ class PresensiController extends Controller
                 ->where('kegiatan_id', $kegiatan->id)
                 ->where(function ($q) use ($user) {
                     $q->where('user_id', $user->id)
-                      ->orWhere('nim', $user->nim)
                       ->orWhere('email', $user->email);
+                    // NIM hanya unik untuk akun UNUSA; NIM peserta umum bisa sama dengan orang lain.
+                    if ($user->is_unusa && $user->nim) {
+                        $q->orWhere('nim', $user->nim);
+                    }
                 })
                 ->latest()
                 ->first();

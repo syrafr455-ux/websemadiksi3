@@ -58,6 +58,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Formulir yang Diproses Verifikator Berkas
+    |--------------------------------------------------------------------------
+    |
+    | form_key CustomForm yang boleh dilihat & diproses verifikator, tetap dibatasi
+    | cakupan fakultas/prodinya. "pencairan" SELALU hanya untuk super_admin dan
+    | diabaikan bila dicantumkan di sini (lihat CustomFormSubmission::formVerifikator()).
+    |
+    */
+
+    'verifikator_form_keys' => ['monev', 'pelaporan'],
+
+    // Aturan email:rfc,dns (cek MX domain email). Selalu aktif di luar tes; phpunit.xml mematikannya
+    // (VALIDASI_EMAIL_DNS=false) agar tes tidak membutuhkan koneksi internet.
+    'validasi_email_dns' => (bool) env('VALIDASI_EMAIL_DNS', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Sumber Data Akademik & Status KIP-K
     |--------------------------------------------------------------------------
     |

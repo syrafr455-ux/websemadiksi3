@@ -179,11 +179,56 @@ class UserManagementController extends Controller
             return back()->with('error', 'Status KIP-K akun tidak berubah.');
         }
 
+        // Akun KIP-K selalu akun UNUSA, dan NIM wajib unik di antara akun UNUSA.
+        if ($jadiKipk && $user->nim && User::where('nim', $user->nim)->where('is_unusa', true)->whereKeyNot($user->id)->exists()) {
+            return back()->with('error', 'NIM akun ini sudah dipakai akun mahasiswa UNUSA lain. Rapikan data NIM terlebih dahulu.');
+        }
+
         DB::transaction(fn () => $jadiKipk
             ? $statusKip->tetapkanManual($user, $request->user(), $data['alasan'])
             : $statusKip->cabut($user, $request->user(), $data['alasan']));
 
         return back()->with('success', "Status KIP-K akun '{$user->name}' diperbarui.");
+    }
+
+    /**
+     * Atur fakultas & program studi akun mahasiswa_kipk (mis. akun lama tanpa prodi) agar masuk cakupan
+     * verifikator yang sesuai. Hanya dua field ini yang diubah; perubahan tercatat di audit log.
+     */
+    public function akademik(Request $request, int $id): RedirectResponse
+    {
+        $user = User::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('update', $user);
+        abort_unless($user->role === UserRole::MahasiswaKipk, 422, 'Fakultas & prodi hanya diatur di sini untuk akun Mahasiswa KIP-K.');
+
+        $data = $request->validate([
+            'fakultas_id' => ['required', 'integer', Rule::exists('fakultas', 'id')],
+            'program_studi_id' => ['required', 'integer', Rule::exists('program_studi', 'id')->where('fakultas_id', (int) $request->input('fakultas_id'))],
+        ], [
+            'fakultas_id.required' => 'Fakultas wajib dipilih.',
+            'program_studi_id.required' => 'Program studi wajib dipilih.',
+            'program_studi_id.exists' => 'Program studi tidak termasuk fakultas yang dipilih.',
+        ]);
+
+        $lama = ['fakultas_id' => $user->fakultas_id, 'program_studi_id' => $user->program_studi_id];
+        $baru = ['fakultas_id' => (int) $data['fakultas_id'], 'program_studi_id' => (int) $data['program_studi_id']];
+        if ($lama === $baru) {
+            return back()->with('success', 'Fakultas & program studi tidak berubah.');
+        }
+
+        $user->forceFill($baru)->save();
+
+        $nama = fn (array $ids): string => (\App\Models\ProgramStudi::find($ids['program_studi_id'])?->nama ?? '-')
+            .' / '.(\App\Models\Fakultas::find($ids['fakultas_id'])?->nama ?? '-');
+        AuditLog::record(
+            auth()->id(),
+            'update_user_akademik',
+            "Mengatur fakultas & prodi akun '{$user->name}' (ID: {$user->id}): "
+                .($lama['program_studi_id'] ? $nama($lama) : 'belum diatur').' -> '.$nama($baru),
+            $user
+        );
+
+        return back()->with('success', "Fakultas & program studi akun '{$user->name}' diperbarui.");
     }
 
     /**

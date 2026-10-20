@@ -20,8 +20,9 @@ class MahasiswaKipkRequest extends PenggunaRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email:rfc,dns', 'max:255', 'unique:users,email'],
-            'nim' => ['nullable', 'string', 'max:50', 'unique:users,nim'],
+            'email' => ['required', 'string', static::aturanFormatEmailDns(), 'max:255', 'unique:users,email'],
+            // Akun KIP-K selalu akun UNUSA: NIM unik di antara akun UNUSA.
+            'nim' => ['nullable', 'string', 'max:50', static::aturanNimUnusaUnik(null)],
             'phone' => ['nullable', 'string', 'max:20'],
             'angkatan' => ['nullable', 'string', 'max:10'],
             'prodi' => ['nullable', 'string', 'max:100'],
@@ -32,7 +33,7 @@ class MahasiswaKipkRequest extends PenggunaRequest
 
     public function messages(): array
     {
-        return [];
+        return ['nim.unique' => 'NIM ini sudah dipakai akun mahasiswa UNUSA lain.'];
     }
 
     public function atributPengguna(): array

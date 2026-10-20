@@ -172,6 +172,7 @@ class PendaftaranController extends Controller
                 'verification_status' => 'Verified',
                 'is_blocked' => false,
                 'jalur_pendaftaran' => User::JALUR_UNUSA,
+                'is_unusa' => true,
                 // Kepemilikan email kampus sudah terbukti lewat link aktivasi.
                 'email_verified_at' => now(),
             ])->save();
@@ -221,7 +222,8 @@ class PendaftaranController extends Controller
 
     private function sudahPunyaAkun(array $mahasiswa): bool
     {
-        return User::where('nim', $mahasiswa['nim'])
+        // NIM hanya unik di antara akun UNUSA; peserta umum kampus lain boleh punya NIM yang sama.
+        return User::where(fn ($q) => $q->where('nim', $mahasiswa['nim'])->where('is_unusa', true))
             ->orWhere('email', strtolower((string) $mahasiswa['email_kampus']))
             ->exists();
     }

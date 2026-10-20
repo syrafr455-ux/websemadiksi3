@@ -36,7 +36,7 @@ const CARA_TERHUBUNG = {
 // Status KIP-K: nomor hanya tersamar; nomor lengkap dibuka lewat aksi yang tercatat di audit log.
 function StatusKip({ u, nomorTerbuka, onBukaNomor, onUbahStatus }) {
     const p = u.penerima_kipk;
-    const bisaDiubah = u.role === 'mahasiswa_kipk' || (u.role === 'user_umum' && u.jalur_pendaftaran === 'unusa');
+    const bisaDiubah = u.role === 'mahasiswa_kipk' || (u.role === 'user_umum' && u.is_unusa);
 
     return (
         <div className="mt-2 space-y-1" data-status-kip={u.id}>
@@ -70,12 +70,13 @@ function StatusKip({ u, nomorTerbuka, onBukaNomor, onUbahStatus }) {
 }
 
 function DetailPeran({ u, ...aksi }) {
+    // aksi: nomorTerbuka, onBukaNomor, onUbahStatus, onAturProdi
     if (u.role === 'user_umum') {
         return (
             <div>
                 <div className="font-bold text-slate-200">{u.asal_kampus || '-'}</div>
                 <div className="text-[11px] text-slate-400">NIM {u.nim || '-'} • {u.program_studi_teks || '-'}</div>
-                {u.jalur_pendaftaran === 'unusa' && <StatusKip u={u} {...aksi} />}
+                {u.is_unusa && <StatusKip u={u} {...aksi} />}
             </div>
         );
     }
@@ -92,6 +93,10 @@ function DetailPeran({ u, ...aksi }) {
                         Prodi belum diatur
                     </span>
                 )}
+                <button type="button" onClick={() => aksi.onAturProdi(u)} data-atur-prodi={u.id}
+                    className="block mt-1 text-[10px] font-bold text-teal-300 hover:underline">
+                    Atur fakultas & prodi
+                </button>
                 <StatusKip u={u} {...aksi} />
             </div>
         );
@@ -156,6 +161,20 @@ export default function PenggunaIndex({
     };
 
     const { data, setData, post, put, transform, processing, errors, reset, clearErrors } = useForm(penggunaKosong('mahasiswa_kipk'));
+
+    // Atur fakultas & prodi akun KIP-K lama (hanya dua field ini; tercatat di audit log).
+    const [aturProdi, setAturProdi] = useState(null);
+    const formProdi = useForm({ fakultas_id: '', program_studi_id: '' });
+    const bukaAturProdi = (u) => {
+        formProdi.clearErrors();
+        formProdi.setData({ fakultas_id: u.fakultas_id ?? '', program_studi_id: u.program_studi_id ?? '' });
+        setAturProdi(u);
+    };
+    const simpanProdi = (e) => {
+        e.preventDefault();
+        formProdi.post(`/admin/pengguna/${aturProdi.id}/akademik`, { preserveScroll: true, onSuccess: () => setAturProdi(null) });
+    };
+    const prodiFakultasTerpilih = fakultasOptions.find((f) => String(f.id) === String(formProdi.data.fakultas_id))?.program_studi || [];
 
     const semuaProdi = useMemo(
         () => fakultasOptions.flatMap((f) => (f.program_studi || []).map((p) => ({ ...p, fakultas_nama: f.nama }))),
@@ -360,6 +379,7 @@ export default function PenggunaIndex({
                                                     nomorTerbuka={u.penerima_kipk ? nomorTerbuka[u.penerima_kipk.id] : null}
                                                     onBukaNomor={bukaNomor}
                                                     onUbahStatus={(user) => { setAlasanKip(''); setUbahKip(user); }}
+                                                    onAturProdi={bukaAturProdi}
                                                 />
                                             </td>
                                             <td className="px-6 py-4">
@@ -442,6 +462,40 @@ export default function PenggunaIndex({
                     </div>
                 </div>
 
+                {/* Modal Atur Fakultas & Prodi akun KIP-K */}
+                {aturProdi && (
+                    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+                        <form onSubmit={simpanProdi} className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 space-y-4 text-xs" data-form-atur-prodi>
+                            <h3 className="text-base font-black text-white">Fakultas & Prodi: {aturProdi.name}</h3>
+                            <p className="text-slate-400">Hanya fakultas dan program studi yang diubah. Verifikator fakultas/prodi terkait akan melihat berkas akun ini.</p>
+                            <div>
+                                <label htmlFor="atur-fakultas" className="block font-bold text-slate-300 mb-1">Fakultas <span className="text-rose-400">*</span></label>
+                                <select id="atur-fakultas" value={formProdi.data.fakultas_id} required
+                                    onChange={(e) => formProdi.setData({ fakultas_id: e.target.value, program_studi_id: '' })}
+                                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white">
+                                    <option value="">-- Pilih fakultas --</option>
+                                    {fakultasOptions.map((f) => <option key={f.id} value={f.id}>{f.nama}</option>)}
+                                </select>
+                                {formProdi.errors.fakultas_id && <span className="text-[10px] text-rose-400">{formProdi.errors.fakultas_id}</span>}
+                            </div>
+                            <div>
+                                <label htmlFor="atur-prodi" className="block font-bold text-slate-300 mb-1">Program Studi <span className="text-rose-400">*</span></label>
+                                <select id="atur-prodi" value={formProdi.data.program_studi_id} required
+                                    onChange={(e) => formProdi.setData('program_studi_id', e.target.value)}
+                                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white">
+                                    <option value="">-- Pilih program studi --</option>
+                                    {prodiFakultasTerpilih.map((p) => <option key={p.id} value={p.id}>{p.nama}</option>)}
+                                </select>
+                                {formProdi.errors.program_studi_id && <span className="text-[10px] text-rose-400">{formProdi.errors.program_studi_id}</span>}
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <button type="button" onClick={() => setAturProdi(null)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold">Batal</button>
+                                <button type="submit" disabled={formProdi.processing} className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold">Simpan</button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+
                 {/* Modal Ubah Status KIP-K (wajib alasan, tercatat di audit log) */}
                 {ubahKip && (
                     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
@@ -512,6 +566,15 @@ export default function PenggunaIndex({
                                             <input id="pengguna-asal_kampus" type="text" autoComplete="off" value={data.asal_kampus}
                                                 onChange={(e) => setData('asal_kampus', e.target.value)} className={kelasInput} required />
                                         </Field>
+                                        <label className="flex items-start gap-2 text-[11px] text-slate-300">
+                                            <input id="pengguna-is_unusa" type="checkbox" checked={Boolean(data.is_unusa)}
+                                                onChange={(e) => setData('is_unusa', e.target.checked)}
+                                                className="mt-0.5 w-4 h-4 rounded text-emerald-600 bg-slate-900 border-slate-700" />
+                                            <span>
+                                                Akun mahasiswa UNUSA
+                                                <span className="block text-slate-500">NIM akun UNUSA wajib unik. Peserta dari kampus lain cukup email yang unik.</span>
+                                            </span>
+                                        </label>
                                         <div className="grid grid-cols-2 gap-3">
                                             <Field id="pengguna-nim" label="NIM" wajib error={errors.nim}>
                                                 <input id="pengguna-nim" type="text" autoComplete="off" value={data.nim}

@@ -363,7 +363,7 @@ class DashboardController extends Controller
     public function submissions(): View
     {
         \Illuminate\Support\Facades\Gate::authorize('viewAny', CustomFormSubmission::class);
-        // Verifikator: hanya formulir monev dari mahasiswa dalam cakupannya.
+        // Verifikator: hanya formulir monev & pelaporan (config unusa.verifikator_form_keys) dari mahasiswa dalam cakupannya.
         $submissions = CustomFormSubmission::terlihatOleh(auth()->user())
             ->with(['form', 'user.programStudi'])
             ->latest('id')

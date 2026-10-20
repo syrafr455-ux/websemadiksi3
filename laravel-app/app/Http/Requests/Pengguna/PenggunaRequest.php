@@ -7,6 +7,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\Rules\Unique;
 
 /**
  * Dasar form tambah/edit pengguna per role di /admin/pengguna.
@@ -83,6 +84,24 @@ abstract class PenggunaRequest extends FormRequest
     public static function aturanEmail(?int $abaikanId): array
     {
         return ['required', 'string', 'email:rfc', 'max:255', Rule::unique('users', 'email')->ignore($abaikanId)];
+    }
+
+    /**
+     * NIM unik hanya di antara akun UNUSA (is_unusa = true); sama dengan indeks users_nim_unusa_unique.
+     * Peserta umum dari kampus lain tidak dibatasi.
+     */
+    public static function aturanNimUnusaUnik(?int $abaikanId): Unique
+    {
+        return Rule::unique('users', 'nim')->where('is_unusa', true)->ignore($abaikanId);
+    }
+
+    /**
+     * Aturan format email akun. Pemeriksaan DNS (MX) aktif kecuali dimatikan lewat
+     * config('unusa.validasi_email_dns') -- hanya untuk tes, agar tes tidak butuh internet.
+     */
+    public static function aturanFormatEmailDns(): string
+    {
+        return config('unusa.validasi_email_dns', true) ? 'email:rfc,dns' : 'email:rfc';
     }
 
     public static function aturanPassword(bool $wajib): array

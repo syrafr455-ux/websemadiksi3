@@ -33,7 +33,7 @@ class KlaimKipTest extends TestCase
     protected function umumUnusa(string $nim, string $nama): User
     {
         return User::factory()->role(UserRole::UserUmum)->create([
-            'name' => $nama, 'nim' => $nim, 'jalur_pendaftaran' => User::JALUR_UNUSA,
+            'name' => $nama, 'nim' => $nim, 'jalur_pendaftaran' => User::JALUR_UNUSA, 'is_unusa' => true,
             'asal_kampus' => 'Universitas Nahdlatul Ulama Surabaya',
         ]);
     }

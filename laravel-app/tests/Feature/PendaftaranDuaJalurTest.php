@@ -183,7 +183,8 @@ class PendaftaranDuaJalurTest extends TestCase
 
     public function test_nim_that_already_has_account_is_rejected(): void
     {
-        User::factory()->create(['nim' => '2241010001', 'email' => 'lain@gmail.com']);
+        // Akun UNUSA dengan NIM ini sudah ada (NIM unik di antara akun UNUSA).
+        User::factory()->create(['nim' => '2241010001', 'email' => 'lain@gmail.com', 'is_unusa' => true]);
 
         $this->cekNim('2241010001');
         $this->get(route('register'))->assertSee('sudah memiliki akun SEMADIKSI')->assertSee(route('login'));
