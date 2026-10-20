@@ -34,12 +34,12 @@ class KegiatanBookingController extends Controller
      */
     public function show(string $slugOrId): Response
     {
+        // Tabel kegiatan tidak punya kolom slug (query "where slug" gagal di PostgreSQL): cari berdasarkan ID saja.
+        abort_unless(ctype_digit($slugOrId), 404);
+
         $kegiatan = Kegiatan::with(['seats' => function ($q) {
             $q->orderBy('row_label')->orderBy('col_number');
-        }])
-        ->where('slug', $slugOrId)
-        ->orWhere('id', is_numeric($slugOrId) ? (int) $slugOrId : -1)
-        ->firstOrFail();
+        }])->findOrFail((int) $slugOrId);
 
         // Check if current user is already registered
         $myRegistration = null;
