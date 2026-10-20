@@ -1,5 +1,9 @@
 @extends('layouts.admin')
 
+@section('title', 'Data Mahasiswa UNUSA')
+@section('pageTitle', 'Mahasiswa UNUSA')
+@section('pageSubtitle', 'Master mahasiswa untuk pendaftaran jalur Mahasiswa UNUSA')
+
 @section('content')
 <div class="p-6 md:p-8 space-y-6">
     <div>

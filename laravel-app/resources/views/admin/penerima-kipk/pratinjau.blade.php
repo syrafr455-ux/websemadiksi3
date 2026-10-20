@@ -1,5 +1,9 @@
 @extends('layouts.admin')
 
+@section('title', 'Pratinjau Impor Penerima KIP-K')
+@section('pageTitle', 'Pratinjau Impor Penerima KIP-K')
+@section('pageSubtitle', 'Validasi kelayakan data baris sebelum disimpan ke database')
+
 @section('content')
     {{-- Nomor pendaftaran hanya ditampilkan tersamar di pratinjau. --}}
     @include('admin.impor._pratinjau', [

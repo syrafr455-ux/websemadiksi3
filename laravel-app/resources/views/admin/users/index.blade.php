@@ -1,5 +1,9 @@
 @extends('layouts.admin')
 
+@section('title', 'Data Pengguna & Mahasiswa')
+@section('pageTitle', 'Data Pengguna')
+@section('pageSubtitle', 'Manajemen akun mahasiswa KIP-K, status verifikasi berkas, dan hak akses')
+
 @section('content')
 <div class="p-6 md:p-8 space-y-8">
     {{-- Header --}}

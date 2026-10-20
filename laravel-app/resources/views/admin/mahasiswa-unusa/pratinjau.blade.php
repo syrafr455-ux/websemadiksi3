@@ -1,5 +1,9 @@
 @extends('layouts.admin')
 
+@section('title', 'Pratinjau Impor Mahasiswa UNUSA')
+@section('pageTitle', 'Pratinjau Impor Mahasiswa')
+@section('pageSubtitle', 'Validasi kelayakan data baris sebelum disimpan ke database')
+
 @section('content')
     @include('admin.impor._pratinjau', [
         'judul' => 'Pratinjau Impor Data Mahasiswa UNUSA',

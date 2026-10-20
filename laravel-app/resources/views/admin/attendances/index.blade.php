@@ -1,5 +1,9 @@
 @extends('layouts.admin')
 
+@section('title', 'Verifikasi Presensi & Kehadiran')
+@section('pageTitle', 'Verifikasi Presensi')
+@section('pageSubtitle', 'Review foto selfie bukti presensi kegiatan mahasiswa secara real-time')
+
 @section('content')
 <div class="p-6 md:p-8 space-y-8" x-data="{ selectedAtt: null, previewImg: null }">
     {{-- Header --}}
@@ -111,46 +115,48 @@
         class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
         style="display: none;"
     >
-        <div 
-            @click.away="selectedAtt = null" 
-            class="bg-slate-950 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl"
-        >
-            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div>
-                    <h3 class="text-base font-bold text-white">Update Status Presensi</h3>
-                    <p class="text-xs text-slate-400" x-text="selectedAtt?.name"></p>
+        <template x-if="selectedAtt !== null">
+            <div 
+                @click.away="selectedAtt = null" 
+                class="bg-slate-950 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl"
+            >
+                <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                    <div>
+                        <h3 class="text-base font-bold text-white">Update Status Presensi</h3>
+                        <p class="text-xs text-slate-400" x-text="selectedAtt.name"></p>
+                    </div>
+                    <button type="button" @click="selectedAtt = null" class="p-1 rounded-lg text-slate-400 hover:bg-slate-800">
+                        <span class="material-symbols-outlined text-xl">close</span>
+                    </button>
                 </div>
-                <button @click="selectedAtt = null" class="p-1 rounded-lg text-slate-400 hover:bg-slate-800">
-                    <span class="material-symbols-outlined text-xl">close</span>
-                </button>
+
+                <form :action="'{{ url('/admin/attendances') }}/' + selectedAtt.id + '/status'" method="POST" class="space-y-4">
+                    @csrf
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Status Kehadiran</label>
+                        <select name="status" x-model="selectedAtt.status" class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500">
+                            <option value="Hadir">Hadir (Disetujui)</option>
+                            <option value="Izin">Izin</option>
+                            <option value="Tidak Hadir">Tidak Hadir / Ditolak</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Catatan Verifikator</label>
+                        <textarea name="notes" x-model="selectedAtt.notes" rows="3" placeholder="Opsional, misal foto buram / verifikasi manual" class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500"></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                        <button type="button" @click="selectedAtt = null" class="px-4 py-2 rounded-xl border border-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-900">
+                            Batal
+                        </button>
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold">
+                            Simpan Perubahan
+                        </button>
+                    </div>
+                </form>
             </div>
-
-            <form :action="'{{ url('/admin/attendances') }}/' + selectedAtt?.id + '/status'" method="POST" class="space-y-4">
-                @csrf
-                <div>
-                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Status Kehadiran</label>
-                    <select name="status" x-model="selectedAtt.status" class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500">
-                        <option value="Hadir">Hadir (Disetujui)</option>
-                        <option value="Izin">Izin</option>
-                        <option value="Tidak Hadir">Tidak Hadir / Ditolak</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Catatan Verifikator</label>
-                    <textarea name="notes" x-model="selectedAtt.notes" rows="3" placeholder="Opsional, misal foto buram / verifikasi manual" class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500"></textarea>
-                </div>
-
-                <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                    <button type="button" @click="selectedAtt = null" class="px-4 py-2 rounded-xl border border-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-900">
-                        Batal
-                    </button>
-                    <button type="submit" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold">
-                        Simpan Perubahan
-                    </button>
-                </div>
-            </form>
-        </div>
+        </template>
     </div>
 
     {{-- Modal Preview Foto --}}

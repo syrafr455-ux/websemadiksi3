@@ -64,6 +64,17 @@ body {
   color: var(--color-on-background);
 }
 
+body.admin-body {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+body.admin-body h1,
+body.admin-body h2,
+body.admin-body h3 {
+  color: #ffffff;
+}
+
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }

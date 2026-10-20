@@ -1,5 +1,9 @@
 @extends('layouts.admin')
 
+@section('title', 'Formulir & Laporan Masuk')
+@section('pageTitle', 'Formulir Masuk')
+@section('pageSubtitle', 'Review pengajuan pencairan beasiswa, pelaporan kegiatan, dan monev IPK mahasiswa')
+
 @section('content')
 <div class="p-6 md:p-8 space-y-8" x-data="{ selectedSub: null, viewDetail: null }">
     {{-- Header --}}
@@ -110,35 +114,37 @@
         class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
         style="display: none;"
     >
-        <div 
-            @click.away="viewDetail = null" 
-            class="bg-slate-950 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-6 shadow-2xl max-h-[85vh] overflow-y-auto"
-        >
-            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div>
-                    <h3 class="text-base font-bold text-white" x-text="viewDetail?.title"></h3>
-                    <p class="text-xs text-slate-400" x-text="'Oleh: ' + viewDetail?.student"></p>
-                </div>
-                <button @click="viewDetail = null" class="p-1 rounded-lg text-slate-400 hover:bg-slate-800">
-                    <span class="material-symbols-outlined text-xl">close</span>
-                </button>
-            </div>
-
-            <div class="space-y-4 text-xs">
-                <template x-for="(val, key) in viewDetail?.answers" :key="key">
-                    <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                        <span class="font-bold text-slate-400 uppercase tracking-wider text-[10px]" x-text="key"></span>
-                        <div class="text-white font-medium" x-text="val"></div>
+        <template x-if="viewDetail !== null">
+            <div 
+                @click.away="viewDetail = null" 
+                class="bg-slate-950 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-6 shadow-2xl max-h-[85vh] overflow-y-auto"
+            >
+                <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                    <div>
+                        <h3 class="text-base font-bold text-white" x-text="viewDetail.title"></h3>
+                        <p class="text-xs text-slate-400" x-text="'Oleh: ' + viewDetail.student"></p>
                     </div>
-                </template>
-            </div>
+                    <button type="button" @click="viewDetail = null" class="p-1 rounded-lg text-slate-400 hover:bg-slate-800">
+                        <span class="material-symbols-outlined text-xl">close</span>
+                    </button>
+                </div>
 
-            <div class="flex justify-end pt-4 border-t border-slate-800">
-                <button @click="viewDetail = null" class="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold hover:bg-slate-700">
-                    Tutup
-                </button>
+                <div class="space-y-4 text-xs">
+                    <template x-for="(val, key) in viewDetail.answers" :key="key">
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="font-bold text-slate-400 uppercase tracking-wider text-[10px]" x-text="key"></span>
+                            <div class="text-white font-medium" x-text="val"></div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="flex justify-end pt-4 border-t border-slate-800">
+                    <button type="button" @click="viewDetail = null" class="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold hover:bg-slate-700">
+                        Tutup
+                    </button>
+                </div>
             </div>
-        </div>
+        </template>
     </div>
 
     {{-- Modal Update Status Submission --}}
@@ -153,46 +159,48 @@
         class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
         style="display: none;"
     >
-        <div 
-            @click.away="selectedSub = null" 
-            class="bg-slate-950 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl"
-        >
-            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div>
-                    <h3 class="text-base font-bold text-white">Status Persetujuan Formulir</h3>
-                    <p class="text-xs text-slate-400" x-text="selectedSub?.form + ' (' + selectedSub?.student + ')'"></p>
+        <template x-if="selectedSub !== null">
+            <div 
+                @click.away="selectedSub = null" 
+                class="bg-slate-950 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl"
+            >
+                <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                    <div>
+                        <h3 class="text-base font-bold text-white">Status Persetujuan Formulir</h3>
+                        <p class="text-xs text-slate-400" x-text="selectedSub.form + ' (' + selectedSub.student + ')'"></p>
+                    </div>
+                    <button type="button" @click="selectedSub = null" class="p-1 rounded-lg text-slate-400 hover:bg-slate-800">
+                        <span class="material-symbols-outlined text-xl">close</span>
+                    </button>
                 </div>
-                <button @click="selectedSub = null" class="p-1 rounded-lg text-slate-400 hover:bg-slate-800">
-                    <span class="material-symbols-outlined text-xl">close</span>
-                </button>
+
+                <form :action="'{{ url('/admin/submissions') }}/' + selectedSub.id + '/status'" method="POST" class="space-y-4">
+                    @csrf
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Status Pengajuan</label>
+                        <select name="status" x-model="selectedSub.status" class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500">
+                            <option value="Disetujui">Disetujui</option>
+                            <option value="Perlu Revisi">Perlu Revisi</option>
+                            <option value="Ditolak">Ditolak</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Catatan Admin</label>
+                        <textarea name="admin_notes" x-model="selectedSub.admin_notes" rows="3" placeholder="Misal: Berkas telah diverifikasi untuk pencairan gelombang 1..." class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500"></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                        <button type="button" @click="selectedSub = null" class="px-4 py-2 rounded-xl border border-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-900">
+                            Batal
+                        </button>
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold">
+                            Simpan Status
+                        </button>
+                    </div>
+                </form>
             </div>
-
-            <form :action="'{{ url('/admin/submissions') }}/' + selectedSub?.id + '/status'" method="POST" class="space-y-4">
-                @csrf
-                <div>
-                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Status Pengajuan</label>
-                    <select name="status" x-model="selectedSub.status" class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500">
-                        <option value="Disetujui">Disetujui</option>
-                        <option value="Perlu Revisi">Perlu Revisi</option>
-                        <option value="Ditolak">Ditolak</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Catatan Admin</label>
-                    <textarea name="admin_notes" x-model="selectedSub.admin_notes" rows="3" placeholder="Misal: Berkas telah diverifikasi untuk pencairan gelombang 1..." class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500"></textarea>
-                </div>
-
-                <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                    <button type="button" @click="selectedSub = null" class="px-4 py-2 rounded-xl border border-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-900">
-                        Batal
-                    </button>
-                    <button type="submit" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold">
-                        Simpan Status
-                    </button>
-                </div>
-            </form>
-        </div>
+        </template>
     </div>
 </div>
 @endsection

@@ -1,5 +1,9 @@
 @extends('layouts.admin')
 
+@section('title', 'Kelola Kegiatan & Event')
+@section('pageTitle', 'Kelola Kegiatan')
+@section('pageSubtitle', 'Daftar agenda resmi, kuota peserta, dan konfigurasi pendaftaran')
+
 @section('content')
 <div class="p-6 md:p-8 space-y-8" x-data="{ modalOpen: false }">
     {{-- Header Actions --}}

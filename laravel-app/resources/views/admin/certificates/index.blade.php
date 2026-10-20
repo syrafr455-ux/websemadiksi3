@@ -1,5 +1,9 @@
 @extends('layouts.admin')
 
+@section('title', 'Penerbitan & Arsip Sertifikat')
+@section('pageTitle', 'Penerbitan Sertifikat')
+@section('pageSubtitle', 'Terbitkan e-sertifikat resmi ber-ID unik yang dapat diverifikasi publik')
+
 @section('content')
 <div class="p-6 md:p-8 space-y-8" x-data="{ modalOpen: false }">
     {{-- Header Actions --}}

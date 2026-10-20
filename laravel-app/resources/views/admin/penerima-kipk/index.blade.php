@@ -1,5 +1,9 @@
 @extends('layouts.admin')
 
+@section('title', 'Daftar Penerima KIP-K')
+@section('pageTitle', 'Penerima KIP-K')
+@section('pageSubtitle', 'Daftar resmi penerima beasiswa KIP-Kuliah UNUSA')
+
 @section('content')
 <div class="p-6 md:p-8 space-y-6" x-data="{
     nomor: {},

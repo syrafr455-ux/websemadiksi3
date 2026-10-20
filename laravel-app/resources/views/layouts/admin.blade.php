@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ $title ?? 'Panel Administrator' }} - SEMADIKSI UNUSA</title>
+    <title>@yield('title', $title ?? 'Panel Administrator') - SEMADIKSI UNUSA</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,7 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-full bg-slate-900 text-slate-100 flex" x-data="{ sidebarOpen: false }">
+<body class="min-h-full bg-slate-900 text-slate-100 flex admin-body" style="background-color: #0f172a; color: #f8fafc;" x-data="{ sidebarOpen: false }">
 
     {{-- Admin Sidebar --}}
     <aside 
@@ -58,15 +58,15 @@
     </aside>
 
     {{-- Main Admin App Area --}}
-    <div class="flex-1 lg:pl-72 flex flex-col min-h-screen">
-        <header class="h-20 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-30 px-6 flex items-center justify-between">
+    <div class="flex-1 lg:pl-72 flex flex-col min-h-screen bg-slate-900 text-slate-100" style="background-color: #0f172a;">
+        <header class="h-20 bg-slate-950 border-b border-slate-800 sticky top-0 z-30 px-6 flex items-center justify-between" style="background-color: #020617;">
             <div class="flex items-center gap-3">
                 <button @click="sidebarOpen = true" class="lg:hidden p-2 rounded-xl text-slate-400 hover:bg-slate-900">
                     <span class="material-symbols-outlined text-2xl">menu</span>
                 </button>
                 <div>
-                    <h1 class="text-base font-bold text-white">{{ $pageTitle ?? 'Panel Pengelola' }}</h1>
-                    <p class="text-xs text-slate-400">{{ $pageSubtitle ?? 'Pusat Kontrol PostgreSQL SEMADIKSI' }}</p>
+                    <h1 class="text-base font-bold text-white">@yield('pageTitle', $pageTitle ?? 'Panel Pengelola')</h1>
+                    <p class="text-xs text-slate-400">@yield('pageSubtitle', $pageSubtitle ?? 'Pusat Kontrol PostgreSQL SEMADIKSI')</p>
                 </div>
             </div>
 
@@ -97,7 +97,7 @@
             </div>
         @endif
 
-        <main class="flex-1 p-6">
+        <main class="flex-1 p-6 bg-slate-900 text-slate-100" style="background-color: #0f172a;">
             @if(isset($slot) && trim($slot))
                 {{ $slot }}
             @else
