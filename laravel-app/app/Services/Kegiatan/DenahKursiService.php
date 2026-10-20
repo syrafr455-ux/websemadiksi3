@@ -27,6 +27,15 @@ class DenahKursiService
     public const DEFAULT_LAYOUT = [
         'rows' => ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'],
         'cols_per_row' => 10,
+        'aisle_after_col' => 5,
+        'vip_rows' => ['A', 'B'],
+        'panitia_rows' => [],
+    ];
+
+    public const PRESET_BIOSKOP_12 = [
+        'rows' => ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
+        'cols_per_row' => 12,
+        'aisle_after_col' => 6,
         'vip_rows' => ['A', 'B'],
         'panitia_rows' => [],
     ];
@@ -36,7 +45,7 @@ class DenahKursiService
      * Key yang tidak dikirim memakai default; key yang dikirim kosong (null) berarti daftar kosong.
      * blocked_seats hanya disertakan bila ada isinya (konfigurasi lama tetap sama bentuknya).
      *
-     * @return array{rows: list<string>, cols_per_row: int, vip_rows: list<string>, panitia_rows: list<string>, blocked_seats?: list<string>}
+     * @return array{rows: list<string>, cols_per_row: int, vip_rows: list<string>, panitia_rows: list<string>, aisle_after_col?: int, blocked_seats?: list<string>}
      */
     public function normalisasi(?array $layout): array
     {
@@ -46,12 +55,19 @@ class DenahKursiService
             array_key_exists($key, $layout) ? (array) ($layout[$key] ?? []) : $default
         ), fn (string $nilai) => $nilai !== '')));
 
+        $cols = (int) ($layout['cols_per_row'] ?? self::DEFAULT_LAYOUT['cols_per_row']);
+
         $hasil = [
             'rows' => $daftar('rows', self::DEFAULT_LAYOUT['rows']),
-            'cols_per_row' => (int) ($layout['cols_per_row'] ?? self::DEFAULT_LAYOUT['cols_per_row']),
+            'cols_per_row' => $cols,
             'vip_rows' => $daftar('vip_rows', self::DEFAULT_LAYOUT['vip_rows']),
             'panitia_rows' => $daftar('panitia_rows'),
         ];
+
+        // Gang tengah (aisle): disertakan bila dikirim (konfigurasi lama tetap sama bentuknya)
+        if (array_key_exists('aisle_after_col', $layout) && $layout['aisle_after_col'] !== null && $layout['aisle_after_col'] !== '') {
+            $hasil['aisle_after_col'] = max(0, min($cols, (int) $layout['aisle_after_col']));
+        }
 
         $diblokir = $daftar('blocked_seats');
         sort($diblokir);
@@ -60,6 +76,17 @@ class DenahKursiService
         }
 
         return $hasil;
+    }
+
+    /**
+     * Posisi kolom pembatas gang tengah (aisle). Default tengah baris bila tidak dikonfigurasi.
+     */
+    public function aisleAfterCol(array $layout): ?int
+    {
+        $norm = $this->normalisasi($layout);
+        $col = $norm['aisle_after_col'] ?? ($norm['cols_per_row'] > 1 ? (int) floor($norm['cols_per_row'] / 2) : null);
+
+        return ($col !== null && $col > 0 && $col < $norm['cols_per_row']) ? $col : null;
     }
 
     public static function kodeKursi(string $baris, int $kolom): string

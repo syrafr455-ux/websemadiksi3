@@ -22,6 +22,7 @@ export default function PetaKursi({
     legenda = [],
     judulPanggung = 'PANGGUNG / LAYAR UTAMA',
     labelPeta = 'Denah kursi',
+    aisleAfterCol = null,
 }) {
     const wadah = useRef(null);
     const [sorot, setSorot] = useState(null);
@@ -87,23 +88,57 @@ export default function PetaKursi({
     return (
         <div className="space-y-4 min-w-0">
             <div className="text-center">
-                <div className="w-full max-w-lg mx-auto py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 font-black text-[11px] tracking-widest uppercase">
+                <div className="w-full max-w-lg mx-auto py-2.5 rounded-xl bg-gradient-to-r from-emerald-600/15 via-emerald-500/25 to-emerald-600/15 border border-emerald-500/40 text-emerald-300 font-black text-xs tracking-widest uppercase flex items-center justify-center gap-2 shadow-sm">
+                    <span className="material-symbols-outlined text-base">theater_comedy</span>
                     {judulPanggung}
                 </div>
+                <div className="text-[10px] text-slate-400 font-semibold mt-1">Area Panggung Utama Depan</div>
             </div>
 
             {/* Area peta: gulir horizontal di dalam wadah ini saja. */}
             <div ref={wadah} className="overflow-x-auto overscroll-x-contain pb-2 -mx-1 px-1" role="group" aria-label={labelPeta} data-peta-kursi>
                 <div className="w-max mx-auto space-y-2">
+                    {/* Header Blok Kiri & Kanan dengan Lorong Tengah */}
+                    {baris.length > 0 && baris[0].isi.length > 1 && (
+                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-slate-400 pb-1 select-none" aria-hidden="true">
+                            <span className="w-6 text-center"></span>
+                            <div className="flex-1 text-center bg-slate-950/80 py-1 px-2 rounded-lg border border-slate-800 text-slate-400 font-mono text-[10px]">
+                                Blok Kiri
+                            </div>
+                            <div className="w-8 sm:w-10 text-center text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                                Gang
+                            </div>
+                            <div className="flex-1 text-center bg-slate-950/80 py-1 px-2 rounded-lg border border-slate-800 text-slate-400 font-mono text-[10px]">
+                                Blok Kanan
+                            </div>
+                            <span className="w-6 text-center"></span>
+                        </div>
+                    )}
+
                     {baris.map(({ label, isi }) => {
-                        const tengah = Math.ceil(isi.length / 2);
+                        const maxKolom = isi.length > 0 ? Math.max(...isi.map((k) => k.kolom)) : 0;
+                        const splitCol = (aisleAfterCol && aisleAfterCol > 0 && aisleAfterCol < maxKolom)
+                            ? aisleAfterCol
+                            : Math.ceil(isi.length / 2);
+                        const blokKiri = isi.filter((k) => k.kolom <= splitCol);
+                        const blokKanan = isi.filter((k) => k.kolom > splitCol);
+
                         return (
                             <div key={label} className="flex items-center gap-2">
-                                <span className="w-6 text-center text-xs font-black text-slate-400" aria-hidden="true">{label}</span>
-                                <div className="flex items-center gap-1.5">{isi.slice(0, tengah).map(tombol)}</div>
-                                <div className="w-5 flex justify-center" aria-hidden="true"><div className="w-0.5 h-6 bg-slate-800" /></div>
-                                <div className="flex items-center gap-1.5">{isi.slice(tengah).map(tombol)}</div>
-                                <span className="w-6 text-center text-xs font-black text-slate-400" aria-hidden="true">{label}</span>
+                                <span className="w-6 text-center text-xs font-black text-slate-400 shrink-0" aria-hidden="true">{label}</span>
+                                <div className="flex items-center gap-1.5">{blokKiri.map(tombol)}</div>
+                                {blokKanan.length > 0 && (
+                                    <div
+                                        className="w-8 sm:w-10 flex flex-col items-center justify-center shrink-0 select-none pointer-events-none"
+                                        aria-hidden="true"
+                                        data-gang-tengah
+                                        title="Gang Tengah (Aisle)"
+                                    >
+                                        <div className="w-1 h-6 bg-slate-800/80 rounded-full border border-slate-700/50" />
+                                    </div>
+                                )}
+                                {blokKanan.length > 0 && <div className="flex items-center gap-1.5">{blokKanan.map(tombol)}</div>}
+                                <span className="w-6 text-center text-xs font-black text-slate-400 shrink-0" aria-hidden="true">{label}</span>
                             </div>
                         );
                     })}

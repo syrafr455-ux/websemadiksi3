@@ -358,6 +358,7 @@ export default function KegiatanShow({
                                     dipilih={dipilih}
                                     onPilih={pilihKursi}
                                     labelPeta={`Denah kursi ${kegiatan.nama_kegiatan}`}
+                                    aisleAfterCol={kegiatan.seat_layout_config?.aisle_after_col}
                                     legenda={[
                                         { label: 'Tersedia', kelas: GAYA_KURSI.tersedia },
                                         { label: 'VIP', kelas: GAYA_KURSI.vip },

@@ -63,6 +63,7 @@ class KegiatanBookingController extends Controller
                 'id', 'nama_kegiatan', 'deskripsi', 'kategori', 'metode_pelaksanaan', 'sasaran_peserta',
                 'tanggal_mulai', 'tanggal_selesai', 'registration_deadline', 'status',
                 'lokasi_type', 'lokasi_nama', 'lokasi_detail', 'narasumber', 'biaya', 'kuota', 'file_panduan_url',
+                'is_seat_booking_active', 'seat_layout_config',
             ]),
             'isDraftPreview' => $kegiatan->status === KegiatanStatus::Draft,
             'pendaftaran' => [

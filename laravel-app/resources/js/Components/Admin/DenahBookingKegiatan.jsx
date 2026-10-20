@@ -23,9 +23,11 @@ function jadwalAwal(kegiatan) {
 }
 
 function denahAwal(kegiatan, denah) {
+    const cols = denah.cols_per_row ?? 10;
     return {
         rows: (denah.rows || []).join(', '),
-        cols: denah.cols_per_row ?? 10,
+        cols: cols,
+        aisle_after_col: denah.aisle_after_col ?? Math.floor(cols / 2),
         vip: (denah.vip_rows || []).join(', '),
         panitia: (denah.panitia_rows || []).join(', '),
         blokir: denah.blocked_seats || [],
@@ -68,6 +70,7 @@ export default function DenahBookingKegiatan({ kegiatan, kursi = [], denah = {},
     const layoutForm = useMemo(() => ({
         rows: daftarDariTeks(form.rows),
         cols_per_row: parseInt(form.cols, 10) || 0,
+        aisle_after_col: parseInt(form.aisle_after_col, 10) || Math.floor((parseInt(form.cols, 10) || 0) / 2),
         vip_rows: daftarDariTeks(form.vip),
         panitia_rows: daftarDariTeks(form.panitia),
         blocked_seats: [...form.blokir].sort(),
@@ -258,6 +261,7 @@ export default function DenahBookingKegiatan({ kegiatan, kursi = [], denah = {},
                         onPilih={toggleBlokir}
                         info={info}
                         labelPeta="Peta kursi kegiatan (admin)"
+                        aisleAfterCol={denah.aisle_after_col ?? Math.floor((denah.cols_per_row || 10) / 2)}
                         legenda={[
                             { label: 'Tersedia', kelas: GAYA_KURSI.tersedia },
                             { label: 'VIP', kelas: GAYA_KURSI.vip },
@@ -287,12 +291,29 @@ export default function DenahBookingKegiatan({ kegiatan, kursi = [], denah = {},
 
             {/* Denah & venue */}
             <form onSubmit={simpanDenah} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4" data-form-denah>
-                <div>
-                    <h3 className="text-sm font-black text-white">Denah &amp; Venue</h3>
-                    <p className="text-[11px] text-slate-400">
-                        Mengubah label baris atau jumlah kolom membuat ulang semua kursi: peserta yang sudah memilih akan diminta memilih ulang lewat email.
-                        Mengubah baris VIP/panitia atau kursi diblokir tidak mereset kursi peserta.
-                    </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h3 className="text-sm font-black text-white">Denah &amp; Venue</h3>
+                        <p className="text-[11px] text-slate-400">
+                            Mengubah label baris atau jumlah kolom membuat ulang semua kursi: peserta yang sudah memilih akan diminta memilih ulang lewat email.
+                            Mengubah baris VIP/panitia atau kursi diblokir tidak mereset kursi peserta.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setForm((f) => ({
+                                ...f,
+                                rows: 'A, B, C, D, E, F, G, H',
+                                cols: 12,
+                                aisle_after_col: 6,
+                                vip: 'A, B',
+                            }));
+                        }}
+                        className="shrink-0 px-3 py-1.5 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300 text-[11px] font-bold hover:bg-sky-500/25 transition-all"
+                    >
+                        Preset Bioskop (12 Kolom, Lorong Tengah)
+                    </button>
                 </div>
 
                 {(pesanTolak || errorDenah) && (
@@ -307,7 +328,14 @@ export default function DenahBookingKegiatan({ kegiatan, kursi = [], denah = {},
                         <input id="denah-rows" type="text" value={form.rows} onChange={(e) => ubah('rows', e.target.value)} className={kelasInput} required />
                     </Field>
                     <Field label="Kursi per baris" htmlFor="denah-cols" error={semuaError['layout_config.cols_per_row']}>
-                        <input id="denah-cols" type="number" min="1" max="50" value={form.cols} onChange={(e) => ubah('cols', e.target.value)} className={kelasInput} required />
+                        <input id="denah-cols" type="number" min="1" max="50" value={form.cols} onChange={(e) => {
+                            const c = parseInt(e.target.value, 10) || 0;
+                            ubah('cols', e.target.value);
+                            ubah('aisle_after_col', Math.floor(c / 2));
+                        }} className={kelasInput} required />
+                    </Field>
+                    <Field label="Posisi Gang Tengah (setelah kolom ke-...)" htmlFor="denah-aisle" bantuan="Pemisah lorong visual (default: tengah baris)">
+                        <input id="denah-aisle" type="number" min="1" max={form.cols || 50} value={form.aisle_after_col || ''} onChange={(e) => ubah('aisle_after_col', e.target.value)} placeholder="mis. 6" className={kelasInput} />
                     </Field>
                     <Field label="Baris VIP" htmlFor="denah-vip">
                         <input id="denah-vip" type="text" value={form.vip} onChange={(e) => ubah('vip', e.target.value)} placeholder="mis. A" className={kelasInput} />
