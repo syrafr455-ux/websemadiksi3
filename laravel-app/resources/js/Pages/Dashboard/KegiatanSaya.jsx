@@ -201,13 +201,29 @@ export default function KegiatanSaya({
                                         {/* Action Buttons */}
                                         <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
                                             {isPaidOrFree ? (
-                                                <button
-                                                    onClick={() => openTicketModal(reg)}
-                                                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 transition-all"
-                                                >
-                                                    <span className="material-symbols-outlined text-sm">qr_code</span>
-                                                    Tampilkan E-Tiket &amp; QR
-                                                </button>
+                                                <div className="flex items-center gap-2 w-full">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openTicketModal(reg)}
+                                                        className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 transition-all"
+                                                        data-lihat-tiket={reg.id}
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">qr_code</span>
+                                                        Tampilkan E-Tiket
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setActiveTicket(reg);
+                                                            setTimeout(() => window.print(), 350);
+                                                        }}
+                                                        className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-xs border border-emerald-500/30 flex items-center justify-center gap-1.5 transition-all shrink-0"
+                                                        data-unduh-tiket={reg.id}
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">download</span>
+                                                        Unduh E-Tiket
+                                                    </button>
+                                                </div>
                                             ) : (
                                                 <div className="text-xs text-amber-400 font-bold flex items-center gap-1">
                                                     <span className="material-symbols-outlined text-sm">pending</span>

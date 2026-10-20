@@ -42,10 +42,39 @@ export default function KegiatanShow({
     const perluPilihUlang = registrasiSaya.filter((r) => r.perlu_pilih_ulang && r.saya_pemesan);
     const menungguPemesan = registrasiSaya.filter((r) => r.perlu_pilih_ulang && !r.saya_pemesan);
     const sudahTerdaftar = registrasiSaya.some((r) => r.saya_peserta);
+    const registrasiSayaSendiri = registrasiSaya.find((r) => r.saya_peserta);
+    const sayaPerluKursi = registrasiSayaSendiri && (!registrasiSayaSendiri.seat_id || registrasiSayaSendiri.perlu_pilih_ulang);
 
-    const [mode, setMode] = useState(() => (bukaPilihUlang && perluPilihUlang.length ? 'pilih_ulang' : 'daftar'));
+    const [mode, setMode] = useState(() => {
+        if (bukaPilihUlang && perluPilihUlang.length) return 'pilih_ulang';
+        if (sudahTerdaftar && bookingAwal.memakai_denah) return 'alokasi_teman';
+        return 'daftar';
+    });
     const [targetRegistrasi, setTargetRegistrasi] = useState(() => perluPilihUlang[0]?.id ?? null);
     const [kursiBaru, setKursiBaru] = useState(null);
+
+    // Alokasi kursi multi-user (mandiri + teman terdaftar)
+    const [daftarAlokasi, setDaftarAlokasi] = useState(() => {
+        if (sayaPerluKursi && registrasiSayaSendiri) {
+            return [{
+                registration_id: registrasiSayaSendiri.id,
+                name: user?.name ? `${user.name} (Anda)` : 'Anda',
+                nim: user?.nim || '',
+                seat_id: null,
+                seat_code: null,
+                isSelf: true,
+            }];
+        }
+        return [];
+    });
+    const [aktifAlokasi, setAktifAlokasi] = useState(0);
+
+    // State pencarian teman terdaftar tanpa kursi
+    const [kataKunciTeman, setKataKunciTeman] = useState('');
+    const [hasilCariTeman, setHasilCariTeman] = useState([]);
+    const [mencariTeman, setMencariTeman] = useState(false);
+    const [tampilDropdownTeman, setTampilDropdownTeman] = useState(false);
+    const [errorCariTeman, setErrorCariTeman] = useState(null);
 
     const [peserta, setPeserta] = useState(() => [{ ...pesertaKosong(), name: user?.name || '', email: user?.email || '', identity: user?.nim || '', phone: user?.phone || '' }]);
     const [aktif, setAktif] = useState(0);
@@ -58,7 +87,9 @@ export default function KegiatanShow({
     const statusBooking = STATUS_BOOKING[booking.status] || STATUS_BOOKING.ditutup;
 
     useEffect(() => {
-        if (mode === 'pilih_ulang') petaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (mode === 'pilih_ulang' || mode === 'alokasi_teman') {
+            petaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     }, [mode]);
 
     // Nilai terbaru untuk dipakai di callback pembaruan berkala.
@@ -66,6 +97,37 @@ export default function KegiatanShow({
     pesertaRef.current = peserta;
     const kursiBaruRef = useRef(kursiBaru);
     kursiBaruRef.current = kursiBaru;
+    const daftarAlokasiRef = useRef(daftarAlokasi);
+    daftarAlokasiRef.current = daftarAlokasi;
+
+    // Debounced search teman terdaftar tanpa kursi
+    useEffect(() => {
+        if (!user || !sudahTerdaftar || !kataKunciTeman.trim()) {
+            setHasilCariTeman([]);
+            setMencariTeman(false);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            setMencariTeman(true);
+            setErrorCariTeman(null);
+            try {
+                const { data } = await window.axios.get(`/kegiatan/${kegiatan.id}/peserta-tanpa-kursi`, {
+                    params: { search: kataKunciTeman.trim() },
+                });
+                const idSudahDipilih = new Set(daftarAlokasi.map((a) => a.registration_id));
+                const filtered = Array.isArray(data) ? data.filter((p) => !idSudahDipilih.has(p.id)) : [];
+                setHasilCariTeman(filtered);
+                setTampilDropdownTeman(true);
+            } catch (err) {
+                setErrorCariTeman(err.response?.data?.message || 'Gagal mencari peserta.');
+            } finally {
+                setMencariTeman(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [kataKunciTeman, kegiatan.id, sudahTerdaftar, user, daftarAlokasi]);
 
     // Kursi yang sudah tidak tersedia dibuang dari pilihan; pilihan lain tetap.
     const buangPilihanTidakValid = useCallback((statusKursi, pesanAwal = null) => {
@@ -88,6 +150,15 @@ export default function KegiatanShow({
             setKursiBaru(null);
         }
 
+        const alokasiBaru = daftarAlokasiRef.current.map((a) => {
+            if (a.seat_id && takTersedia(a.seat_id)) {
+                hilang.push(a.seat_code);
+                return { ...a, seat_id: null, seat_code: null };
+            }
+            return a;
+        });
+        if (hilang.length) setDaftarAlokasi(alokasiBaru);
+
         if (pesanAwal || hilang.length) {
             setPemberitahuan(pesanAwal || `Kursi ${[...new Set(hilang)].join(', ')} baru saja diambil peserta lain. Silakan pilih kursi lain; pilihan lain Anda tetap tersimpan.`);
         }
@@ -101,7 +172,6 @@ export default function KegiatanShow({
             setBooking(data.booking);
             buangPilihanTidakValid(data.kursi, pesan);
         } catch {
-            // Gagal memuat: coba lagi pada pembaruan berikutnya.
             if (pesan) setPemberitahuan(pesan);
         }
     }, [kegiatan.id, buangPilihanTidakValid]);
@@ -116,13 +186,32 @@ export default function KegiatanShow({
 
     const dipilih = useMemo(() => {
         if (mode === 'pilih_ulang') return kursiBaru ? { [kursiBaru.id]: 'Baru' } : {};
+        if (mode === 'alokasi_teman') {
+            const hasil = {};
+            daftarAlokasi.forEach((item, idx) => {
+                if (item.seat_id) {
+                    hasil[item.seat_id] = item.isSelf ? 'Anda' : (item.name ? item.name.split(' ')[0] : `T${idx + 1}`);
+                }
+            });
+            return hasil;
+        }
         return Object.fromEntries(peserta.filter((p) => p.seat_id).map((p) => [p.seat_id, `P${peserta.indexOf(p) + 1}`]));
-    }, [mode, peserta, kursiBaru]);
+    }, [mode, peserta, kursiBaru, daftarAlokasi]);
 
     const tampilan = (k) => {
         switch (k.status) {
             case 'tersedia':
-                return { kelas: k.tier === 'vip' ? GAYA_KURSI.vip : GAYA_KURSI.tersedia, status: bisaPilih ? 'tersedia' : 'tersedia, belum bisa dipilih', bisaDipilih: bisaPilih && (mode === 'pilih_ulang' ? Boolean(targetRegistrasi) : !sudahTerdaftar && pendaftaran.dibuka) };
+                return {
+                    kelas: k.tier === 'vip' ? GAYA_KURSI.vip : GAYA_KURSI.tersedia,
+                    status: bisaPilih ? 'tersedia' : 'tersedia, belum bisa dipilih',
+                    bisaDipilih: bisaPilih && (
+                        mode === 'pilih_ulang'
+                            ? Boolean(targetRegistrasi)
+                            : mode === 'alokasi_teman'
+                                ? daftarAlokasi.length > 0
+                                : !sudahTerdaftar && pendaftaran.dibuka
+                    ),
+                };
             case 'milik':
                 return { kelas: GAYA_KURSI.milik, status: `kursi Anda/delegasi Anda (${k.pemegang || '-'})`, bisaDipilih: false, isi: '★' };
             case 'panitia':
@@ -140,6 +229,37 @@ export default function KegiatanShow({
             setKursiBaru((lama) => (lama?.id === k.id ? null : k));
             return;
         }
+
+        if (mode === 'alokasi_teman') {
+            if (!daftarAlokasi.length) {
+                setPemberitahuan('Tambahkan teman atau pilih peserta yang ingin dialokasikan kursinya.');
+                return;
+            }
+            const target = daftarAlokasi[aktifAlokasi] || daftarAlokasi[0];
+            if (!target) return;
+
+            const pemilikLain = daftarAlokasi.findIndex((item, i) => item.seat_id === k.id && i !== aktifAlokasi);
+            if (pemilikLain !== -1) {
+                const namaLain = daftarAlokasi[pemilikLain].name || `Peserta ${pemilikLain + 1}`;
+                setPemberitahuan(`Kursi ${k.kode} sudah dipilih untuk ${namaLain}.`);
+                return;
+            }
+
+            setDaftarAlokasi((lama) => lama.map((item, i) => {
+                if (i !== aktifAlokasi) return item;
+                return item.seat_id === k.id
+                    ? { ...item, seat_id: null, seat_code: null }
+                    : { ...item, seat_id: k.id, seat_code: k.kode };
+            }));
+
+            // Jika peserta aktif ini baru saja mendapatkan kursi, cari peserta berikutnya yang belum punya kursi
+            const nextIndex = daftarAlokasi.findIndex((item, i) => i !== aktifAlokasi && !item.seat_id);
+            if (nextIndex !== -1 && target.seat_id !== k.id) {
+                setAktifAlokasi(nextIndex);
+            }
+            return;
+        }
+
         const pemilikLain = peserta.findIndex((p, i) => p.seat_id === k.id && i !== aktif);
         if (pemilikLain !== -1) {
             setPemberitahuan(`Kursi ${k.kode} sudah dipilih untuk peserta ${pemilikLain + 1}.`);
@@ -149,6 +269,73 @@ export default function KegiatanShow({
             if (i !== aktif) return p;
             return p.seat_id === k.id ? { ...p, seat_id: null, seat_code: null } : { ...p, seat_id: k.id, seat_code: k.kode };
         }));
+    };
+
+    const tambahTemanAlokasi = (teman) => {
+        const itemBaru = {
+            registration_id: teman.id,
+            name: teman.nama_lengkap,
+            nim: teman.nim || '',
+            seat_id: null,
+            seat_code: null,
+            isSelf: false,
+        };
+        const indexBaru = daftarAlokasi.length;
+        setDaftarAlokasi((lama) => [...lama, itemBaru]);
+        setAktifAlokasi(indexBaru);
+        setKataKunciTeman('');
+        setHasilCariTeman([]);
+        setTampilDropdownTeman(false);
+        setPemberitahuan(`Peserta ${teman.nama_lengkap} ditambahkan. Silakan pilih kursi di denah.`);
+    };
+
+    const hapusTemanAlokasi = (index) => {
+        setDaftarAlokasi((lama) => lama.filter((_, i) => i !== index));
+        setAktifAlokasi((lama) => Math.max(0, lama >= index ? lama - 1 : lama));
+    };
+
+    const simpanAlokasi = (e) => {
+        e.preventDefault();
+        if (!daftarAlokasi.length) {
+            setPemberitahuan('Belum ada peserta yang dipilih untuk dialokasikan kursi.');
+            return;
+        }
+
+        const belumPunya = daftarAlokasi.find((a) => !a.seat_id);
+        if (belumPunya) {
+            const idx = daftarAlokasi.indexOf(belumPunya);
+            setAktifAlokasi(idx);
+            setPemberitahuan(`Pilih kursi di denah untuk ${belumPunya.isSelf ? 'Anda' : belumPunya.name}.`);
+            petaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
+
+        const payload = {
+            allocations: daftarAlokasi.map((a) => ({
+                registration_id: a.registration_id,
+                seat_id: a.seat_id,
+            })),
+        };
+
+        router.post(`/kegiatan/${kegiatan.id}/pilih-kursi`, payload, {
+            preserveScroll: true,
+            onStart: () => setMemproses(true),
+            onFinish: () => setMemproses(false),
+            onError: (errs) => {
+                const bentrok = Object.keys(errs).filter((k) => /^allocations\.\d+\.seat_id$/.test(k));
+                if (bentrok.length) {
+                    const idxs = bentrok.map((k) => Number(k.split('.')[1]));
+                    setDaftarAlokasi((lama) => lama.map((a, i) => (idxs.includes(i) ? { ...a, seat_id: null, seat_code: null } : a)));
+                    if (idxs[0] !== undefined) setAktifAlokasi(idxs[0]);
+                    muatStatusKursi(bentrok.map((k) => errs[k]).join(' '));
+                } else if (errs.allocations) {
+                    setPemberitahuan(errs.allocations);
+                } else {
+                    const pesan = Object.values(errs).flat().join(' ');
+                    setPemberitahuan(pesan || 'Terjadi kesalahan saat mengalokasikan kursi.');
+                }
+            },
+        });
     };
 
     const ubahPeserta = (i, field, nilai) => setPeserta((lama) => lama.map((p, j) => (j === i ? { ...p, [field]: nilai } : p)));
@@ -316,7 +503,22 @@ export default function KegiatanShow({
                                 ))}
                             </ul>
                         </div>
-                        <a href="/dashboard/kegiatan-saya" className="shrink-0 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs text-center">Lihat E-Tiket</a>
+                        <div className="flex items-center gap-2">
+                            {booking.memakai_denah && bisaPilih && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setMode('alokasi_teman');
+                                        petaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                    }}
+                                    className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs text-center transition-colors"
+                                    data-btn-pilih-teman
+                                >
+                                    Pilihkan Kursi Teman
+                                </button>
+                            )}
+                            <a href="/dashboard/kegiatan-saya" className="shrink-0 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs text-center">Lihat E-Tiket</a>
+                        </div>
                     </div>
                 )}
 
@@ -343,7 +545,11 @@ export default function KegiatanShow({
                                             <p className="text-xs text-emerald-300 mt-1">
                                                 {mode === 'pilih_ulang'
                                                     ? `Pilih kursi baru untuk ${perluPilihUlang.find((r) => r.id === targetRegistrasi)?.nama_peserta || 'peserta'}.`
-                                                    : (sudahTerdaftar || !pendaftaran.dibuka ? '' : `Pilih kursi untuk peserta ${aktif + 1}${peserta[aktif]?.name ? ` (${peserta[aktif].name})` : ''}.`)}
+                                                    : mode === 'alokasi_teman'
+                                                        ? daftarAlokasi[aktifAlokasi]
+                                                            ? `Pilih kursi di denah untuk ${daftarAlokasi[aktifAlokasi].isSelf ? 'Anda' : daftarAlokasi[aktifAlokasi].name}.`
+                                                            : 'Tambahkan teman atau klik peserta untuk memilihkan kursi.'
+                                                        : (sudahTerdaftar || !pendaftaran.dibuka ? '' : `Pilih kursi untuk peserta ${aktif + 1}${peserta[aktif]?.name ? ` (${peserta[aktif].name})` : ''}.`)}
                                             </p>
                                         )}
                                     </div>
@@ -378,7 +584,7 @@ export default function KegiatanShow({
                         )}
                     </div>
 
-                    {/* Panel kanan: pilih ulang atau pendaftaran */}
+                    {/* Panel kanan: alokasi teman, pilih ulang, atau pendaftaran */}
                     <div className="min-w-0">
                         {mode === 'pilih_ulang' && perluPilihUlang.length > 0 ? (
                             <form onSubmit={simpanPilihUlang} className="bg-slate-900 border border-amber-400/40 rounded-3xl p-5 space-y-4" data-form-pilih-ulang>
@@ -398,7 +604,201 @@ export default function KegiatanShow({
                                 <button type="submit" disabled={memproses || !kursiBaru || !bisaPilih} className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 text-xs font-black">
                                     {memproses ? 'Menyimpan…' : 'Simpan kursi baru'}
                                 </button>
-                                <button type="button" onClick={() => { setMode('daftar'); setKursiBaru(null); }} className="w-full text-[11px] text-slate-400 hover:text-white">Tutup alur pilih ulang</button>
+                                <button type="button" onClick={() => { setMode('alokasi_teman'); setKursiBaru(null); }} className="w-full text-[11px] text-slate-400 hover:text-white">Beralih ke alokasi teman</button>
+                            </form>
+                        ) : (mode === 'alokasi_teman' || (sudahTerdaftar && booking.memakai_denah)) ? (
+                            <form onSubmit={simpanAlokasi} className="bg-slate-900 border border-sky-500/40 rounded-3xl p-5 space-y-4 shadow-xl" data-form-alokasi-kursi>
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <h3 className="text-sm font-black text-white flex items-center gap-1.5">
+                                            <span className="material-symbols-outlined text-sky-400 text-base" aria-hidden="true">group_add</span>
+                                            Alokasi Kursi Teman Terdaftar
+                                        </h3>
+                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                            Pilih kursi Anda dan pilihkan kursi untuk rekan terdaftar tanpa kursi.
+                                        </p>
+                                    </div>
+                                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold shrink-0">
+                                        Terdaftar
+                                    </span>
+                                </div>
+
+                                {/* Status kursi Anda saat ini jika sudah punya kursi terkonfirmasi */}
+                                {registrasiSayaSendiri?.kursi && !registrasiSayaSendiri.perlu_pilih_ulang && (
+                                    <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs">
+                                        <div>
+                                            <span className="text-slate-400 text-[11px] block">Kursi Anda (Terkonfirmasi)</span>
+                                            <span className="font-bold text-white">{registrasiSayaSendiri.nama_peserta}</span>
+                                        </div>
+                                        <span className="font-mono text-base font-black text-emerald-300" data-kursi-anda-aktif>
+                                            {registrasiSayaSendiri.kursi}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* Komponen Pencarian Teman Terdaftar */}
+                                <div className="space-y-1 relative" data-komponen-cari-teman>
+                                    <label htmlFor="cari-teman-input" className="block text-[11px] font-bold text-slate-300">
+                                        Pilihkan Kursi untuk Teman Terdaftar
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            id="cari-teman-input"
+                                            type="text"
+                                            value={kataKunciTeman}
+                                            onChange={(e) => {
+                                                setKataKunciTeman(e.target.value);
+                                                setTampilDropdownTeman(true);
+                                            }}
+                                            onFocus={() => {
+                                                if (hasilCariTeman.length > 0) setTampilDropdownTeman(true);
+                                            }}
+                                            placeholder="Cari nama atau NIM teman terdaftar..."
+                                            className="w-full pl-9 pr-8 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-500 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all"
+                                        />
+                                        <span className="material-symbols-outlined absolute left-2.5 top-2.5 text-base text-slate-400 pointer-events-none" aria-hidden="true">
+                                            person_search
+                                        </span>
+                                        {mencariTeman && (
+                                            <span className="material-symbols-outlined absolute right-2.5 top-2.5 text-base text-sky-400 animate-spin" aria-hidden="true">
+                                                progress_activity
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Auto-suggest dropdown */}
+                                    {tampilDropdownTeman && kataKunciTeman.trim().length > 0 && (
+                                        <div className="absolute z-20 left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-2xl bg-slate-950 border border-slate-700 shadow-2xl p-1.5 space-y-1">
+                                            {mencariTeman ? (
+                                                <div className="p-3 text-center text-xs text-slate-400">Mencari peserta...</div>
+                                            ) : hasilCariTeman.length > 0 ? (
+                                                hasilCariTeman.map((teman) => (
+                                                    <div
+                                                        key={teman.id}
+                                                        className="p-2 rounded-xl hover:bg-slate-900 border border-transparent hover:border-slate-800 flex items-center justify-between gap-2 text-xs transition-colors"
+                                                    >
+                                                        <div className="min-w-0">
+                                                            <div className="font-bold text-white truncate">{teman.nama_lengkap}</div>
+                                                            <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                                                                {teman.nim && <span>NIM: {teman.nim}</span>}
+                                                                {teman.email && <span className="font-mono text-slate-500">{teman.email}</span>}
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => tambahTemanAlokasi(teman)}
+                                                            className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] shrink-0"
+                                                            data-btn-tambah-teman={teman.id}
+                                                        >
+                                                            + Pilih
+                                                        </button>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="p-3 text-center text-xs text-slate-400">
+                                                    {errorCariTeman || 'Tidak ada peserta tanpa kursi yang cocok.'}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Daftar Alokasi Kursi (Cards) */}
+                                <div className="space-y-2" data-daftar-alokasi>
+                                    <div className="text-[11px] font-bold text-slate-400">
+                                        Daftar Kursi yang Dipilihkan ({daftarAlokasi.length} peserta):
+                                    </div>
+                                    {daftarAlokasi.length === 0 ? (
+                                        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800/80 text-center text-slate-500 text-xs">
+                                            Belum ada teman yang ditambahkan. Gunakan kolom pencarian di atas untuk menambahkan teman terdaftar.
+                                        </div>
+                                    ) : (
+                                        daftarAlokasi.map((item, idx) => (
+                                            <div
+                                                key={item.registration_id}
+                                                onClick={() => setAktifAlokasi(idx)}
+                                                className={`p-3 rounded-2xl border cursor-pointer transition-all ${
+                                                    aktifAlokasi === idx
+                                                        ? 'bg-slate-950 border-sky-400 ring-2 ring-sky-400/30'
+                                                        : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
+                                                }`}
+                                                data-alokasi-peserta={idx}
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                                                            <span className="material-symbols-outlined text-sm text-sky-400" aria-hidden="true">
+                                                                {item.isSelf ? 'person' : 'person_pin'}
+                                                            </span>
+                                                            <span className="truncate">{item.name}</span>
+                                                            {item.nim && <span className="text-[10px] text-slate-400 font-mono">({item.nim})</span>}
+                                                        </div>
+                                                        <div className="text-xs font-mono font-black text-sky-300 mt-1" data-label-kursi-alokasi={idx}>
+                                                            {item.isSelf
+                                                                ? `Kursi Anda: ${item.seat_code || 'Belum dipilih (klik denah)'}`
+                                                                : `Kursi ${item.name}: ${item.seat_code || 'Belum dipilih (klik denah)'}`}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        {aktifAlokasi === idx ? (
+                                                            <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">
+                                                                Aktif
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] text-slate-500">Pilih</span>
+                                                        )}
+                                                        {!item.isSelf && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    hapusTemanAlokasi(idx);
+                                                                }}
+                                                                className="p-1 rounded-lg text-rose-400 hover:bg-rose-500/20 hover:text-rose-200 transition-colors"
+                                                                title="Hapus teman dari daftar alokasi"
+                                                                aria-label={`Hapus ${item.name}`}
+                                                            >
+                                                                <span className="material-symbols-outlined text-sm" aria-hidden="true">close</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {!bisaPilih && (
+                                    <p className="text-[11px] text-amber-300">
+                                        {keteranganBooking(booking.status, booking.buka, booking.tutup)}
+                                    </p>
+                                )}
+
+                                {daftarAlokasi.length > 0 && (
+                                    <button
+                                        type="submit"
+                                        disabled={memproses || !daftarAlokasi.every((a) => a.seat_id) || !bisaPilih}
+                                        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 to-teal-500 hover:from-sky-500 hover:to-teal-400 disabled:opacity-40 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg"
+                                        data-btn-submit-alokasi
+                                    >
+                                        {memproses ? 'Menyimpan alokasi…' : `Kunci Kursi (${daftarAlokasi.filter((a) => a.seat_id).length}/${daftarAlokasi.length} Kursi)`}
+                                    </button>
+                                )}
+
+                                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+                                    <a href="/dashboard/kegiatan-saya" className="text-slate-400 hover:text-emerald-400 transition-colors">
+                                        ← Kembali ke Kegiatan Saya
+                                    </a>
+                                    {perluPilihUlang.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setMode('pilih_ulang')}
+                                            className="text-amber-400 hover:text-amber-300 font-bold"
+                                        >
+                                            Mode Pilih Ulang ({perluPilihUlang.length})
+                                        </button>
+                                    )}
+                                </div>
                             </form>
                         ) : !user ? (
                             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3 text-center">
@@ -406,7 +806,12 @@ export default function KegiatanShow({
                                 <a href="/masuk" className="block w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black">Masuk</a>
                             </div>
                         ) : sudahTerdaftar ? (
-                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-xs text-slate-300">Anda sudah terdaftar di kegiatan ini. Lihat e-tiket Anda di halaman Kegiatan Saya.</div>
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-xs text-slate-300 space-y-2">
+                                <p>Anda sudah terdaftar di kegiatan ini. Lihat e-tiket Anda di halaman Kegiatan Saya.</p>
+                                <a href="/dashboard/kegiatan-saya" className="inline-block px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">
+                                    Buka Kegiatan Saya
+                                </a>
+                            </div>
                         ) : !pendaftaran.dibuka ? (
                             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-xs text-slate-300">Pendaftaran kegiatan ini sudah ditutup.</div>
                         ) : (
