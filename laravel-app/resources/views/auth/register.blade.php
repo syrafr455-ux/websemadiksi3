@@ -44,6 +44,7 @@
                         {{ session('unusa_pesan') }}
                         @if($statusUnusa === 'sudah_terdaftar')
                             <a href="{{ route('login') }}" class="block mt-2 font-bold text-primary hover:underline">Masuk ke akun Anda</a>
+                            <a href="{{ route('password.request') }}" class="block mt-1 font-bold text-primary hover:underline">Lupa kata sandi?</a>
                         @endif
                     </div>
                 @endif

@@ -35,9 +35,12 @@
                 </div>
 
                 <div>
-                    <label for="password" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
-                        Kata Sandi Administrator
-                    </label>
+                    <div class="flex items-center justify-between mb-2">
+                        <label for="password" class="block text-xs font-bold text-on-surface uppercase tracking-wider">
+                            Kata Sandi Administrator
+                        </label>
+                        <a href="{{ route('password.request', ['dari' => 'admin']) }}" class="text-xs font-semibold text-amber-700 hover:underline">Lupa kata sandi?</a>
+                    </div>
                     <div class="relative">
                         <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-xl">shield_lock</span>
                         <input 

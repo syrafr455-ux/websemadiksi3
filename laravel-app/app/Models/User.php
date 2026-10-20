@@ -205,6 +205,17 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Link atur ulang kata sandi dikirim ke email yang tercatat di akun (dipanggil password broker).
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $url = route('password.reset', ['token' => $token, 'email' => $this->email]);
+        $berlaku = (int) config('auth.passwords.'.config('auth.defaults.passwords', 'users').'.expire', 60);
+
+        \Illuminate\Support\Facades\Mail::to($this->email)->send(new \App\Mail\ResetKataSandiMail($this->name, $url, $berlaku));
+    }
+
+    /**
      * Akun user_umum milik mahasiswa UNUSA (penanda is_unusa; boleh mengklaim status KIP-K).
      */
     public function isUmumUnusa(): bool

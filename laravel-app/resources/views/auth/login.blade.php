@@ -46,6 +46,7 @@
                         <label for="password" class="block text-xs font-bold text-on-surface uppercase tracking-wider">
                             Kata Sandi
                         </label>
+                        <a href="{{ route('password.request') }}" class="text-xs font-semibold text-primary hover:underline">Lupa kata sandi?</a>
                     </div>
                     <div class="relative">
                         <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-xl">lock</span>

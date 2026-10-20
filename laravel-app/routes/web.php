@@ -49,6 +49,12 @@ Route::middleware('guest')->group(function () {
 
     Route::get('/admin/masuk', [AuthController::class, 'showAdminLogin'])->name('admin.login');
     Route::post('/admin/masuk', [AuthController::class, 'adminLogin'])->name('admin.login.post');
+
+    // Lupa kata sandi (semua role): respons netral, rate limit per IP & per email/NIM di controller.
+    Route::get('/lupa-kata-sandi', [\App\Http\Controllers\LupaKataSandiController::class, 'form'])->name('password.request');
+    Route::post('/lupa-kata-sandi', [\App\Http\Controllers\LupaKataSandiController::class, 'kirim'])->name('password.email');
+    Route::get('/atur-ulang-kata-sandi/{token}', [\App\Http\Controllers\LupaKataSandiController::class, 'formAturUlang'])->name('password.reset');
+    Route::post('/atur-ulang-kata-sandi', [\App\Http\Controllers\LupaKataSandiController::class, 'simpan'])->middleware('throttle:10,1')->name('password.update');
 });
 
 // Verifikasi email (pendaftar jalur Peserta Umum)

@@ -7,6 +7,7 @@
             <div class="flex justify-center gap-3 pt-2">
                 @if(! empty($tautanMasuk))
                     <a href="{{ route('login') }}" class="px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-bold">Masuk</a>
+                    <a href="{{ route('password.request') }}" class="px-5 py-2.5 rounded-xl border border-primary text-primary text-sm font-bold">Lupa Kata Sandi</a>
                 @endif
                 <a href="{{ route('register') }}" class="px-5 py-2.5 rounded-xl border border-primary text-primary text-sm font-bold">Ke Halaman Pendaftaran</a>
             </div>

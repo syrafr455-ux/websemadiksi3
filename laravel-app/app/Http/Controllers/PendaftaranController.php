@@ -101,7 +101,7 @@ class PendaftaranController extends Controller
         }
 
         if ($this->sudahPunyaAkun($mahasiswa)) {
-            return $this->hasilUnusa('sudah_terdaftar', 'NIM ini sudah memiliki akun SEMADIKSI. Silakan masuk; bila lupa kata sandi, hubungi admin SEMADIKSI.', $nim);
+            return $this->hasilUnusa('sudah_terdaftar', 'NIM ini sudah memiliki akun SEMADIKSI. Silakan masuk; bila lupa kata sandi, atur ulang lewat halaman Lupa Kata Sandi.', $nim);
         }
 
         $berlaku = (int) config('unusa.aktivasi_berlaku_menit', 60);
