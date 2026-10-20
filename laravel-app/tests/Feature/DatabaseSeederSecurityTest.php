@@ -3,6 +3,17 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Models\Activity;
+use App\Models\ActivityRegistration;
+use App\Models\Attendance;
+use App\Models\BeritaAcara;
+use App\Models\Certificate;
+use App\Models\CustomForm;
+use App\Models\CustomFormQuestion;
+use App\Models\CustomFormSection;
+use App\Models\KipInfo;
+use App\Models\KipkDocument;
+use App\Models\Scholarship;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -115,6 +126,31 @@ class DatabaseSeederSecurityTest extends TestCase
         $admin = User::where('email', self::ADMIN_EMAIL)->firstOrFail();
         $this->assertTrue(Hash::check('Password-Lama-Admin', $admin->password));
         $this->assertSame('Administrator SEMADIKSI', $admin->name);
+    }
+
+    public function test_seeder_can_run_twice_without_duplicates_or_errors(): void
+    {
+        $model = [User::class, Activity::class, ActivityRegistration::class, Attendance::class,
+            Certificate::class, BeritaAcara::class, Scholarship::class, KipInfo::class,
+            KipkDocument::class, CustomForm::class, CustomFormSection::class, CustomFormQuestion::class];
+        $hitung = fn (): array => collect($model)->mapWithKeys(fn (string $m) => [class_basename($m) => $m::count()])->all();
+
+        $this->artisan('db:seed', ['--class' => DatabaseSeeder::class])->assertSuccessful();
+        $setelahPertama = $hitung();
+        $sandiFauzan = User::where('email', self::MAHASISWA_EMAILS[0])->value('password');
+
+        // Data demo yang diubah di lokal tidak ditimpa saat seeder dijalankan lagi.
+        Certificate::where('code', 'SMD-LKMB-2026-0091')->update(['status' => 'Dicabut']);
+
+        $this->artisan('db:seed', ['--class' => DatabaseSeeder::class])
+            ->expectsOutputToContain('sudah ada; password tidak diubah')
+            ->assertSuccessful();
+
+        $this->assertSame($setelahPertama, $hitung());
+        $this->assertSame(1, Certificate::where('code', 'SMD-LKMB-2026-0091')->count());
+        $this->assertSame('Dicabut', Certificate::where('code', 'SMD-LKMB-2026-0091')->value('status'));
+        $this->assertSame($sandiFauzan, User::where('email', self::MAHASISWA_EMAILS[0])->value('password'));
+        $this->assertGreaterThan(0, $setelahPertama['Certificate']);
     }
 
     public function test_existing_account_password_is_replaced_when_configured(): void

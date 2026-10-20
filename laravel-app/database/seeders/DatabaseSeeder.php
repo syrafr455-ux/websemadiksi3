@@ -14,7 +14,9 @@ use App\Models\KipInfo;
 use App\Models\KipkDocument;
 use App\Models\Scholarship;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -51,7 +53,24 @@ class DatabaseSeeder extends Seeder
     }
 
     /**
-     * Seed the application's database.
+     * Buat baris demo hanya bila belum ada (dicari lewat kolom kunci alami), sehingga seeder aman
+     * dijalankan ulang: tidak menduplikasi data, tidak gagal pada kolom unik (mis. kode sertifikat),
+     * dan tidak menimpa data demo yang sudah diubah di lokal.
+     *
+     * @template TModel of Model
+     *
+     * @param  class-string<TModel>  $model
+     * @param  list<string>  $kolomKunci
+     * @param  array<string, mixed>  $atribut
+     * @return TModel
+     */
+    private function sekali(string $model, array $kolomKunci, array $atribut): Model
+    {
+        return $model::firstOrCreate(Arr::only($atribut, $kolomKunci), Arr::except($atribut, $kolomKunci));
+    }
+
+    /**
+     * Seed the application's database. Aman dijalankan berulang kali (lihat sekali()).
      */
     public function run(): void
     {
@@ -127,7 +146,7 @@ class DatabaseSeeder extends Seeder
         }
 
         // 2. Activities (Kegiatan)
-        $act1 = Activity::create([
+        $act1 = $this->sekali(Activity::class, ['title'], [
             'title' => 'Latihan Kepemimpinan Mahasiswa Berprestasi (LKMB) 2026',
             'category' => 'Seminar',
             'type' => 'Offline',
@@ -148,7 +167,7 @@ class DatabaseSeeder extends Seeder
             'xp_points' => 100,
         ]);
 
-        $act2 = Activity::create([
+        $act2 = $this->sekali(Activity::class, ['title'], [
             'title' => 'SEMADIKSI Peduli: Bakti Sosial & Edukasi Panti Asuhan Akhir Tahun',
             'category' => 'Sosial',
             'type' => 'Offline',
@@ -169,7 +188,7 @@ class DatabaseSeeder extends Seeder
             'xp_points' => 75,
         ]);
 
-        $act3 = Activity::create([
+        $act3 = $this->sekali(Activity::class, ['title'], [
             'title' => 'Webinar Nasional: Menembus Beasiswa Riset & Magang Global',
             'category' => 'Webinar',
             'type' => 'Online',
@@ -191,7 +210,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 3. Activity Registration
-        ActivityRegistration::create([
+        $this->sekali(ActivityRegistration::class, ['user_id', 'activity_id'], [
             'user_id' => $fauzan->id,
             'activity_id' => $act1->id,
             'selected_seat' => 'A-12',
@@ -200,7 +219,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 4. Attendances
-        Attendance::create([
+        $this->sekali(Attendance::class, ['user_id', 'activity_id'], [
             'user_id' => $fauzan->id,
             'activity_id' => $act1->id,
             'activity_title' => $act1->title,
@@ -220,7 +239,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 5. Certificates
-        Certificate::create([
+        $this->sekali(Certificate::class, ['code'], [
             'user_id' => $fauzan->id,
             'activity_id' => $act1->id,
             'user_name' => $fauzan->name,
@@ -236,7 +255,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 6. Berita Acara
-        BeritaAcara::create([
+        $this->sekali(BeritaAcara::class, ['title'], [
             'title' => 'Berita Acara Pelantikan Pengurus & Rapat Kerja SEMADIKSI UNUSA Periode 2026/2027',
             'category' => 'Rapat Kerja',
             'status' => 'Selesai',
@@ -252,7 +271,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 7. Scholarships
-        Scholarship::create([
+        $this->sekali(Scholarship::class, ['title'], [
             'title' => 'Beasiswa KIP Kuliah Merdeka Jalur Aspirasi & Reguler UNUSA',
             'provider' => 'Kementerian Pendidikan, Kebudayaan, Riset, dan Teknologi RI',
             'category' => 'KIP Kuliah',
@@ -272,7 +291,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 8. Info KIP
-        KipInfo::create([
+        $this->sekali(KipInfo::class, ['title'], [
             'title' => 'Panduan Wajib Unggah Berkas Persyaratan Pencairan Dana Bantuan KIP-K Semester Ganjil',
             'category' => 'Alur Pencairan',
             'content' => 'Diberitahukan kepada seluruh mahasiswa penerima beasiswa KIP-Kuliah UNUSA angkatan 2023, 2024, dan 2025 bahwa pengumpulan berkas persyaratan pencairan dibuka hingga 28 Oktober 2026.',
@@ -282,7 +301,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 9. KIP-K Documents
-        KipkDocument::create([
+        $this->sekali(KipkDocument::class, ['user_id', 'file_name'], [
             'user_id' => $fauzan->id,
             'user_name' => $fauzan->name,
             'user_email' => $fauzan->email,
@@ -301,14 +320,14 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 10. Custom Forms (Pencairan, Pelaporan, Monev)
-        $formPencairan = CustomForm::create([
+        $formPencairan = $this->sekali(CustomForm::class, ['form_key'], [
             'form_key' => 'pencairan',
             'title' => 'Formulir Pengajuan Pencairan Beasiswa KIP-Kuliah',
             'subtitle' => 'Tahap 1: Verifikasi kelengkapan berkas administrasi dan keaktifan studi mahasiswa',
             'is_active' => true,
         ]);
 
-        $sec1 = CustomFormSection::create([
+        $sec1 = $this->sekali(CustomFormSection::class, ['custom_form_id', 'section_code'], [
             'custom_form_id' => $formPencairan->id,
             'section_code' => 'sec-p1',
             'title' => 'Data Identitas & Akademik Mahasiswa',
@@ -317,7 +336,7 @@ class DatabaseSeeder extends Seeder
             'order_index' => 1,
         ]);
 
-        CustomFormQuestion::create([
+        $this->sekali(CustomFormQuestion::class, ['custom_form_id', 'question_code'], [
             'custom_form_id' => $formPencairan->id,
             'section_id' => $sec1->id,
             'question_code' => 'p_nama',
@@ -328,7 +347,7 @@ class DatabaseSeeder extends Seeder
             'order_index' => 1,
         ]);
 
-        CustomFormQuestion::create([
+        $this->sekali(CustomFormQuestion::class, ['custom_form_id', 'question_code'], [
             'custom_form_id' => $formPencairan->id,
             'section_id' => $sec1->id,
             'question_code' => 'p_nim',
@@ -339,7 +358,7 @@ class DatabaseSeeder extends Seeder
             'order_index' => 2,
         ]);
 
-        CustomFormQuestion::create([
+        $this->sekali(CustomFormQuestion::class, ['custom_form_id', 'question_code'], [
             'custom_form_id' => $formPencairan->id,
             'section_id' => $sec1->id,
             'question_code' => 'p_prodi',
@@ -350,7 +369,7 @@ class DatabaseSeeder extends Seeder
             'order_index' => 3,
         ]);
 
-        $sec2 = CustomFormSection::create([
+        $sec2 = $this->sekali(CustomFormSection::class, ['custom_form_id', 'section_code'], [
             'custom_form_id' => $formPencairan->id,
             'section_code' => 'sec-p2',
             'title' => 'Unggah Berkas Persyaratan Pencairan',
@@ -359,7 +378,7 @@ class DatabaseSeeder extends Seeder
             'order_index' => 2,
         ]);
 
-        CustomFormQuestion::create([
+        $this->sekali(CustomFormQuestion::class, ['custom_form_id', 'question_code'], [
             'custom_form_id' => $formPencairan->id,
             'section_id' => $sec2->id,
             'question_code' => 'p_surat_rekom',
@@ -371,7 +390,7 @@ class DatabaseSeeder extends Seeder
             'order_index' => 1,
         ]);
 
-        CustomFormQuestion::create([
+        $this->sekali(CustomFormQuestion::class, ['custom_form_id', 'question_code'], [
             'custom_form_id' => $formPencairan->id,
             'section_id' => $sec2->id,
             'question_code' => 'p_surat_pernyataan',
@@ -383,14 +402,14 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // Form Pelaporan & Form Monev
-        CustomForm::create([
+        $this->sekali(CustomForm::class, ['form_key'], [
             'form_key' => 'pelaporan',
             'title' => 'Formulir Pelaporan Keaktifan Organisasi & Prestasi Lomba',
             'subtitle' => 'Tahap 2: Dokumentasi partisipasi kegiatan kemahasiswaan dan kejuaraan perlombaan',
             'is_active' => true,
         ]);
 
-        CustomForm::create([
+        $this->sekali(CustomForm::class, ['form_key'], [
             'form_key' => 'monev',
             'title' => 'Formulir Evaluasi Capaian Indeks Prestasi (Monev Akademik)',
             'subtitle' => 'Tahap 3: Pemutakhiran nilai IPS/IPK serta kondisi sosial ekonomi keluarga penerima KIP-K',
