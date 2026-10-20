@@ -3,20 +3,19 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Enums\KegiatanStatus;
+use App\Enums\RegistrationPaymentStatus;
 use App\Enums\SeatStatus;
-use App\Enums\SeatTier;
 use App\Events\KegiatanUpdatedEvent;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Kegiatan;
-use App\Models\KegiatanSeat;
+use App\Models\KegiatanRegistration;
+use App\Services\Kegiatan\DenahKursiService;
 use App\Services\UnusaFacilityService;
 use App\Support\Wib;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -25,7 +24,8 @@ use Inertia\Response;
 class KegiatanController extends Controller
 {
     public function __construct(
-        protected UnusaFacilityService $facilityService
+        protected UnusaFacilityService $facilityService,
+        protected DenahKursiService $denah
     ) {}
 
     /**
@@ -79,12 +79,7 @@ class KegiatanController extends Controller
         $this->normalizeKegiatanInput($request);
         $validated = $request->validate($this->kegiatanRules());
 
-        // Validasi fasilitas UNUSA jika lokasi_type adalah unusa_campus
-        if ($validated['lokasi_type'] === 'unusa_campus') {
-            if (empty($validated['lokasi_gedung']) || empty($validated['lokasi_ruangan'])) {
-                return back()->withErrors(['lokasi_gedung' => 'Pilihan gedung dan ruangan UNUSA wajib diisi untuk lokasi kampus.'])->withInput();
-            }
-        }
+        $fasilitas = $this->fasilitasUnusa($validated['lokasi_type'], $validated);
 
         $panduanPath = null;
         if ($request->hasFile('panduan_file')) {
@@ -100,7 +95,7 @@ class KegiatanController extends Controller
         try {
             $lokasiType = $validated['lokasi_type'];
             $seatBookingActive = $request->boolean('is_seat_booking_active');
-            $seatLayout = $this->normalizeSeatLayout($validated['seat_layout_config'] ?? null);
+            $seatLayout = $this->denah->normalisasi($validated['seat_layout_config'] ?? null);
 
             $kegiatan = Kegiatan::create([
                 'nama_kegiatan' => trim($validated['nama_kegiatan']),
@@ -114,6 +109,7 @@ class KegiatanController extends Controller
                 'registration_deadline' => Wib::keUtc($validated['registration_deadline'] ?? null),
                 'submission_deadline' => Wib::keUtc($validated['submission_deadline'] ?? null),
                 'lokasi_type' => $lokasiType,
+                ...$fasilitas,
                 'lokasi_nama' => trim($validated['lokasi_nama']),
                 'lokasi_detail' => $validated['lokasi_detail'] ?? null,
                 'biaya' => (float) $validated['biaya'],
@@ -132,7 +128,7 @@ class KegiatanController extends Controller
 
             // Buat denah kursi interaktif jika booking kursi aktif
             if ($seatBookingActive) {
-                $this->generateSeatsForKegiatan($kegiatan, $seatLayout);
+                $this->denah->buat($kegiatan, $seatLayout);
             }
 
             AuditLog::record(
@@ -156,13 +152,59 @@ class KegiatanController extends Controller
      */
     public function show(int $id): Response
     {
-        $kegiatan = Kegiatan::with(['seats' => function ($q) {
-            $q->orderBy('row_label')->orderBy('col_number');
-        }, 'registrations.participantUser'])->findOrFail($id);
+        $kegiatan = Kegiatan::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('update', $kegiatan);
+
+        $pendaftar = $kegiatan->registrations()
+            ->with(['participantUser:id,name,email,nim', 'bookerUser:id,name,email', 'seat:id,seat_code,tier'])
+            ->orderByDesc('needs_seat_reselection')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (KegiatanRegistration $reg) => [
+                'id' => $reg->id,
+                'nama_peserta' => $reg->ticket_holder_name,
+                'identitas_peserta' => $reg->ticket_holder_identity,
+                'email_peserta' => $reg->participantUser?->email ?? ($reg->delegation_data['email'] ?? null),
+                // Booker hanya ditampilkan bila tiket dipesankan orang lain (delegasi).
+                'booker' => $reg->booker_user_id && $reg->booker_user_id !== $reg->participant_user_id && $reg->bookerUser
+                    ? ['name' => $reg->bookerUser->name, 'email' => $reg->bookerUser->email]
+                    : null,
+                'nomor_tiket' => $reg->nomor_tiket,
+                'kursi' => $reg->seat?->seat_code,
+                'status_pembayaran' => $reg->status_pembayaran?->value,
+                'status_pembayaran_label' => $reg->status_pembayaran?->label(),
+                'status_kehadiran' => $reg->status_kehadiran?->value,
+                'checked_in_at' => $reg->checked_in_at,
+                'needs_seat_reselection' => (bool) $reg->needs_seat_reselection,
+                'created_at' => $reg->created_at,
+            ]);
+
+        $aktif = $kegiatan->registrations()->active()->count();
 
         return Inertia::render('Admin/Kegiatan/Show', [
-            'kegiatan' => $kegiatan,
-            'unusaFacilities' => $this->facilityService->listCampuses(),
+            'title' => 'Detail Kegiatan',
+            'kegiatan' => [
+                ...$kegiatan->only([
+                    'id', 'nama_kegiatan', 'kategori', 'metode_pelaksanaan', 'sasaran_peserta',
+                    'tanggal_mulai', 'tanggal_selesai', 'registration_deadline', 'submission_deadline',
+                    'lokasi_type', 'lokasi_kampus', 'lokasi_gedung', 'lokasi_ruangan', 'lokasi_nama', 'lokasi_detail',
+                    'biaya', 'kuota', 'is_seat_booking_active', 'booking_opens_at', 'booking_closes_at',
+                    'venue_change_count', 'is_submission_active', 'file_panduan_url',
+                ]),
+                'status' => $kegiatan->status?->value,
+                'seat_booking_open' => $kegiatan->isSeatBookingOpen(),
+                'registration_open' => $kegiatan->isRegistrationOpen(),
+            ],
+            'ringkasan' => [
+                'pendaftar_aktif' => $aktif,
+                'pendaftar_total' => $pendaftar->count(),
+                'kursi_total' => $kegiatan->seats()->count(),
+                'kursi_terisi' => $kegiatan->seats()->where('status', SeatStatus::Booked->value)->count(),
+                'perlu_pilih_ulang' => $pendaftar->where('needs_seat_reselection', true)
+                    ->whereIn('status_pembayaran', RegistrationPaymentStatus::activeValues())->count(),
+                'hadir' => $pendaftar->where('status_kehadiran', 'checked_in')->count(),
+            ],
+            'pendaftar' => $pendaftar->values(),
         ]);
     }
 
@@ -179,6 +221,18 @@ class KegiatanController extends Controller
 
         // Hanya field yang benar-benar dikirim yang diubah; field yang tidak dikirim tetap memakai nilai lama.
         $payload = $this->kegiatanUpdatePayload($request, $validated);
+
+        // Pilihan kampus/gedung/ruangan hanya disimpan untuk lokasi kampus UNUSA.
+        $lokasiType = $payload['lokasi_type'] ?? $kegiatan->lokasi_type;
+        if ($lokasiType !== 'unusa_campus') {
+            $payload = [...$payload, 'lokasi_kampus' => null, 'lokasi_gedung' => null, 'lokasi_ruangan' => null];
+        } elseif (array_intersect(['lokasi_kampus', 'lokasi_gedung', 'lokasi_ruangan'], array_keys($validated))) {
+            $payload = [...$payload, ...$this->fasilitasUnusa($lokasiType, [
+                'lokasi_kampus' => $validated['lokasi_kampus'] ?? $kegiatan->lokasi_kampus,
+                'lokasi_gedung' => $validated['lokasi_gedung'] ?? $kegiatan->lokasi_gedung,
+                'lokasi_ruangan' => $validated['lokasi_ruangan'] ?? $kegiatan->lokasi_ruangan,
+            ])];
+        }
 
         // jsonb PostgreSQL mengurutkan ulang key objek; isi narasumber yang sama tidak boleh dianggap perubahan.
         if (array_key_exists('narasumber', $payload) && $this->jsonSama($payload['narasumber'], $kegiatan->narasumber)) {
@@ -202,13 +256,12 @@ class KegiatanController extends Controller
             }
 
             // Denah kursi hanya dibuat ulang bila konfigurasinya benar-benar berubah (atau belum ada kursi sama sekali).
+            // Jalurnya sama dengan venue-config: kapasitas dicek, kursi peserta direset, email pilih ulang dikirim.
             $seatBookingActive = $payload['is_seat_booking_active'] ?? (bool) $kegiatan->is_seat_booking_active;
-            $regenerateSeats = false;
             if ($seatBookingActive && array_key_exists('seat_layout_config', $validated)) {
-                $layoutBaru = $this->normalizeSeatLayout($validated['seat_layout_config']);
-                if ($layoutBaru !== $this->normalizeSeatLayout($kegiatan->seat_layout_config) || ! $kegiatan->seats()->exists()) {
-                    $payload['seat_layout_config'] = $layoutBaru;
-                    $regenerateSeats = true;
+                $layoutBaru = $this->denah->normalisasi($validated['seat_layout_config']);
+                if ($layoutBaru !== $this->denah->normalisasi($kegiatan->seat_layout_config) || ! $kegiatan->seats()->exists()) {
+                    $payload['seat_layout_config'] = $this->denah->ganti($kegiatan, $layoutBaru, ruanganLama: $kegiatan->lokasi_nama);
                 }
             }
 
@@ -228,10 +281,6 @@ class KegiatanController extends Controller
             // save() tidak menulis apa pun (termasuk updated_at) bila tidak ada kolom yang berubah.
             $kegiatan->save();
 
-            if ($regenerateSeats) {
-                $this->updateSeatsForKegiatan($kegiatan, $payload['seat_layout_config']);
-            }
-
             // Jika ada perubahan waktu/lokasi, trigger notifikasi email kepada peserta
             if (! empty($changedAttributes)) {
                 event(new KegiatanUpdatedEvent($kegiatan, $changedAttributes));
@@ -247,6 +296,9 @@ class KegiatanController extends Controller
             DB::commit();
 
             return back()->with('success', 'Kegiatan berhasil diperbarui.');
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
             return back()->with('error', 'Gagal memperbarui kegiatan: '.$e->getMessage())->withInput();
@@ -288,117 +340,6 @@ class KegiatanController extends Controller
     }
 
     /**
-     * Helper: Generate denah kursi otomatis baris A-I.
-     */
-    protected function generateSeatsForKegiatan(Kegiatan $kegiatan, array $layout): void
-    {
-        $rows = $layout['rows'] ?? ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-        $cols = (int) ($layout['cols_per_row'] ?? 10);
-        $vipRows = $layout['vip_rows'] ?? ['A', 'B'];
-        $panitiaRows = $layout['panitia_rows'] ?? [];
-
-        $seatsToInsert = [];
-        $now = now();
-
-        foreach ($rows as $r) {
-            $r = strtoupper(trim($r));
-            for ($c = 1; $c <= $cols; $c++) {
-                $tier = SeatTier::Reguler;
-                if (in_array($r, $vipRows, true)) {
-                    $tier = SeatTier::Vip;
-                } elseif (in_array($r, $panitiaRows, true)) {
-                    $tier = SeatTier::Panitia;
-                }
-
-                $status = ($tier === SeatTier::Panitia)
-                    ? SeatStatus::ReservedPanitia
-                    : SeatStatus::Available;
-
-                $seatCode = $r.str_pad((string) $c, 2, '0', STR_PAD_LEFT);
-
-                $seatsToInsert[] = [
-                    'kegiatan_id' => $kegiatan->id,
-                    'seat_code' => $seatCode,
-                    'row_label' => $r,
-                    'seat_number' => $c,
-                    'col_number' => $c,
-                    'tier' => $tier->value,
-                    'status' => $status->value,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            }
-        }
-
-        if (! empty($seatsToInsert)) {
-            KegiatanSeat::insert($seatsToInsert);
-        }
-    }
-
-    /**
-     * Helper: Update denah kursi dengan proteksi kursi yang berstatus 'booked'.
-     */
-    protected function updateSeatsForKegiatan(Kegiatan $kegiatan, array $layout): void
-    {
-        $existingBookedSeatCodes = $kegiatan->seats()
-            ->where('status', SeatStatus::Booked->value)
-            ->pluck('seat_code')
-            ->all();
-
-        // Jangan pernah hapus kursi booked
-        $kegiatan->seats()
-            ->whereNotIn('seat_code', $existingBookedSeatCodes)
-            ->delete();
-
-        $rows = $layout['rows'] ?? ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-        $cols = (int) ($layout['cols_per_row'] ?? 10);
-        $vipRows = $layout['vip_rows'] ?? ['A', 'B'];
-        $panitiaRows = $layout['panitia_rows'] ?? [];
-
-        $seatsToInsert = [];
-        $now = now();
-
-        foreach ($rows as $r) {
-            $r = strtoupper(trim($r));
-            for ($c = 1; $c <= $cols; $c++) {
-                $seatCode = $r.str_pad((string) $c, 2, '0', STR_PAD_LEFT);
-
-                // Jika sudah ada kursi booked, biarkan tetap ada
-                if (in_array($seatCode, $existingBookedSeatCodes, true)) {
-                    continue;
-                }
-
-                $tier = SeatTier::Reguler;
-                if (in_array($r, $vipRows, true)) {
-                    $tier = SeatTier::Vip;
-                } elseif (in_array($r, $panitiaRows, true)) {
-                    $tier = SeatTier::Panitia;
-                }
-
-                $status = ($tier === SeatTier::Panitia)
-                    ? SeatStatus::ReservedPanitia
-                    : SeatStatus::Available;
-
-                $seatsToInsert[] = [
-                    'kegiatan_id' => $kegiatan->id,
-                    'seat_code' => $seatCode,
-                    'row_label' => $r,
-                    'seat_number' => $c,
-                    'col_number' => $c,
-                    'tier' => $tier->value,
-                    'status' => $status->value,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            }
-        }
-
-        if (! empty($seatsToInsert)) {
-            KegiatanSeat::insert($seatsToInsert);
-        }
-    }
-
-    /**
      * Aturan validasi form kegiatan. Nama field = nama kolom model Kegiatan.
      * Saat update semua field opsional ('sometimes'): yang tidak dikirim tidak diubah.
      */
@@ -418,15 +359,16 @@ class KegiatanController extends Controller
             'registration_deadline' => ['nullable', 'date'],
             'submission_deadline' => ['nullable', 'date'],
             'lokasi_type' => [...$wajib, Rule::in(Kegiatan::LOKASI_TYPES)],
-            // Pilihan kampus/gedung/ruangan hanya alat bantu UI untuk mengisi lokasi_nama & lokasi_detail (tidak disimpan).
-            'lokasi_kampus' => ['nullable', 'string'],
-            'lokasi_gedung' => ['nullable', 'string'],
-            'lokasi_ruangan' => ['nullable', 'string'],
+            // Pilihan fasilitas UNUSA; disimpan hanya untuk lokasi_type = unusa_campus (lihat fasilitasUnusa()).
+            'lokasi_kampus' => ['nullable', 'string', 'max:255'],
+            'lokasi_gedung' => ['nullable', 'string', 'max:255'],
+            'lokasi_ruangan' => ['nullable', 'string', 'max:255'],
             'lokasi_nama' => [...$wajib, 'string', 'max:255'],
             'lokasi_detail' => ['nullable', 'string', 'max:255'],
             'biaya' => [...$wajib, 'numeric', 'min:0'],
             'kuota' => [...$wajib, 'integer', 'min:1'],
             'poin_xp' => ['nullable', 'integer', 'min:0'],
+            // Daftar narasumber kosong dikirim sebagai null (FormData membuang array kosong saat ada unggahan berkas).
             'narasumber' => ['nullable', 'array'],
             'narasumber.*' => ['array'],
             'narasumber.*.nama' => ['required', 'string', 'max:255'],
@@ -444,11 +386,44 @@ class KegiatanController extends Controller
             'seat_layout_config.rows' => ['sometimes', 'array'],
             'seat_layout_config.rows.*' => ['string', 'max:3'],
             'seat_layout_config.cols_per_row' => ['sometimes', 'integer', 'min:1', 'max:50'],
-            'seat_layout_config.vip_rows' => ['sometimes', 'array'],
+            // Daftar kosong dikirim sebagai null (FormData membuang array kosong saat ada unggahan berkas).
+            'seat_layout_config.vip_rows' => ['sometimes', 'nullable', 'array'],
             'seat_layout_config.vip_rows.*' => ['string', 'max:3'],
-            'seat_layout_config.panitia_rows' => ['sometimes', 'array'],
+            'seat_layout_config.panitia_rows' => ['sometimes', 'nullable', 'array'],
             'seat_layout_config.panitia_rows.*' => ['string', 'max:3'],
         ];
+    }
+
+    /**
+     * Pilihan kampus/gedung/ruangan yang disimpan. Untuk lokasi kampus UNUSA ketiganya wajib dan harus
+     * ada di daftar fasilitas (UnusaFacilityService); untuk lokasi lain disimpan null.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array{lokasi_kampus: ?string, lokasi_gedung: ?string, lokasi_ruangan: ?string}
+     *
+     * @throws ValidationException
+     */
+    protected function fasilitasUnusa(string $lokasiType, array $input): array
+    {
+        if ($lokasiType !== 'unusa_campus') {
+            return ['lokasi_kampus' => null, 'lokasi_gedung' => null, 'lokasi_ruangan' => null];
+        }
+
+        $kampus = trim((string) ($input['lokasi_kampus'] ?? ''));
+        $gedung = trim((string) ($input['lokasi_gedung'] ?? ''));
+        $ruangan = trim((string) ($input['lokasi_ruangan'] ?? ''));
+
+        if ($kampus === '' || $gedung === '' || $ruangan === '') {
+            throw ValidationException::withMessages(['lokasi_gedung' => 'Pilihan kampus, gedung, dan ruangan UNUSA wajib diisi untuk lokasi kampus.']);
+        }
+
+        $dataKampus = collect($this->facilityService->listCampuses())->firstWhere('name', $kampus);
+        $dataGedung = collect($dataKampus['buildings'] ?? [])->firstWhere('name', $gedung);
+        if (! $dataGedung || ! collect($dataGedung['rooms'] ?? [])->contains('name', $ruangan)) {
+            throw ValidationException::withMessages(['lokasi_ruangan' => 'Kombinasi kampus, gedung, dan ruangan UNUSA tidak dikenal.']);
+        }
+
+        return ['lokasi_kampus' => $kampus, 'lokasi_gedung' => $gedung, 'lokasi_ruangan' => $ruangan];
     }
 
     /**
@@ -556,26 +531,6 @@ class KegiatanController extends Controller
         }
 
         return $hasil === [] ? null : $hasil;
-    }
-
-    /**
-     * Bentuk baku denah kursi agar konfigurasi lama dan baru bisa dibandingkan.
-     *
-     * @return array{rows: list<string>, cols_per_row: int, vip_rows: list<string>, panitia_rows: list<string>}
-     */
-    protected function normalizeSeatLayout(?array $layout): array
-    {
-        $baris = fn ($rows): array => array_values(array_map(
-            fn ($row) => strtoupper(trim((string) $row)),
-            is_array($rows) ? $rows : []
-        ));
-
-        return [
-            'rows' => $baris($layout['rows'] ?? ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']),
-            'cols_per_row' => (int) ($layout['cols_per_row'] ?? 10),
-            'vip_rows' => $baris($layout['vip_rows'] ?? ['A', 'B']),
-            'panitia_rows' => $baris($layout['panitia_rows'] ?? []),
-        ];
     }
 
     /**

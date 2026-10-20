@@ -1,6 +1,5 @@
 // Pemetaan data kegiatan (props dari server) <-> state form admin.
-// Nama field form = nama kolom model App\Models\Kegiatan, kecuali alat bantu UI pemilih fasilitas
-// (lokasi_kampus/lokasi_gedung/lokasi_ruangan) dan berkas unggahan (panduan_file).
+// Nama field form = nama kolom model App\Models\Kegiatan, kecuali berkas unggahan (panduan_file).
 
 import { keInputWib } from './waktuWib';
 
@@ -109,8 +108,10 @@ export function kegiatanKeForm(item) {
         registration_deadline: keInputWib(item.registration_deadline),
         submission_deadline: keInputWib(item.submission_deadline),
         lokasi_type: item.lokasi_type ?? 'unusa_campus',
-        // Pilihan fasilitas tidak disimpan di database; lokasi_nama/lokasi_detail yang tersimpan tetap dipakai.
-        ...DEFAULT_FASILITAS,
+        // Pilihan fasilitas tersimpan (hanya untuk lokasi kampus); kegiatan lama tanpa pilihan memakai default.
+        lokasi_kampus: item.lokasi_kampus || DEFAULT_FASILITAS.lokasi_kampus,
+        lokasi_gedung: item.lokasi_gedung || DEFAULT_FASILITAS.lokasi_gedung,
+        lokasi_ruangan: item.lokasi_ruangan || DEFAULT_FASILITAS.lokasi_ruangan,
         lokasi_nama: item.lokasi_nama ?? '',
         lokasi_detail: item.lokasi_detail ?? '',
         biaya: item.biaya ?? 0,
@@ -128,5 +129,25 @@ export function kegiatanKeForm(item) {
             panitia_rows: layout.panitia_rows ?? DEFAULT_SEAT_LAYOUT.panitia_rows,
         },
         panduan_file: null,
+    };
+}
+
+/**
+ * Data yang dikirim ke server. Bila ada berkas, Inertia mengirim FormData yang membuang array kosong,
+ * sehingga "hapus semua narasumber" atau "tanpa baris VIP" tidak sampai ke server. Array kosong
+ * dikirim sebagai null (string kosong di FormData) dan server membacanya sebagai daftar kosong.
+ */
+export function kegiatanKePayload(data) {
+    const kosongJadiNull = (list) => (Array.isArray(list) && list.length === 0 ? null : list);
+    const layout = data.seat_layout_config || {};
+
+    return {
+        ...data,
+        narasumber: kosongJadiNull(data.narasumber),
+        seat_layout_config: {
+            ...layout,
+            vip_rows: kosongJadiNull(layout.vip_rows),
+            panitia_rows: kosongJadiNull(layout.panitia_rows),
+        },
     };
 }

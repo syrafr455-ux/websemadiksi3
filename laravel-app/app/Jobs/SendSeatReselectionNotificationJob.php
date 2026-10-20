@@ -42,7 +42,7 @@ class SendSeatReselectionNotificationJob implements ShouldQueue
             : null;
 
         // Tautan pemilihan ulang untuk pemesan (booker)
-        $reselectionUrl = url('/kegiatan/'.($this->kegiatan->slug ?? $this->kegiatan->id));
+        $reselectionUrl = route('kegiatan.detail', $this->kegiatan->id);
 
         $sentBookerEmails = [];
         $sentDelegateEmails = [];

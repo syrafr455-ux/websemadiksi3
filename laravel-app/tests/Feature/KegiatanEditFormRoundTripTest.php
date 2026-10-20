@@ -112,9 +112,9 @@ class KegiatanEditFormRoundTripTest extends TestCase
             'registration_deadline' => $this->keInputWib($item['registration_deadline'] ?? null),
             'submission_deadline' => $this->keInputWib($item['submission_deadline'] ?? null),
             'lokasi_type' => $item['lokasi_type'] ?? 'unusa_campus',
-            'lokasi_kampus' => 'Kampus B (Jemursari)',
-            'lokasi_gedung' => 'Tower UNUSA',
-            'lokasi_ruangan' => 'Auditorium Lt. 9',
+            'lokasi_kampus' => ($item['lokasi_kampus'] ?? null) ?: 'Kampus B (Jemursari)',
+            'lokasi_gedung' => ($item['lokasi_gedung'] ?? null) ?: 'Tower UNUSA',
+            'lokasi_ruangan' => ($item['lokasi_ruangan'] ?? null) ?: 'Auditorium Lt. 9',
             'lokasi_nama' => $item['lokasi_nama'] ?? '',
             'lokasi_detail' => $item['lokasi_detail'] ?? '',
             'biaya' => $item['biaya'] ?? 0,
@@ -135,11 +135,27 @@ class KegiatanEditFormRoundTripTest extends TestCase
         ];
     }
 
+    /** Port PHP dari kegiatanKePayload(): array kosong dikirim sebagai null. */
+    protected function payload(array $form): array
+    {
+        $kosongJadiNull = fn ($list) => is_array($list) && $list === [] ? null : $list;
+        if (array_key_exists('narasumber', $form)) {
+            $form['narasumber'] = $kosongJadiNull($form['narasumber']);
+        }
+        foreach (['vip_rows', 'panitia_rows'] as $key) {
+            if (isset($form['seat_layout_config']) && array_key_exists($key, $form['seat_layout_config'])) {
+                $form['seat_layout_config'][$key] = $kosongJadiNull($form['seat_layout_config'][$key]);
+            }
+        }
+
+        return $form;
+    }
+
     /** Kirim form edit seperti React: POST dengan _method=PUT. */
     protected function simpanForm(Kegiatan $kegiatan, array $data)
     {
         return $this->actingAs($this->admin)
-            ->post(route('admin.kegiatan.update', $kegiatan->id), ['_method' => 'PUT', ...$data])
+            ->post(route('admin.kegiatan.update', $kegiatan->id), ['_method' => 'PUT', ...$this->payload($data)])
             ->assertRedirect()
             ->assertSessionHasNoErrors()
             ->assertSessionHas('success');

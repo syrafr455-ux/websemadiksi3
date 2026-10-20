@@ -9,6 +9,7 @@ import {
     SASARAN_OPTIONS,
     formatNarasumber,
     kegiatanKeForm,
+    kegiatanKePayload,
     kegiatanKosong,
     labelDari,
     narasumberKosong,
@@ -29,10 +30,14 @@ export default function KegiatanIndex({
     const [currentStep, setCurrentStep] = useState(1);
 
     // Form State (nama field = nama kolom model Kegiatan, lihat resources/js/lib/kegiatanForm.js)
-    const { data, setData, post, processing, errors, reset } = useForm(kegiatanKosong());
+    const { data, setData, post, processing, errors, reset, clearErrors, transform } = useForm(kegiatanKosong());
+    transform((form) => (editingItem
+        ? { _method: 'PUT', ...kegiatanKePayload(form) }
+        : kegiatanKePayload(form)));
 
     const openCreateModal = () => {
         reset();
+        clearErrors();
         setEditingItem(null);
         setCurrentStep(1);
         setModalOpen(true);
@@ -40,6 +45,7 @@ export default function KegiatanIndex({
 
     const openEditModal = (item) => {
         setEditingItem(item);
+        clearErrors();
         setData(kegiatanKeForm(item));
         setCurrentStep(1);
         setModalOpen(true);
@@ -81,33 +87,29 @@ export default function KegiatanIndex({
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (editingItem) {
-            router.post(`/admin/kegiatan/${editingItem.id}`, {
-                _method: 'PUT',
-                ...data,
-            }, {
-                onSuccess: () => setModalOpen(false),
-            });
-        } else {
-            post('/admin/kegiatan', {
-                onSuccess: () => setModalOpen(false),
-            });
-        }
+        // Edit dikirim sebagai POST + _method=PUT agar berkas PDF ikut terunggah; error validasi masuk ke `errors`.
+        post(editingItem ? `/admin/kegiatan/${editingItem.id}` : '/admin/kegiatan', {
+            onSuccess: () => setModalOpen(false),
+            onError: (errs) => {
+                if (errs.capacity) setCurrentStep(4);
+            },
+        });
     };
 
-    // Helper untuk memilih fasilitas UNUSA
-    const handleFacilityCampusChange = (campusName) => {
+    // Pemilih fasilitas UNUSA: kampus -> gedung -> ruangan selalu berupa kombinasi yang valid,
+    // lalu nama & detail lokasi tampilan diisi dari pilihan itu.
+    const pilihFasilitas = (campusName, buildingName = null, roomName = null) => {
         const campus = unusaFacilities.find((c) => c.name === campusName);
-        const firstBuilding = campus?.buildings?.[0];
-        const firstRoom = firstBuilding?.rooms?.[0];
+        const building = campus?.buildings?.find((b) => b.name === buildingName) || campus?.buildings?.[0];
+        const room = building?.rooms?.find((r) => r.name === roomName) || building?.rooms?.[0];
 
         setData({
             ...data,
             lokasi_kampus: campusName,
-            lokasi_gedung: firstBuilding?.name || '',
-            lokasi_ruangan: firstRoom?.name || '',
-            lokasi_nama: `${firstBuilding?.name || ''} - ${campusName}`,
-            lokasi_detail: `${firstRoom?.name || ''}, ${campus?.address || ''}`,
+            lokasi_gedung: building?.name || '',
+            lokasi_ruangan: room?.name || '',
+            lokasi_nama: `${building?.name || ''} - ${campusName}`,
+            lokasi_detail: `${room?.name || ''}, ${campus?.address || ''}`,
         });
     };
 
@@ -250,7 +252,14 @@ export default function KegiatanIndex({
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-2">
                                                     <a
-                                                        href={`/kegiatan/${item.slug || item.id}`}
+                                                        href={`/admin/kegiatan/${item.id}`}
+                                                        className="p-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300"
+                                                        title="Detail & Pendaftar"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">groups</span>
+                                                    </a>
+                                                    <a
+                                                        href={`/kegiatan/${item.id}`}
                                                         target="_blank"
                                                         rel="noreferrer"
                                                         className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
@@ -574,7 +583,7 @@ export default function KegiatanIndex({
                                                         <label className="block text-[11px] font-bold text-slate-400 mb-1">Kampus UNUSA</label>
                                                         <select
                                                             value={data.lokasi_kampus}
-                                                            onChange={(e) => handleFacilityCampusChange(e.target.value)}
+                                                            onChange={(e) => pilihFasilitas(e.target.value)}
                                                             className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
                                                         >
                                                             {unusaFacilities.map((c) => (
@@ -587,7 +596,7 @@ export default function KegiatanIndex({
                                                         <label className="block text-[11px] font-bold text-slate-400 mb-1">Gedung</label>
                                                         <select
                                                             value={data.lokasi_gedung}
-                                                            onChange={(e) => setData('lokasi_gedung', e.target.value)}
+                                                            onChange={(e) => pilihFasilitas(data.lokasi_kampus, e.target.value)}
                                                             className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
                                                         >
                                                             {unusaFacilities
@@ -602,7 +611,7 @@ export default function KegiatanIndex({
                                                         <label className="block text-[11px] font-bold text-slate-400 mb-1">Ruangan / Hall</label>
                                                         <select
                                                             value={data.lokasi_ruangan}
-                                                            onChange={(e) => setData('lokasi_ruangan', e.target.value)}
+                                                            onChange={(e) => pilihFasilitas(data.lokasi_kampus, data.lokasi_gedung, e.target.value)}
                                                             className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
                                                         >
                                                             {unusaFacilities
@@ -614,6 +623,9 @@ export default function KegiatanIndex({
                                                         </select>
                                                     </div>
                                                 </div>
+                                                {(errors.lokasi_gedung || errors.lokasi_ruangan) && (
+                                                    <span className="text-[10px] text-rose-400">{errors.lokasi_gedung || errors.lokasi_ruangan}</span>
+                                                )}
                                             </div>
                                         )}
 
@@ -664,6 +676,18 @@ export default function KegiatanIndex({
 
                                 {currentStep === 4 && (
                                     <div className="space-y-4">
+                                        {errors.capacity && (
+                                            <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-medium flex items-start gap-2">
+                                                <span className="material-symbols-outlined text-sm">error</span>
+                                                <span>{errors.capacity}</span>
+                                            </div>
+                                        )}
+                                        {editingItem && (
+                                            <p className="text-[11px] text-amber-300/90">
+                                                Mengubah denah akan mereset kursi peserta yang sudah memilih; mereka diminta memilih ulang lewat email.
+                                                Denah dengan kapasitas lebih kecil dari jumlah kursi terisi akan ditolak.
+                                            </p>
+                                        )}
                                         <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-950 border border-slate-800">
                                             <div>
                                                 <div className="text-xs font-bold text-white">Aktifkan Pemilihan Kursi Interaktif</div>
