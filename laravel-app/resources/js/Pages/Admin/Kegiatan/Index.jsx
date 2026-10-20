@@ -30,7 +30,7 @@ export default function KegiatanIndex({
     const [currentStep, setCurrentStep] = useState(1);
 
     // Form State (nama field = nama kolom model Kegiatan, lihat resources/js/lib/kegiatanForm.js)
-    const { data, setData, post, processing, errors, reset, clearErrors, transform } = useForm(kegiatanKosong());
+    const { data, setData, post, processing, errors, reset, clearErrors, setError, transform } = useForm(kegiatanKosong());
     transform((form) => (editingItem
         ? { _method: 'PUT', ...kegiatanKePayload(form) }
         : kegiatanKePayload(form)));
@@ -85,8 +85,35 @@ export default function KegiatanIndex({
         setData(field, file);
     };
 
-    const handleSubmit = (e) => {
+    // Sebelum menyimpan denah yang mereset kursi peserta, minta konfirmasi berisi jumlah peserta & email
+    // (dihitung server, sama dengan tab Denah & Booking di halaman detail).
+    const konfirmasiDenah = async () => {
+        try {
+            const { data: hasil } = await window.axios.post(`/admin/kegiatan/${editingItem.id}/venue-config/pratinjau`, {
+                layout_changed: true,
+                is_seat_booking_active: true,
+                layout_config: kegiatanKePayload(data).seat_layout_config,
+            });
+            if (!hasil.cukup) {
+                setError('capacity', hasil.pesan_tolak);
+                setCurrentStep(4);
+                return false;
+            }
+            if (hasil.akan_reset) {
+                return window.confirm(
+                    `Denah baru akan mereset kursi ${hasil.peserta_terdampak} peserta. Mereka diminta memilih ulang kursi `
+                    + `dan sistem mengirim ${hasil.email_dikirim} email (${hasil.email_pemesan} ke pemesan, ${hasil.email_delegasi} ke delegasi). Lanjutkan?`
+                );
+            }
+        } catch {
+            // Pemeriksaan gagal: server tetap memvalidasi kapasitas saat menyimpan.
+        }
+        return true;
+    };
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        if (editingItem && data.is_seat_booking_active && !(await konfirmasiDenah())) return;
         // Edit dikirim sebagai POST + _method=PUT agar berkas PDF ikut terunggah; error validasi masuk ke `errors`.
         post(editingItem ? `/admin/kegiatan/${editingItem.id}` : '/admin/kegiatan', {
             onSuccess: () => setModalOpen(false),

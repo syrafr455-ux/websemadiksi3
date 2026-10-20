@@ -11,6 +11,7 @@ use App\Models\AuditLog;
 use App\Models\Kegiatan;
 use App\Models\KegiatanRegistration;
 use App\Services\Kegiatan\DenahKursiService;
+use App\Services\Kegiatan\PetaKursiService;
 use App\Services\UnusaFacilityService;
 use App\Support\Wib;
 use Illuminate\Http\RedirectResponse;
@@ -79,7 +80,7 @@ class KegiatanController extends Controller
         $this->normalizeKegiatanInput($request);
         $validated = $request->validate($this->kegiatanRules());
 
-        $fasilitas = $this->fasilitasUnusa($validated['lokasi_type'], $validated);
+        $fasilitas = $this->facilityService->pilihanKampus($validated['lokasi_type'], $validated);
 
         $panduanPath = null;
         if ($request->hasFile('panduan_file')) {
@@ -193,8 +194,16 @@ class KegiatanController extends Controller
                 ]),
                 'status' => $kegiatan->status?->value,
                 'seat_booking_open' => $kegiatan->isSeatBookingOpen(),
+                'status_booking' => $kegiatan->statusBookingKursi(),
                 'registration_open' => $kegiatan->isRegistrationOpen(),
             ],
+            // Tab "Denah & Booking": peta kursi beserta pemegangnya, denah tersimpan, dan pilihan fasilitas untuk pindah venue.
+            'kursi' => app(PetaKursiService::class)->untukAdmin($kegiatan),
+            'denah' => [
+                ...$this->denah->normalisasi($kegiatan->seat_layout_config ?? []),
+                'kapasitas' => $this->denah->kapasitas($kegiatan->seat_layout_config ?? []),
+            ],
+            'unusaFacilities' => $this->facilityService->listCampuses(),
             'ringkasan' => [
                 'pendaftar_aktif' => $aktif,
                 'pendaftar_total' => $pendaftar->count(),
@@ -232,7 +241,7 @@ class KegiatanController extends Controller
             foreach (['lokasi_kampus', 'lokasi_gedung', 'lokasi_ruangan'] as $key) {
                 $pilihan[$key] = array_key_exists($key, $validated) ? $validated[$key] : $kegiatan->{$key};
             }
-            $payload = [...$payload, ...$this->fasilitasUnusa($lokasiType, $pilihan)];
+            $payload = [...$payload, ...$this->facilityService->pilihanKampus($lokasiType, $pilihan)];
         }
 
         // jsonb PostgreSQL mengurutkan ulang key objek; isi narasumber yang sama tidak boleh dianggap perubahan.
@@ -253,9 +262,14 @@ class KegiatanController extends Controller
             // Dicek sebelum berkas disimpan agar penolakan kapasitas tidak meninggalkan file yatim di disk.
             $seatBookingActive = $payload['is_seat_booking_active'] ?? (bool) $kegiatan->is_seat_booking_active;
             if ($seatBookingActive && array_key_exists('seat_layout_config', $validated)) {
-                $layoutBaru = $this->denah->normalisasi($validated['seat_layout_config']);
-                if ($layoutBaru !== $this->denah->normalisasi($kegiatan->seat_layout_config) || ! $kegiatan->seats()->exists()) {
-                    $payload['seat_layout_config'] = $this->denah->ganti($kegiatan, $layoutBaru, ruanganLama: $kegiatan->lokasi_nama);
+                // Kursi diblokir diatur di tab Denah & Booking; form ini tidak mengirimnya, jadi nilai lama dipertahankan.
+                $layoutLama = $this->denah->normalisasi($kegiatan->seat_layout_config);
+                $layoutBaru = $this->denah->normalisasi([
+                    'blocked_seats' => $layoutLama['blocked_seats'] ?? [],
+                    ...$validated['seat_layout_config'],
+                ]);
+                if ($layoutBaru !== $layoutLama || ! $kegiatan->seats()->exists()) {
+                    $payload['seat_layout_config'] = $this->denah->terapkan($kegiatan, $layoutBaru, ruanganLama: $kegiatan->lokasi_nama);
                 }
             }
 
@@ -361,7 +375,7 @@ class KegiatanController extends Controller
             'registration_deadline' => ['nullable', 'date'],
             'submission_deadline' => ['nullable', 'date'],
             'lokasi_type' => [...$wajib, Rule::in(Kegiatan::LOKASI_TYPES)],
-            // Pilihan fasilitas UNUSA; disimpan hanya untuk lokasi_type = unusa_campus (lihat fasilitasUnusa()).
+            // Pilihan fasilitas UNUSA; disimpan hanya untuk lokasi_type = unusa_campus (lihat UnusaFacilityService::pilihanKampus()).
             'lokasi_kampus' => ['nullable', 'string', 'max:255'],
             'lokasi_gedung' => ['nullable', 'string', 'max:255'],
             'lokasi_ruangan' => ['nullable', 'string', 'max:255'],
@@ -393,39 +407,9 @@ class KegiatanController extends Controller
             'seat_layout_config.vip_rows.*' => ['string', 'max:3'],
             'seat_layout_config.panitia_rows' => ['sometimes', 'nullable', 'array'],
             'seat_layout_config.panitia_rows.*' => ['string', 'max:3'],
+            'seat_layout_config.blocked_seats' => ['sometimes', 'nullable', 'array'],
+            'seat_layout_config.blocked_seats.*' => ['string', 'max:8'],
         ];
-    }
-
-    /**
-     * Pilihan kampus/gedung/ruangan yang disimpan. Untuk lokasi kampus UNUSA ketiganya wajib dan harus
-     * ada di daftar fasilitas (UnusaFacilityService); untuk lokasi lain disimpan null.
-     *
-     * @param  array<string, mixed>  $input
-     * @return array{lokasi_kampus: ?string, lokasi_gedung: ?string, lokasi_ruangan: ?string}
-     *
-     * @throws ValidationException
-     */
-    protected function fasilitasUnusa(string $lokasiType, array $input): array
-    {
-        if ($lokasiType !== 'unusa_campus') {
-            return ['lokasi_kampus' => null, 'lokasi_gedung' => null, 'lokasi_ruangan' => null];
-        }
-
-        $kampus = trim((string) ($input['lokasi_kampus'] ?? ''));
-        $gedung = trim((string) ($input['lokasi_gedung'] ?? ''));
-        $ruangan = trim((string) ($input['lokasi_ruangan'] ?? ''));
-
-        if ($kampus === '' || $gedung === '' || $ruangan === '') {
-            throw ValidationException::withMessages(['lokasi_gedung' => 'Pilihan kampus, gedung, dan ruangan UNUSA wajib diisi untuk lokasi kampus.']);
-        }
-
-        $dataKampus = collect($this->facilityService->listCampuses())->firstWhere('name', $kampus);
-        $dataGedung = collect($dataKampus['buildings'] ?? [])->firstWhere('name', $gedung);
-        if (! $dataGedung || ! collect($dataGedung['rooms'] ?? [])->contains('name', $ruangan)) {
-            throw ValidationException::withMessages(['lokasi_ruangan' => 'Kombinasi kampus, gedung, dan ruangan UNUSA tidak dikenal.']);
-        }
-
-        return ['lokasi_kampus' => $kampus, 'lokasi_gedung' => $gedung, 'lokasi_ruangan' => $ruangan];
     }
 
     /**

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { formatWib } from '@/lib/waktuWib';
 import { KATEGORI_OPTIONS, METODE_OPTIONS, SASARAN_OPTIONS, labelDari } from '@/lib/kegiatanForm';
+import DenahBookingKegiatan from '@/Components/Admin/DenahBookingKegiatan';
 
 const LOKASI_LABEL = { unusa_campus: 'Kampus UNUSA', external: 'Venue Eksternal', online: 'Online' };
 
@@ -43,8 +44,27 @@ function Baris({ label, children }) {
     );
 }
 
-export default function KegiatanShow({ title = 'Detail Kegiatan', kegiatan = {}, ringkasan = {}, pendaftar = [] }) {
+const TAB = [
+    { id: 'pendaftar', label: 'Pendaftar', ikon: 'groups' },
+    { id: 'denah-booking', label: 'Denah & Booking', ikon: 'event_seat' },
+];
+
+export default function KegiatanShow({
+    title = 'Detail Kegiatan',
+    kegiatan = {},
+    ringkasan = {},
+    pendaftar = [],
+    kursi = [],
+    denah = {},
+    unusaFacilities = [],
+}) {
     const [hanyaPilihUlang, setHanyaPilihUlang] = useState(false);
+    // Tab aktif tersimpan di hash URL (#denah-booking) agar bertahan saat halaman dimuat ulang.
+    const [tab, setTab] = useState(() => (typeof window !== 'undefined' && window.location.hash === '#denah-booking' ? 'denah-booking' : 'pendaftar'));
+    const gantiTab = (id) => {
+        setTab(id);
+        window.history.replaceState(null, '', id === 'pendaftar' ? window.location.pathname + window.location.search : `#${id}`);
+    };
     const daftar = useMemo(
         () => (hanyaPilihUlang ? pendaftar.filter((p) => p.needs_seat_reselection) : pendaftar),
         [pendaftar, hanyaPilihUlang],
@@ -152,7 +172,34 @@ export default function KegiatanShow({ title = 'Detail Kegiatan', kegiatan = {},
                     </div>
                 )}
 
+                {/* Tab */}
+                <div role="tablist" aria-label="Bagian detail kegiatan" className="flex gap-2 border-b border-slate-800">
+                    {TAB.map((t) => (
+                        <button
+                            key={t.id}
+                            type="button"
+                            role="tab"
+                            id={`tab-${t.id}`}
+                            aria-selected={tab === t.id}
+                            aria-controls={`panel-${t.id}`}
+                            onClick={() => gantiTab(t.id)}
+                            className={`px-4 py-2.5 -mb-px border-b-2 text-xs font-bold flex items-center gap-1.5 ${tab === t.id ? 'border-emerald-400 text-white' : 'border-transparent text-slate-400 hover:text-white'}`}
+                        >
+                            <span className="material-symbols-outlined text-base">{t.ikon}</span>
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+
+                {tab === 'denah-booking' && (
+                    <div role="tabpanel" id="panel-denah-booking" aria-labelledby="tab-denah-booking">
+                        <DenahBookingKegiatan kegiatan={kegiatan} kursi={kursi} denah={denah} pendaftar={pendaftar} unusaFacilities={unusaFacilities} />
+                    </div>
+                )}
+
                 {/* Tabel pendaftar */}
+                {tab === 'pendaftar' && (
+                <div role="tabpanel" id="panel-pendaftar" aria-labelledby="tab-pendaftar">
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
                     <div className="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="text-sm font-bold text-white">Daftar Pendaftar ({pendaftar.length})</div>
@@ -241,6 +288,8 @@ export default function KegiatanShow({ title = 'Detail Kegiatan', kegiatan = {},
                         </table>
                     </div>
                 </div>
+                </div>
+                )}
             </div>
         </AdminLayout>
     );

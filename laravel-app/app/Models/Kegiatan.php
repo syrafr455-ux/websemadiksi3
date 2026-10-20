@@ -217,21 +217,38 @@ class Kegiatan extends Model
      */
     public function isSeatBookingOpen(): bool
     {
+        return $this->statusBookingKursi() === self::BOOKING_DIBUKA;
+    }
+
+    public const BOOKING_BELUM_DIBUKA = 'belum_dibuka';
+
+    public const BOOKING_DIBUKA = 'dibuka';
+
+    public const BOOKING_DITUTUP = 'ditutup';
+
+    public const BOOKING_DIBEKUKAN = 'dibekukan';
+
+    /**
+     * Status jendela booking kursi: dibekukan (booking dinonaktifkan admin; kursi yang ada tetap tersimpan),
+     * belum_dibuka (sebelum booking_opens_at), ditutup (tepat/sesudah booking_closes_at), atau dibuka.
+     */
+    public function statusBookingKursi(): string
+    {
         if (! (bool) $this->is_seat_booking_active) {
-            return false;
+            return self::BOOKING_DIBEKUKAN;
         }
 
         $now = now();
 
         if ($this->booking_opens_at && $now->lt($this->booking_opens_at)) {
-            return false;
+            return self::BOOKING_BELUM_DIBUKA;
         }
 
         if ($this->booking_closes_at && $now->gte($this->booking_closes_at)) {
-            return false;
+            return self::BOOKING_DITUTUP;
         }
 
-        return true;
+        return self::BOOKING_DIBUKA;
     }
 
     public function scopeBookable($query)

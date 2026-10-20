@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -24,96 +25,98 @@ class SendSeatReselectionNotificationJob implements ShouldQueue
 
     public function handle(): void
     {
-        // Revisi 3: Hanya ambil registrasi aktif (free, pending, paid) yang membutuhkan pemilihan ulang kursi.
-        // Registrasi batal/expired dikecualikan dari pengiriman email.
+        // Hanya registrasi aktif (free, pending, paid) yang membutuhkan pemilihan ulang kursi.
         $registrations = KegiatanRegistration::with(['participantUser', 'bookerUser'])
             ->where('kegiatan_id', $this->kegiatan->id)
             ->active()
             ->where('needs_seat_reselection', true)
             ->get();
 
-        if ($registrations->isEmpty()) {
+        $penerima = self::penerima($registrations);
+        if ($penerima === []) {
             return;
         }
 
-        // Siapkan batas waktu dalam format zona waktu Asia/Jakarta
         $deadlineWib = $this->kegiatan->booking_closes_at
             ? Wib::dari($this->kegiatan->booking_closes_at)->translatedFormat('d F Y H:i').' WIB'
             : null;
 
-        // Tautan pemilihan ulang untuk pemesan (booker)
-        $reselectionUrl = route('kegiatan.detail', $this->kegiatan->id);
+        // Tautan langsung membuka alur pilih ulang kursi di halaman kegiatan (hanya untuk pemesan).
+        $reselectionUrl = self::urlPilihUlang($this->kegiatan);
 
-        $sentBookerEmails = [];
-        $sentDelegateEmails = [];
+        foreach ($penerima as $p) {
+            try {
+                Mail::to($p['email'])->send(new SeatReselectionMail(
+                    kegiatan: $this->kegiatan,
+                    recipientName: $p['nama'],
+                    deadlineWib: $deadlineWib,
+                    reselectionUrl: $p['pemesan'] ? $reselectionUrl : null,
+                    isBooker: $p['pemesan']
+                ));
+            } catch (\Throwable $e) {
+                Log::error('Gagal mengirim email pemilihan ulang kursi (kegiatan '.$this->kegiatan->id.'): '.$e->getMessage());
+            }
+        }
+    }
 
-        // 1. Kirim email pemilihan ulang ke Booker (berisi tautan pilih kursi)
+    public static function urlPilihUlang(Kegiatan $kegiatan): string
+    {
+        return route('kegiatan.detail', ['slugOrId' => $kegiatan->id]);
+    }
+
+    /**
+     * Penerima email untuk registrasi yang perlu memilih ulang kursi:
+     * - pemesan (booker), satu email per alamat, berisi tautan pilih ulang;
+     * - delegasi yang punya email (bukan pemesan itu sendiri), satu email per alamat, tanpa tautan.
+     * Dipakai juga oleh pratinjau di DenahKursiService agar jumlah email di dialog konfirmasi sama.
+     *
+     * @param  Collection<int, KegiatanRegistration>  $registrations  dengan relasi participantUser & bookerUser
+     * @return list<array{email: string, nama: string, pemesan: bool}>
+     */
+    public static function penerima(Collection $registrations): array
+    {
+        $hasil = [];
+        $emailPemesan = [];
+        $emailDelegasi = [];
+
         foreach ($registrations as $reg) {
             $booker = $reg->bookerUser;
             if (! $booker || empty($booker->email)) {
                 continue;
             }
 
-            $bookerEmail = strtolower(trim($booker->email));
-            if (in_array($bookerEmail, $sentBookerEmails, true)) {
-                continue;
-            }
-
-            $sentBookerEmails[] = $bookerEmail;
-
-            try {
-                Mail::to($bookerEmail)->send(new SeatReselectionMail(
-                    kegiatan: $this->kegiatan,
-                    recipientName: $booker->name ?: 'Pemesan Tiket',
-                    deadlineWib: $deadlineWib,
-                    reselectionUrl: $reselectionUrl,
-                    isBooker: true
-                ));
-            } catch (\Throwable $e) {
-                Log::error("Gagal mengirim email pemilihan ulang kursi ke booker {$bookerEmail}: ".$e->getMessage());
+            $email = strtolower(trim($booker->email));
+            if (! in_array($email, $emailPemesan, true)) {
+                $emailPemesan[] = $email;
+                $hasil[] = ['email' => $email, 'nama' => $booker->name ?: 'Pemesan Tiket', 'pemesan' => true];
             }
         }
 
-        // 2. Revisi 4: Kirim email pemberitahuan ke delegasi yang memiliki email (TANPA tautan pilih kursi)
         foreach ($registrations as $reg) {
-            // Cek apakah registrasi ini adalah delegasi (bukan booker sendiri)
-            $isSelfBooking = ($reg->participant_user_id === $reg->booker_user_id)
+            $pesanSendiri = ($reg->participant_user_id === $reg->booker_user_id)
                 || (! empty($reg->delegation_data['is_booker']));
-
-            if ($isSelfBooking) {
+            if ($pesanSendiri) {
                 continue;
             }
 
-            $delegateEmail = null;
-            $delegateName = $reg->participant_name;
-
+            $email = null;
+            $nama = $reg->participant_name;
             if ($reg->participantUser && ! empty($reg->participantUser->email)) {
-                $delegateEmail = strtolower(trim($reg->participantUser->email));
-                $delegateName = $reg->participantUser->name ?: $delegateName;
+                $email = strtolower(trim($reg->participantUser->email));
+                $nama = $reg->participantUser->name ?: $nama;
             } elseif (! empty($reg->delegation_data['email'])) {
-                $delegateEmail = strtolower(trim($reg->delegation_data['email']));
+                $email = strtolower(trim($reg->delegation_data['email']));
             }
 
-            $bookerEmail = $reg->bookerUser ? strtolower(trim($reg->bookerUser->email)) : null;
-
-            // Jika tidak ada email, atau sama dengan email booker, atau sudah dikirimi email delegasi
-            if (! $delegateEmail || $delegateEmail === $bookerEmail || in_array($delegateEmail, $sentDelegateEmails, true)) {
+            $emailBooker = $reg->bookerUser ? strtolower(trim($reg->bookerUser->email)) : null;
+            if (! $email || $email === $emailBooker || in_array($email, $emailDelegasi, true)) {
                 continue;
             }
 
-            $sentDelegateEmails[] = $delegateEmail;
-
-            try {
-                Mail::to($delegateEmail)->send(new SeatReselectionMail(
-                    kegiatan: $this->kegiatan,
-                    recipientName: $delegateName ?: 'Peserta Delegasi',
-                    deadlineWib: $deadlineWib,
-                    reselectionUrl: null, // Tanpa tautan pilih kursi
-                    isBooker: false
-                ));
-            } catch (\Throwable $e) {
-                Log::error("Gagal mengirim email pemberitahuan perubahan ruangan ke delegasi {$delegateEmail}: ".$e->getMessage());
-            }
+            $emailDelegasi[] = $email;
+            $hasil[] = ['email' => $email, 'nama' => $nama ?: 'Peserta Delegasi', 'pemesan' => false];
         }
+
+        return $hasil;
     }
 }

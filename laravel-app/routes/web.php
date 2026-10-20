@@ -128,6 +128,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
         // Dynamic Venue Layout & Booking Lifecycle Config (Super Admin Only)
         Route::match(['put', 'patch'], '/kegiatan/{id}/venue-config', [\App\Http\Controllers\Admin\KegiatanSeatController::class, 'updateVenueConfig'])->name('kegiatan.venue-config');
+        Route::post('/kegiatan/{id}/venue-config/pratinjau', [\App\Http\Controllers\Admin\KegiatanSeatController::class, 'pratinjau'])->name('kegiatan.venue-config.pratinjau');
 
         // Certificate Template & Dynamic Generator Routes (Admin)
         Route::post('/kegiatan/{id}/template-sertifikat', [\App\Http\Controllers\CertificateController::class, 'uploadTemplate'])->name('kegiatan.certificate-template');

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Contracts\UnusaFacilityProvider;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Fasad domain untuk master ruangan UNUSA.
@@ -13,9 +14,7 @@ use Illuminate\Support\Facades\Cache;
  */
 class UnusaFacilityService
 {
-    public function __construct(private readonly UnusaFacilityProvider $provider)
-    {
-    }
+    public function __construct(private readonly UnusaFacilityProvider $provider) {}
 
     /**
      * @return list<array{code: string, name: string, campus: string, capacity: int}>
@@ -93,5 +92,37 @@ class UnusaFacilityService
                 ],
             ],
         ];
+    }
+
+    /**
+     * Pilihan kampus/gedung/ruangan yang disimpan. Untuk lokasi kampus UNUSA ketiganya wajib dan harus
+     * ada di daftar fasilitas (listCampuses()); untuk lokasi lain disimpan null.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array{lokasi_kampus: ?string, lokasi_gedung: ?string, lokasi_ruangan: ?string}
+     *
+     * @throws ValidationException
+     */
+    public function pilihanKampus(string $lokasiType, array $input): array
+    {
+        if ($lokasiType !== 'unusa_campus') {
+            return ['lokasi_kampus' => null, 'lokasi_gedung' => null, 'lokasi_ruangan' => null];
+        }
+
+        $kampus = trim((string) ($input['lokasi_kampus'] ?? ''));
+        $gedung = trim((string) ($input['lokasi_gedung'] ?? ''));
+        $ruangan = trim((string) ($input['lokasi_ruangan'] ?? ''));
+
+        if ($kampus === '' || $gedung === '' || $ruangan === '') {
+            throw ValidationException::withMessages(['lokasi_gedung' => 'Pilihan kampus, gedung, dan ruangan UNUSA wajib diisi untuk lokasi kampus.']);
+        }
+
+        $dataKampus = collect($this->listCampuses())->firstWhere('name', $kampus);
+        $dataGedung = collect($dataKampus['buildings'] ?? [])->firstWhere('name', $gedung);
+        if (! $dataGedung || ! collect($dataGedung['rooms'] ?? [])->contains('name', $ruangan)) {
+            throw ValidationException::withMessages(['lokasi_ruangan' => 'Kombinasi kampus, gedung, dan ruangan UNUSA tidak dikenal.']);
+        }
+
+        return ['lokasi_kampus' => $kampus, 'lokasi_gedung' => $gedung, 'lokasi_ruangan' => $ruangan];
     }
 }
