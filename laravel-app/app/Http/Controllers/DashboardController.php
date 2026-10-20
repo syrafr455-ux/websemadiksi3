@@ -274,12 +274,63 @@ class DashboardController extends Controller
      */
     public function sertifikat(): View
     {
-        $certificates = Certificate::with('activity')
-            ->where('user_id', Auth::id())
-            ->latest()
+        $userId = Auth::id();
+        $user = Auth::user();
+
+        // Ambil dari tabel sertifikat alur baru
+        $sertifikats = \App\Models\Sertifikat::with('kegiatan')
+            ->where('user_id', $userId)
+            ->latest('id')
             ->get();
 
-        return view('dashboard.sertifikat', compact('certificates'));
+        // Ambil dari tabel legacy jika ada
+        $legacyCerts = Certificate::with('activity')
+            ->where('user_id', $userId)
+            ->latest('id')
+            ->get();
+
+        $mergedCertificates = collect();
+
+        foreach ($sertifikats as $st) {
+            $mergedCertificates->push((object) [
+                'id' => $st->id,
+                'code' => $st->nomor_sertifikat,
+                'title' => $st->kegiatan->nama_kegiatan ?? 'Sertifikat Kegiatan SEMADIKSI',
+                'recipient_name' => $st->recipient_name,
+                'category' => $st->kegiatan->kategori ?? 'Kegiatan',
+                'organizer' => 'SEMADIKSI Panitia Pelaksana',
+                'date' => \Carbon\Carbon::parse($st->issued_at)->translatedFormat('d F Y'),
+                'duration' => '8 JP (Jam Pelajaran)',
+                'status' => 'Selesai',
+                'document_hash' => $st->document_hash,
+                'file_url' => route('sertifikat.download', $st->id),
+                'verification_url' => url('/verifikasi?code=' . $st->nomor_sertifikat),
+                'is_legacy' => false,
+            ]);
+        }
+
+        foreach ($legacyCerts as $lc) {
+            $mergedCertificates->push((object) [
+                'id' => $lc->id,
+                'code' => $lc->code,
+                'title' => $lc->activity_title,
+                'recipient_name' => $lc->user_name,
+                'category' => $lc->activity->category ?? 'Kegiatan',
+                'organizer' => 'SEMADIKSI Divisi Kemahasiswaan',
+                'date' => \Carbon\Carbon::parse($lc->issued_date)->translatedFormat('d F Y'),
+                'duration' => '8 JP',
+                'status' => 'Selesai',
+                'document_hash' => hash('sha256', $lc->code . $lc->user_name),
+                'file_url' => null,
+                'verification_url' => url('/verifikasi?code=' . $lc->code),
+                'is_legacy' => true,
+            ]);
+        }
+
+        return view('dashboard.sertifikat', [
+            'certificates' => $mergedCertificates,
+            'user' => $user,
+        ]);
     }
 
     /**
