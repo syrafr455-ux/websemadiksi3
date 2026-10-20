@@ -27,8 +27,9 @@
             <div class="flex items-center gap-3">
                 <select name="role" onchange="this.form.submit()" class="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500">
                     <option value="">Semua Peran</option>
-                    <option value="student" {{ request('role') === 'student' ? 'selected' : '' }}>Mahasiswa</option>
-                    <option value="admin" {{ request('role') === 'admin' ? 'selected' : '' }}>Administrator</option>
+                    @foreach (\App\Enums\UserRole::options() as $opsi)
+                        <option value="{{ $opsi['value'] }}" {{ request('role') === $opsi['value'] ? 'selected' : '' }}>{{ $opsi['label'] }}</option>
+                    @endforeach
                 </select>
 
                 <button type="submit" class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs">
@@ -69,8 +70,8 @@
                                     <div>
                                         <div class="font-bold text-white text-sm flex items-center gap-2">
                                             {{ $u->name }}
-                                            @if($u->role === 'admin')
-                                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">Admin</span>
+                                            @if($u->isStaff())
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">{{ $u->role->label() }}</span>
                                             @endif
                                         </div>
                                         <div class="text-[11px] text-slate-400">{{ $u->email }}</div>

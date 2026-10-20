@@ -22,7 +22,7 @@
         class="fixed inset-y-0 left-0 z-50 w-72 bg-slate-950 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out shadow-2xl lg:shadow-none"
     >
         <div class="h-20 px-6 border-b border-slate-800 flex items-center justify-between">
-            <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3">
+            <a href="{{ \App\Support\MenuAdmin::beranda(Auth::user()) ?? route('home') }}" class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center text-white shadow-lg shadow-amber-600/30">
                     <span class="material-symbols-outlined text-2xl">admin_panel_settings</span>
                 </div>
@@ -37,50 +37,13 @@
         </div>
 
         <nav class="flex-1 overflow-y-auto px-4 py-4 space-y-1 text-xs">
-            <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.dashboard') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
-                <span class="material-symbols-outlined text-lg">dashboard</span>
-                Ringkasan Utama
-            </a>
-
-            <a href="{{ route('admin.kegiatan') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.kegiatan*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
-                <span class="material-symbols-outlined text-lg">event</span>
-                Kelola Kegiatan
-            </a>
-
-            <a href="{{ route('admin.users') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.users*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
-                <span class="material-symbols-outlined text-lg">group</span>
-                Data Mahasiswa
-            </a>
-
-            <a href="{{ route('admin.mahasiswa-unusa') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.mahasiswa-unusa*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
-                <span class="material-symbols-outlined text-lg">school</span>
-                Data Mahasiswa UNUSA
-            </a>
-
-            <a href="{{ route('admin.penerima-kipk') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.penerima-kipk*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
-                <span class="material-symbols-outlined text-lg">badge</span>
-                Daftar Penerima KIP-K
-            </a>
-
-            <a href="{{ route('admin.certificates') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.certificates*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
-                <span class="material-symbols-outlined text-lg">workspace_premium</span>
-                Penerbitan Sertifikat
-            </a>
-
-            <a href="{{ route('admin.attendances') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.attendances*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
-                <span class="material-symbols-outlined text-lg">camera_enhance</span>
-                Verifikasi Presensi
-            </a>
-
-            <a href="{{ route('admin.berkas') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.berkas*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
-                <span class="material-symbols-outlined text-lg">folder_shared</span>
-                Verifikasi Berkas KIP-K
-            </a>
-
-            <a href="{{ route('admin.submissions') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ request()->routeIs('admin.submissions*') ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
-                <span class="material-symbols-outlined text-lg">dynamic_form</span>
-                Formulir Masuk
-            </a>
+            {{-- Satu sumber menu dengan AdminLayout.jsx: App\Support\MenuAdmin (hanya link yang boleh diakses role ini). --}}
+            @foreach (\App\Support\MenuAdmin::untuk(Auth::user(), request()) as $menu)
+                <a href="{{ $menu['href'] }}" data-menu-admin="{{ $menu['route'] }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ $menu['active'] ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
+                    <span class="material-symbols-outlined text-lg">{{ $menu['icon'] }}</span>
+                    {{ $menu['label'] }}
+                </a>
+            @endforeach
         </nav>
 
         <div class="p-4 border-t border-slate-800">

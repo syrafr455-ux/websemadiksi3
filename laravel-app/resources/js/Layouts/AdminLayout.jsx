@@ -2,22 +2,11 @@ import React, { useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 
 export default function AdminLayout({ children, title = 'Panel Administrator' }) {
-    const { auth = {}, flash = {} } = usePage().props;
+    // menu_admin dari server (App\Support\MenuAdmin): hanya link yang boleh diakses role yang login.
+    const { auth = {}, flash = {}, menu_admin: navItems = [] } = usePage().props;
     const user = auth.user || {};
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [flashVisible, setFlashVisible] = useState(true);
-
-    const navItems = [
-        { label: 'Ringkasan Utama', href: '/admin', icon: 'dashboard', active: window.location.pathname === '/admin' },
-        { label: 'Kegiatan Enterprise', href: '/admin/kegiatan', icon: 'event', active: window.location.pathname.startsWith('/admin/kegiatan') },
-        { label: 'Penilaian Karya', href: '/admin/penilaian', icon: 'rate_review', active: window.location.pathname.startsWith('/admin/penilaian') },
-        { label: 'Data Pengguna', href: '/admin/pengguna', icon: 'group', active: window.location.pathname.startsWith('/admin/pengguna') },
-        { label: 'Data Mahasiswa UNUSA', href: '/admin/mahasiswa-unusa', icon: 'school', active: window.location.pathname.startsWith('/admin/mahasiswa-unusa') },
-        { label: 'Daftar Penerima KIP-K', href: '/admin/penerima-kipk', icon: 'badge', active: window.location.pathname.startsWith('/admin/penerima-kipk') },
-        { label: 'Presensi & Kehadiran', href: '/admin/absensi', icon: 'how_to_reg', active: window.location.pathname.startsWith('/admin/absensi') },
-        { label: 'Sertifikat Digital', href: '/admin/sertifikat', icon: 'workspace_premium', active: window.location.pathname.startsWith('/admin/sertifikat') },
-        { label: 'Verifikasi Berkas KIP-K', href: '/admin/berkas', icon: 'folder_shared', active: window.location.pathname.startsWith('/admin/berkas') },
-    ];
 
     const handleLogout = (e) => {
         e.preventDefault();
@@ -85,6 +74,7 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
                         <a
                             key={item.href}
                             href={item.href}
+                            data-menu-admin={item.route}
                             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                                 item.active
                                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/25 font-bold'
@@ -100,11 +90,13 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
                 {/* Footer / Quick Actions */}
                 <div className="p-4 border-t border-slate-800/80 space-y-2">
                     <a
-                        href="/dashboard"
+                        href="/"
+                        target="_blank"
+                        rel="noreferrer"
                         className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
                     >
-                        <span className="material-symbols-outlined text-base">dashboard_customize</span>
-                        <span>Portal Mahasiswa</span>
+                        <span className="material-symbols-outlined text-base">public</span>
+                        <span>Lihat Web Publik</span>
                     </a>
                     <button
                         onClick={handleLogout}

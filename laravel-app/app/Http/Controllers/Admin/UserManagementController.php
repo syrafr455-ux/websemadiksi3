@@ -50,8 +50,9 @@ class UserManagementController extends Controller
             });
         }
 
-        if ($request->filled('role')) {
-            $query->where('role', $request->input('role'));
+        // Hanya nilai enum UserRole yang dipakai sebagai filter (nilai lama seperti 'student' diabaikan).
+        if ($role = UserRole::tryFrom((string) $request->input('role'))) {
+            $query->where('role', $role->value);
         }
 
         if ($request->filled('is_blocked')) {

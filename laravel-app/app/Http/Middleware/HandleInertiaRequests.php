@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Enums\UserRole;
+use App\Support\MenuAdmin;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -56,6 +57,8 @@ class HandleInertiaRequests extends Middleware
                     'avatar_url' => $user->avatar_url,
                 ] : null,
             ],
+            // Menu panel admin sesuai role (sumber yang sama dengan layouts/admin.blade.php).
+            'menu_admin' => fn () => MenuAdmin::untuk($user, $request),
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),

@@ -48,8 +48,8 @@
                 {{-- Auth Button Action --}}
                 <div class="hidden md:flex items-center gap-3">
                     @auth
-                        @if(Auth::user()->isAdmin())
-                            <a href="{{ route('admin.dashboard') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm shadow-md transition-all">
+                        @if(Auth::user()->isStaff())
+                            <a href="{{ \App\Support\MenuAdmin::beranda(Auth::user()) }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm shadow-md transition-all">
                                 <span class="material-symbols-outlined text-lg">admin_panel_settings</span>
                                 Panel Admin
                             </a>
@@ -83,7 +83,7 @@
                         <a href="{{ route('berita.acara.index') }}" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-on-surface hover:bg-primary/10 hover:text-primary">Berita Acara</a>
                         <hr class="border-surface-variant/40 my-2">
                         @auth
-                            <a href="{{ Auth::user()->isAdmin() ? route('admin.dashboard') : route('dashboard.index') }}" class="px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white text-center">Menuju Dashboard</a>
+                            <a href="{{ Auth::user()->isStaff() ? \App\Support\MenuAdmin::beranda(Auth::user()) : route('dashboard.index') }}" class="px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white text-center">Menuju Dashboard</a>
                         @else
                             <a href="{{ route('login') }}" class="px-4 py-2.5 rounded-xl text-sm font-semibold border border-primary text-primary text-center">Masuk</a>
                             <a href="{{ route('register') }}" class="px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white text-center">Daftar Akun Baru</a>

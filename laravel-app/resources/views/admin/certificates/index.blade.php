@@ -117,9 +117,9 @@
             <form action="{{ route('admin.certificates.store') }}" method="POST" class="space-y-4">
                 @csrf
                 <div>
-                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Pilih Mahasiswa Penerima</label>
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Pilih Peserta Penerima</label>
                     <select name="user_id" required class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500">
-                        <option value="">-- Pilih Mahasiswa --</option>
+                        <option value="">-- Pilih Peserta --</option>
                         @foreach($students as $st)
                             <option value="{{ $st->id }}">{{ $st->name }} ({{ $st->nim ?: $st->email }})</option>
                         @endforeach

@@ -75,7 +75,8 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         if ($user->isAdmin() || $user->isStaff()) {
-            return redirect()->intended(route('admin.dashboard'));
+            // Halaman pertama di menu admin role ini (verifikator/juri tidak punya akses ke ringkasan utama).
+            return redirect()->intended(\App\Support\MenuAdmin::beranda($user) ?? route('admin.dashboard'));
         }
 
         return redirect()->intended(route('dashboard.index'));

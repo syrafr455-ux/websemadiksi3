@@ -143,8 +143,9 @@ class DashboardController extends Controller
             });
         }
 
-        if ($request->filled('role')) {
-            $query->where('role', $request->input('role'));
+        // Hanya nilai enum UserRole yang dipakai sebagai filter.
+        if ($role = UserRole::tryFrom((string) $request->input('role'))) {
+            $query->where('role', $role->value);
         }
 
         // Safe order by existing primary key or created_at
@@ -252,7 +253,8 @@ class DashboardController extends Controller
     {
         $certificates = Certificate::with(['user', 'activity'])->latest('id')->paginate(15);
         $activities = Activity::all();
-        $students = User::where('role', 'student')->get();
+        // Penerima sertifikat = peserta (mahasiswa_kipk & user_umum).
+        $students = User::whereIn('role', UserRole::participantValues())->orderBy('name')->get();
 
         return view('admin.certificates.index', compact('certificates', 'activities', 'students'));
     }
@@ -260,7 +262,7 @@ class DashboardController extends Controller
     public function storeCertificate(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'user_id' => ['required', 'exists:users,id'],
+            'user_id' => ['required', \Illuminate\Validation\Rule::exists('users', 'id')->whereIn('role', UserRole::participantValues())],
             'activity_id' => ['required', 'exists:activities,id'],
             'code' => ['nullable', 'string', 'unique:certificates,code'],
             'issued_date' => ['required', 'date'],
