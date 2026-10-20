@@ -110,6 +110,7 @@ Route::middleware(['auth', 'email.terverifikasi'])->prefix('dashboard')->name('d
 
 // Event Show & Booking Checkout Routes
 Route::get('/kegiatan/{slugOrId}', [\App\Http\Controllers\KegiatanBookingController::class, 'show'])->name('kegiatan.detail');
+Route::get('/kegiatan/{id}/status-kursi', [\App\Http\Controllers\KegiatanBookingController::class, 'statusKursi'])->whereNumber('id')->middleware('throttle:60,1')->name('kegiatan.status-kursi');
 Route::post('/kegiatan/{id}/checkout', [\App\Http\Controllers\KegiatanBookingController::class, 'checkout'])->name('kegiatan.checkout')->middleware(['auth', 'email.terverifikasi']);
 Route::post('/kegiatan/{id}/reselect-seat', [\App\Http\Controllers\KegiatanBookingController::class, 'reselectSeat'])->name('kegiatan.reselect-seat')->middleware('auth');
 

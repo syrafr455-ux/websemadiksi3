@@ -61,7 +61,7 @@ class SendSeatReselectionNotificationJob implements ShouldQueue
 
     public static function urlPilihUlang(Kegiatan $kegiatan): string
     {
-        return route('kegiatan.detail', ['slugOrId' => $kegiatan->id]);
+        return route('kegiatan.detail', ['slugOrId' => $kegiatan->id, 'pilih_ulang' => 1]);
     }
 
     /**

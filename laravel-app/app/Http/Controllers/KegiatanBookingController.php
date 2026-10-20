@@ -13,10 +13,12 @@ use App\Models\Kegiatan;
 use App\Models\KegiatanRegistration;
 use App\Models\KegiatanSeat;
 use App\Models\User;
+use App\Services\Kegiatan\PetaKursiService;
 use App\Services\PaymentGatewayService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -26,40 +28,103 @@ use Inertia\Response;
 class KegiatanBookingController extends Controller
 {
     public function __construct(
-        protected PaymentGatewayService $paymentService
+        protected PaymentGatewayService $paymentService,
+        protected PetaKursiService $peta
     ) {}
 
     /**
-     * Tampilkan detail kegiatan dan peta denah kursi interaktif untuk peserta.
+     * Detail kegiatan, peta kursi, dan alur pilih/pilih ulang kursi untuk peserta.
+     * ?pilih_ulang=1 (tautan dari email pilih ulang kursi) langsung membuka alur pilih ulang;
+     * tamu diarahkan masuk dulu lalu kembali ke halaman ini.
      */
-    public function show(string $slugOrId): Response
+    public function show(Request $request, string $slugOrId): Response|RedirectResponse
     {
         // Tabel kegiatan tidak punya kolom slug (query "where slug" gagal di PostgreSQL): cari berdasarkan ID saja.
         abort_unless(ctype_digit($slugOrId), 404);
+        $kegiatan = Kegiatan::findOrFail((int) $slugOrId);
+        $user = $request->user();
 
-        $kegiatan = Kegiatan::with(['seats' => function ($q) {
-            $q->orderBy('row_label')->orderBy('col_number');
-        }])->findOrFail((int) $slugOrId);
-
-        // Check if current user is already registered
-        $myRegistration = null;
-        if (auth()->check()) {
-            $myRegistration = KegiatanRegistration::with('seat')
-                ->where('kegiatan_id', $kegiatan->id)
-                ->where(function ($q) {
-                    $q->where('participant_user_id', auth()->id())
-                      ->orWhere('booker_user_id', auth()->id());
-                })
-                ->first();
+        if ($request->boolean('pilih_ulang') && ! $user) {
+            return redirect()->guest(route('login'))->with('success', 'Silakan masuk untuk memilih ulang kursi Anda.');
         }
 
-        $paymentMethods = config('payment.methods', []);
-
         return Inertia::render('Kegiatan/Show', [
-            'kegiatan' => $kegiatan,
-            'myRegistration' => $myRegistration,
-            'paymentMethods' => $paymentMethods,
+            // toArray(): tanggal terserialisasi ISO-8601 UTC seperti props Inertia lainnya.
+            'kegiatan' => Arr::only($kegiatan->toArray(), [
+                'id', 'nama_kegiatan', 'deskripsi', 'kategori', 'metode_pelaksanaan', 'sasaran_peserta',
+                'tanggal_mulai', 'tanggal_selesai', 'registration_deadline', 'status',
+                'lokasi_type', 'lokasi_nama', 'lokasi_detail', 'narasumber', 'biaya', 'kuota', 'file_panduan_url',
+            ]),
+            'pendaftaran' => [
+                'dibuka' => $kegiatan->isRegistrationOpen(),
+                'kuota_tersisa' => max(0, (int) $kegiatan->kuota - (int) $kegiatan->kuota_terisi),
+            ],
+            'booking' => $this->statusBooking($kegiatan),
+            'kursi' => $this->peta->untukPeserta($kegiatan, $user),
+            'registrasiSaya' => $this->registrasiSaya($kegiatan, $user),
+            'bukaPilihUlang' => $request->boolean('pilih_ulang'),
+            'paymentMethods' => config('payment.methods', []),
         ]);
+    }
+
+    /**
+     * Status peta kursi untuk pembaruan berkala (tiap ~30 detik) di halaman peserta.
+     * Hanya id & status kursi (nama hanya untuk kursi milik pengguna sendiri) dan status jendela booking.
+     */
+    public function statusKursi(Request $request, int $id): JsonResponse
+    {
+        $kegiatan = Kegiatan::findOrFail($id);
+
+        return response()->json([
+            'booking' => $this->statusBooking($kegiatan),
+            'kursi' => $this->peta->statusRingkas($kegiatan, $request->user()),
+        ]);
+    }
+
+    /**
+     * @return array{memakai_denah: bool, status: string, buka: mixed, tutup: mixed, bisa_pilih: bool}
+     */
+    protected function statusBooking(Kegiatan $kegiatan): array
+    {
+        return [
+            'memakai_denah' => $kegiatan->hasSeatLayout(),
+            'status' => $kegiatan->statusBookingKursi(),
+            'buka' => $kegiatan->booking_opens_at?->toJSON(),
+            'tutup' => $kegiatan->booking_closes_at?->toJSON(),
+            'bisa_pilih' => $kegiatan->isSeatBookingOpen(),
+        ];
+    }
+
+    /**
+     * Registrasi aktif yang dipesan atau diikuti pengguna di kegiatan ini. Hanya pemesan yang bisa memilih ulang kursi.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function registrasiSaya(Kegiatan $kegiatan, ?User $user): array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        return KegiatanRegistration::with(['seat:id,seat_code', 'participantUser:id,name', 'bookerUser:id,name'])
+            ->where('kegiatan_id', $kegiatan->id)
+            ->active()
+            ->where(fn ($q) => $q->where('booker_user_id', $user->id)->orWhere('participant_user_id', $user->id))
+            ->orderBy('id')
+            ->get()
+            ->map(fn (KegiatanRegistration $reg) => [
+                'id' => $reg->id,
+                'nama_peserta' => $reg->ticket_holder_name,
+                'nomor_tiket' => $reg->nomor_tiket,
+                'kursi' => $reg->seat?->seat_code,
+                'seat_id' => $reg->seat_id,
+                'perlu_pilih_ulang' => (bool) $reg->needs_seat_reselection,
+                'saya_pemesan' => (int) $reg->booker_user_id === (int) $user->id,
+                'saya_peserta' => (int) $reg->participant_user_id === (int) $user->id,
+                'nama_pemesan' => $reg->bookerUser?->name,
+            ])
+            ->values()
+            ->all();
     }
 
     /**
@@ -118,6 +183,23 @@ class KegiatanBookingController extends Controller
                     DB::rollBack();
                     return back()->with('error', 'Pemilihan kursi untuk kegiatan ini sedang ditutup atau berada di luar jadwal booking.');
                 }
+
+                // Kegiatan berdenah: setiap peserta wajib punya kursi, dan satu kursi untuk satu peserta.
+                $errorKursi = [];
+                $dipakai = [];
+                foreach ($delegates as $i => $delegate) {
+                    $sId = $delegate['seat_id'] ?? null;
+                    if (! $sId) {
+                        $errorKursi["delegates.{$i}.seat_id"] = 'Pilih kursi untuk peserta ke-'.($i + 1).'.';
+                    } elseif (in_array($sId, $dipakai, true)) {
+                        $errorKursi["delegates.{$i}.seat_id"] = 'Satu kursi hanya untuk satu peserta.';
+                    }
+                    $dipakai[] = $sId;
+                }
+                if ($errorKursi !== []) {
+                    DB::rollBack();
+                    return back()->withErrors($errorKursi)->with('error', reset($errorKursi));
+                }
             }
 
             if (! empty($seatIds)) {
@@ -128,22 +210,25 @@ class KegiatanBookingController extends Controller
                     ->get()
                     ->keyBy('id');
 
-                foreach ($delegates as $delegate) {
+                // Kumpulkan SEMUA kursi yang gagal (per peserta) agar pilihan lain yang masih valid bisa dipertahankan.
+                $bentrok = [];
+                foreach ($delegates as $i => $delegate) {
                     $sId = $delegate['seat_id'] ?? null;
                     if (! $sId) {
                         continue;
                     }
 
-                    if (! isset($lockedSeats[$sId])) {
-                        DB::rollBack();
-                        return back()->with('error', 'Kursi yang dipilih tidak valid.');
+                    $seat = $lockedSeats[$sId] ?? null;
+                    if (! $seat) {
+                        $bentrok["delegates.{$i}.seat_id"] = 'Kursi yang dipilih tidak valid.';
+                    } elseif ($seat->status !== SeatStatus::Available) {
+                        $bentrok["delegates.{$i}.seat_id"] = "Kursi {$seat->seat_code} baru saja diambil atau tidak tersedia. Silakan pilih kursi lain.";
                     }
+                }
 
-                    $seat = $lockedSeats[$sId];
-                    if ($seat->status !== SeatStatus::Available) {
-                        DB::rollBack();
-                        return back()->with('error', "Kursi {$seat->seat_code} baru saja diambil atau tidak tersedia. Silakan pilih kursi lain.");
-                    }
+                if ($bentrok !== []) {
+                    DB::rollBack();
+                    return back()->withErrors($bentrok)->with('error', implode(' ', array_unique($bentrok)));
                 }
             }
 
@@ -296,6 +381,11 @@ class KegiatanBookingController extends Controller
                 return back()->with('error', 'Registrasi tidak valid atau Anda bukan pemesan tiket/delegasi ini.');
             }
 
+            if (! $registration->needs_seat_reselection || ! in_array($registration->status_pembayaran?->value, RegistrationPaymentStatus::activeValues(), true)) {
+                DB::rollBack();
+                return back()->with('error', 'Registrasi ini tidak sedang menunggu pemilihan ulang kursi.');
+            }
+
             // 2. Revisi 5: Validasi kursi harus berasal dari kegiatan ini (tolak kursi dari kegiatan lain)
             $seat = KegiatanSeat::where('id', $validated['seat_id'])
                 ->lockForUpdate()
@@ -309,7 +399,15 @@ class KegiatanBookingController extends Controller
             // 3. Revisi 5: Validasi status kursi harus Available (tolak kursi tidak available)
             if ($seat->status !== SeatStatus::Available) {
                 DB::rollBack();
-                return back()->with('error', 'Kursi yang dipilih tidak tersedia atau baru saja diambil. Silakan pilih kursi lain.');
+                $pesan = "Kursi {$seat->seat_code} tidak tersedia atau baru saja diambil. Silakan pilih kursi lain.";
+
+                return back()->withErrors(['seat_id' => $pesan])->with('error', $pesan);
+            }
+
+            // Kursi lama (bila masih tercatat) dilepas agar tidak tertahan.
+            if ($registration->seat_id && (int) $registration->seat_id !== (int) $seat->id) {
+                KegiatanSeat::whereKey($registration->seat_id)->where('status', SeatStatus::Booked->value)
+                    ->update(['status' => SeatStatus::Available->value]);
             }
 
             // Kunci status kursi baru
@@ -322,6 +420,18 @@ class KegiatanBookingController extends Controller
             ]);
 
             DB::commit();
+
+            // Masih ada peserta (pesanan pengguna ini) yang menunggu kursi baru: kembali ke alur pilih ulang.
+            $sisa = KegiatanRegistration::where('kegiatan_id', $kegiatan->id)
+                ->where('booker_user_id', $user->id)
+                ->active()
+                ->where('needs_seat_reselection', true)
+                ->count();
+
+            if ($sisa > 0) {
+                return redirect()->route('kegiatan.detail', ['slugOrId' => $kegiatan->id, 'pilih_ulang' => 1])
+                    ->with('success', "Kursi {$seat->seat_code} tersimpan untuk {$registration->participant_name}. Masih ada {$sisa} peserta yang perlu kursi baru.");
+            }
 
             return redirect()->route('dashboard.kegiatan.saya')->with('success', 'Kursi berhasil dipilih kembali. Selamat menikmati kegiatan!');
         } catch (\Throwable $e) {

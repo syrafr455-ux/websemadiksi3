@@ -122,11 +122,18 @@ export default function KegiatanSaya({
                                             </div>
 
                                             <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                                                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
+                                                <div className={`p-2.5 rounded-xl border ${reg.perlu_pilih_ulang ? 'bg-amber-500/10 border-amber-400/50' : 'bg-slate-950 border-slate-800/80'}`} data-kursi-tiket={reg.id}>
                                                     <div className="text-[10px] text-slate-500 font-bold uppercase">Nomor Kursi</div>
-                                                    <div className="font-mono font-black text-emerald-400 mt-0.5 text-sm">
-                                                        {seat ? `${seat.seat_code} (${seat.row_label}-${seat.col_number})` : 'General Admission'}
-                                                    </div>
+                                                    {reg.perlu_pilih_ulang ? (
+                                                        <div className="mt-0.5 text-[11px] font-bold text-amber-300 flex items-center gap-1" data-perlu-pilih-ulang>
+                                                            <span className="material-symbols-outlined text-sm">sync_problem</span>
+                                                            Perlu pilih ulang kursi
+                                                        </div>
+                                                    ) : (
+                                                        <div className="font-mono font-black text-emerald-400 mt-0.5 text-sm">
+                                                            {seat ? seat.seat_code : 'Tanpa kursi bernomor'}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
                                                     <div className="text-[10px] text-slate-500 font-bold uppercase">Peserta</div>
@@ -135,6 +142,23 @@ export default function KegiatanSaya({
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            {reg.perlu_pilih_ulang && (
+                                                reg.bisa_pilih_ulang ? (
+                                                    <a
+                                                        href={`/kegiatan/${reg.kegiatan_id}?pilih_ulang=1`}
+                                                        className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black"
+                                                        data-tombol-pilih-ulang={reg.id}
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">event_seat</span>
+                                                        Pilih ulang kursi
+                                                    </a>
+                                                ) : (
+                                                    <p className="text-[11px] text-amber-200/90">
+                                                        Ruangan kegiatan berubah. Kursi baru untuk tiket ini akan dipilihkan oleh pemesan tiket.
+                                                    </p>
+                                                )
+                                            )}
 
                                             <div className="text-[11px] text-slate-400 space-y-1">
                                                 <div className="flex items-center gap-1.5">
@@ -249,7 +273,7 @@ export default function KegiatanSaya({
                                     <div className="flex justify-between py-1.5">
                                         <span className="text-slate-400">Kursi Reservasi</span>
                                         <span className="font-mono font-black text-emerald-400 text-sm">
-                                            {activeTicket.seat ? activeTicket.seat.seat_code : 'General Admission'}
+                                            {activeTicket.perlu_pilih_ulang ? 'Perlu pilih ulang' : (activeTicket.seat ? activeTicket.seat.seat_code : 'Tanpa kursi bernomor')}
                                         </span>
                                     </div>
                                     <div className="flex justify-between py-1.5">

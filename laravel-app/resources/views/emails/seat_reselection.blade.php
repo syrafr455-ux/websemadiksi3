@@ -26,7 +26,7 @@
         <p>Kursi Anda sebelumnya telah di-reset untuk menyesuaikan tata letak ruangan baru. <strong>Nomor E-Tiket dan status pendaftaran Anda tetap valid dan aman.</strong></p>
 
         @if(!empty($isBooker) && !empty($reselectionUrl))
-            <p>Silakan segera memilih ulang kursi yang Anda inginkan (termasuk untuk delegasi Anda jika ada) melalui tautan berikut:</p>
+            <p>Silakan segera memilih ulang kursi yang Anda inginkan (termasuk untuk delegasi Anda jika ada). Tautan berikut langsung membuka halaman pemilihan ulang kursi; bila belum masuk, Anda akan diminta masuk dulu ke akun SEMADIKSI.</p>
 
             <div style="text-align: center; margin: 30px 0;">
                 <a href="{{ $reselectionUrl }}" style="background-color: #0d9488; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">

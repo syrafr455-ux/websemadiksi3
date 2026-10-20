@@ -179,7 +179,13 @@ class DashboardController extends Controller
                   ->orWhere('booker_user_id', $userId);
             })
             ->latest('id')
-            ->get();
+            ->get()
+            ->each(function ($reg) use ($userId) {
+                // Penanda untuk kartu tiket: status bayar (nilai enum), perlu pilih ulang kursi, dan siapa yang boleh memilih.
+                $reg->append('payment_status');
+                $reg->setAttribute('perlu_pilih_ulang', (bool) $reg->needs_seat_reselection);
+                $reg->setAttribute('bisa_pilih_ulang', (bool) $reg->needs_seat_reselection && (int) $reg->booker_user_id === (int) $userId);
+            });
 
         $registrations = ActivityRegistration::with('activity')
             ->where('user_id', $userId)
