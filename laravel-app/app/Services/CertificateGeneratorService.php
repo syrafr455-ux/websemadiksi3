@@ -61,12 +61,9 @@ class CertificateGeneratorService
                 $w = $size['width'];
                 $h = $size['height'];
 
-                // 1. Nomor Seri Sertifikat di bagian atas
-                $codeY = $schemaConfig['code_pos_y'] ?? ($h * 0.33);
-                $pdf->SetFont('Arial', 'B', 10);
-                $pdf->SetTextColor(100, 116, 139); // Slate-500
-                $pdf->SetXY(0, $codeY);
-                $pdf->Cell($w, 8, 'Nomor: ' . $nomorSertifikat, 0, 1, 'C');
+                // 1. Nomor Seri Sertifikat: Dihapus dari tampilan kasat mata dokumen
+                // Nomor seri tetap tersimpan di database dan tertanam di dalam URL QR Code validasi.
+
 
                 // 2. Nama Lengkap Penerima di area tengah dokumen
                 $nameY = $schemaConfig['name_pos_y'] ?? ($h * 0.45);
@@ -170,7 +167,8 @@ class CertificateGeneratorService
             );
         } else {
             // Fallback jika tidak ada template PDF
-            $pdf = Pdf::loadView('certificates.dynamic', [
+            $viewName = view()->exists('certificates.template') ? 'certificates.template' : 'certificates.dynamic';
+            $pdf = Pdf::loadView($viewName, [
                 'sertifikat' => new Sertifikat(['nomor_sertifikat' => $nomorSertifikat, 'peran_sertifikat' => $peran]),
                 'kegiatan' => $kegiatan,
                 'namaLengkap' => $namaPenerima,
@@ -182,7 +180,9 @@ class CertificateGeneratorService
                 'backgroundBase64' => null,
                 'tanggalTerbit' => Wib::sekarang()->translatedFormat('d F Y'),
                 'tanggalKegiatan' => $kegiatan->tanggal_mulai ? Wib::dari($kegiatan->tanggal_mulai)->translatedFormat('d F Y') : Wib::sekarang()->translatedFormat('d F Y'),
-            ])->setPaper('a4', 'landscape');
+            ])->setPaper('a4', 'landscape')
+              ->setOption('isRemoteEnabled', true)
+              ->setOption('isHtml5ParserEnabled', true);
             $pdfContent = $pdf->output();
         }
 
@@ -312,7 +312,8 @@ class CertificateGeneratorService
                 'tanggalKegiatan' => $tanggalKegiatan,
             ];
 
-            $pdf = Pdf::loadView('certificates.dynamic', $viewData)
+            $viewName = view()->exists('certificates.template') ? 'certificates.template' : 'certificates.dynamic';
+            $pdf = Pdf::loadView($viewName, $viewData)
                 ->setPaper('a4', 'landscape')
                 ->setOption('isRemoteEnabled', true)
                 ->setOption('isHtml5ParserEnabled', true);
