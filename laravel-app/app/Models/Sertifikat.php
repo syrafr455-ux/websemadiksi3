@@ -17,6 +17,8 @@ class Sertifikat extends Model
         'nomor_sertifikat',
         'kegiatan_id',
         'user_id',
+        'nama_penerima',
+        'email_penerima',
         'presensi_id',
         'peran_sertifikat',
         'file_pdf_path',
@@ -25,7 +27,7 @@ class Sertifikat extends Model
         'issued_at',
     ];
 
-    protected $appends = ['file_url', 'verification_url', 'peran_label'];
+    protected $appends = ['file_url', 'verification_url', 'peran_label', 'recipient_name', 'recipient_email'];
 
     protected function casts(): array
     {
@@ -72,6 +74,16 @@ class Sertifikat extends Model
     public function getPeranLabelAttribute(): string
     {
         return $this->peran_sertifikat?->label() ?? 'Peserta';
+    }
+
+    public function getRecipientNameAttribute(): string
+    {
+        return $this->nama_penerima ?: ($this->user?->name ?? 'Peserta Terdaftar');
+    }
+
+    public function getRecipientEmailAttribute(): string
+    {
+        return $this->email_penerima ?: ($this->user?->email ?? '-');
     }
 
     public function verifyDocumentHash(): bool
