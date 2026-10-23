@@ -30,6 +30,7 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <!-- Tes tanpa internet: aturan email:rfc,dns memakai email:rfc saja (production tetap memeriksa DNS). -->
         <env name="VALIDASI_EMAIL_DNS" value="false" force="true"/>
+        <env name="UNUSA_STUDENT_EMAIL_DOMAINS" value="student.unusa.ac.id" force="true"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

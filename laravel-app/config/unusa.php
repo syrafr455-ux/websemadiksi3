@@ -105,12 +105,22 @@ return [
     */
 
     'student_email_domains' => array_values(array_filter(array_map(
-        fn (string $domain): string => strtolower(trim($domain)),
+        function (string $domain): string {
+            $domain = strtolower(trim($domain));
+            if (str_contains($domain, '@')) {
+                $domain = substr(strrchr($domain, '@') ?: '', 1);
+            }
+
+            return $domain;
+        },
         explode(',', (string) env('UNUSA_STUDENT_EMAIL_DOMAINS', 'student.unusa.ac.id'))
     ))),
 
     // Jalur pendaftaran "Mahasiswa Umum" disembunyikan sementara. Role, tabel, dan form admin tetap ada.
     'registrasi_umum_aktif' => (bool) env('REGISTRASI_UMUM_AKTIF', false),
+
+    // Klaim Keycloak yang dipakai sebagai NIM mahasiswa (default preferred_username).
+    'keycloak_nim_claim' => env('KEYCLOAK_NIM_CLAIM', 'preferred_username'),
 
     /*
     |--------------------------------------------------------------------------

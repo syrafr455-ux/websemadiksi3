@@ -43,4 +43,13 @@ return [
         'return_url' => env('TRIPAY_RETURN_URL'),
     ],
 
+    'keycloak' => [
+        'enabled' => filter_var(env('KEYCLOAK_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'base_url' => rtrim((string) env('KEYCLOAK_BASE_URL'), '/'),
+        'realms' => env('KEYCLOAK_REALMS', 'UNUSA'),
+        'client_id' => env('KEYCLOAK_CLIENT_ID', 'simadiksi'),
+        'client_secret' => env('KEYCLOAK_CLIENT_SECRET'),
+        'redirect' => env('KEYCLOAK_REDIRECT_URI'),
+    ],
+
 ];

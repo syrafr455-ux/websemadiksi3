@@ -3,16 +3,18 @@
 namespace App\Models;
 
 use App\Enums\UserRole;
+use App\Mail\ResetKataSandiMail;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Verifikasi email hanya diwajibkan untuk pendaftaran mandiri jalur Peserta Umum
@@ -53,6 +55,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'verifikator_level',
         'jalur_pendaftaran',
         'is_unusa',
+        'keycloak_sub',
     ];
 
     /**
@@ -115,9 +118,6 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->role instanceof UserRole && $this->role->isStaff();
     }
 
-    /**
-     * @param  UserRole|string  ...$roles
-     */
     public function hasRole(UserRole|string ...$roles): bool
     {
         if (! $this->role instanceof UserRole) {
@@ -212,7 +212,7 @@ class User extends Authenticatable implements MustVerifyEmail
         $url = route('password.reset', ['token' => $token, 'email' => $this->email]);
         $berlaku = (int) config('auth.passwords.'.config('auth.defaults.passwords', 'users').'.expire', 60);
 
-        \Illuminate\Support\Facades\Mail::to($this->email)->send(new \App\Mail\ResetKataSandiMail($this->name, $url, $berlaku));
+        Mail::to($this->email)->send(new ResetKataSandiMail($this->name, $url, $berlaku));
     }
 
     /**

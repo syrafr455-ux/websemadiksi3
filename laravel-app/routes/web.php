@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\KegiatanSeatController;
 use App\Http\Controllers\Admin\MasterMahasiswaController;
 use App\Http\Controllers\Admin\PenerimaKipkController;
 use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\Auth\KeycloakController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CertificateController;
 use App\Http\Controllers\DashboardController;
@@ -51,6 +52,12 @@ Route::redirect('/login', '/masuk');
 Route::middleware('guest')->group(function () {
     Route::get('/masuk', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/masuk', [AuthController::class, 'login'])->name('login.post');
+
+    // SSO Keycloak UNUSA (OAuth2 / PKCE)
+    Route::middleware('throttle:20,1')->group(function () {
+        Route::get('/auth/login', [KeycloakController::class, 'redirect'])->name('auth.login');
+        Route::get('/auth/login/callback', [KeycloakController::class, 'callback'])->name('auth.login.callback');
+    });
 
     // Pendaftaran Mahasiswa UNUSA: NIM -> kartu tersamar -> link aktivasi ke email kampus -> buat kata sandi.
     Route::get('/daftar', [PendaftaranController::class, 'show'])->name('register');
