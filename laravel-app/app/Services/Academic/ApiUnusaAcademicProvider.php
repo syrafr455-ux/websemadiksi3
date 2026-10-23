@@ -3,36 +3,74 @@
 namespace App\Services\Academic;
 
 use App\Contracts\UnusaAcademicProvider;
-use RuntimeException;
+use App\Models\ProgramStudi;
+use App\Services\Unusa\UnusaApiClient;
+use App\Services\Unusa\UnusaApiException;
+use Illuminate\Support\Facades\Log;
 
 /**
- * KERANGKA KOSONG: integrasi API database UNUSA (belum tersedia).
- * Aktifkan dengan UNUSA_ACADEMIC_PROVIDER=api setelah method di bawah diimplementasikan.
+ * Data mahasiswa dari API UNUSA (UNUSA_ACADEMIC_PROVIDER=api). Referensi fakultas/prodi dan staf tetap
+ * dari database lokal. Bila API gagal, pencarian kembali ke data impor CSV dan penyebabnya dicatat
+ * untuk admin (tanpa NIM atau data pribadi); pengguna tidak melihat galat teknis.
+ *
+ * Bentuk respons yang diasumsikan (perlu dikonfirmasi IT UNUSA, lihat docs/api-unusa.md):
+ * {nim, nama, email, no_telepon, semester, angkatan, program_studi, status, prestasi: []}
  */
 class ApiUnusaAcademicProvider implements UnusaAcademicProvider
 {
+    public function __construct(
+        private readonly UnusaApiClient $api,
+        private readonly DatabaseUnusaAcademicProvider $lokal,
+    ) {}
+
     public function fakultas(): array
     {
-        throw $this->belumTersedia();
+        return $this->lokal->fakultas();
     }
 
     public function programStudi(?int $fakultasId = null): array
     {
-        throw $this->belumTersedia();
-    }
-
-    public function cariMahasiswaByNim(string $nim): ?array
-    {
-        throw $this->belumTersedia();
+        return $this->lokal->programStudi($fakultasId);
     }
 
     public function findStaffByEmail(string $email): ?array
     {
-        throw $this->belumTersedia();
+        return $this->lokal->findStaffByEmail($email);
     }
 
-    private function belumTersedia(): RuntimeException
+    public function cariMahasiswaByNim(string $nim): ?array
     {
-        return new RuntimeException('Integrasi API database UNUSA belum diimplementasikan.');
+        $nim = trim($nim);
+
+        try {
+            $data = $this->api->get(str_replace('{nim}', rawurlencode($nim), (string) config('unusa.api.path_mahasiswa')));
+        } catch (UnusaApiException $e) {
+            Log::warning('API UNUSA gagal, memakai data impor CSV: '.$e->getMessage(), ['jenis' => $e->jenis]);
+
+            return $this->lokal->cariMahasiswaByNim($nim);
+        }
+
+        if ($data === null) {
+            return $this->lokal->cariMahasiswaByNim($nim);
+        }
+
+        $prodi = isset($data['program_studi'])
+            ? ProgramStudi::with('fakultas')->where('nama', $data['program_studi'])->orWhere('kode', $data['program_studi'])->first()
+            : null;
+
+        return [
+            'nim' => (string) ($data['nim'] ?? $nim),
+            'nama_lengkap' => (string) ($data['nama'] ?? ''),
+            'email_kampus' => isset($data['email']) ? strtolower((string) $data['email']) : null,
+            'program_studi_id' => $prodi?->id,
+            'program_studi' => $prodi?->nama ?? ($data['program_studi'] ?? null),
+            'fakultas_id' => $prodi?->fakultas_id,
+            'fakultas' => $prodi?->fakultas?->nama,
+            'angkatan' => isset($data['angkatan']) ? (string) $data['angkatan'] : null,
+            'semester' => isset($data['semester']) ? (int) $data['semester'] : null,
+            'no_telepon' => isset($data['no_telepon']) ? (string) $data['no_telepon'] : null,
+            'prestasi' => is_array($data['prestasi'] ?? null) ? array_values($data['prestasi']) : [],
+            'status_aktif' => (string) ($data['status'] ?? 'aktif'),
+        ];
     }
 }
