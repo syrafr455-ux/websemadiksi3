@@ -3,20 +3,19 @@
 @section('content')
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
     {{-- Header Banner --}}
-    <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-primary to-emerald-950 p-8 sm:p-12 text-white shadow-xl">
-        <div class="relative z-10 max-w-3xl space-y-4">
-            <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/15 backdrop-blur-md text-emerald-100 border border-white/20">
+    <div class="rounded-2xl bg-emerald-900 p-8 sm:p-10 text-white shadow-sm border border-emerald-800">
+        <div class="max-w-3xl space-y-3">
+            <span class="inline-flex items-center gap-2 px-3 py-1 rounded-md text-xs font-semibold uppercase tracking-wider bg-white/10 text-emerald-100 border border-white/15">
                 <span class="material-symbols-outlined text-sm">history_edu</span>
-                Dokumentasi &amp; Transparansi
+                Dokumentasi &amp; Notulensi
             </span>
-            <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight">
+            <h1 class="text-2xl sm:text-4xl font-bold tracking-tight">
                 Arsip Berita Acara Kegiatan
             </h1>
-            <p class="text-emerald-100 text-sm sm:text-base leading-relaxed max-w-2xl">
-                Catatan resmi notulensi, dokumentasi kegiatan, dan transparansi laporan program kerja SEMADIKSI Universitas Nahdlatul Ulama Surabaya.
+            <p class="text-emerald-100/90 text-sm sm:text-base leading-relaxed max-w-2xl">
+                Catatan resmi, notulensi rapat, dan dokumentasi kegiatan pengurus serta mahasiswa KIP-K Universitas Nahdlatul Ulama Surabaya.
             </p>
         </div>
-        <div class="absolute -right-10 -bottom-10 w-80 h-80 rounded-full bg-white/5 blur-3xl pointer-events-none"></div>
     </div>
 
     {{-- Filter & Search Bar --}}
@@ -63,19 +62,19 @@
     @if($beritaAcaraList->count() > 0)
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             @foreach($beritaAcaraList as $item)
-                <article class="group bg-surface border border-surface-container rounded-3xl overflow-hidden shadow-sm hover:shadow-xl hover:border-primary/40 transition-all duration-300 flex flex-col">
+                <article class="group bg-surface border border-surface-container rounded-2xl overflow-hidden shadow-sm hover:border-primary/40 transition-colors flex flex-col">
                     <div class="relative aspect-video overflow-hidden bg-surface-container">
                         <img 
                             src="{{ $item->banner_image_url ?: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80' }}" 
                             alt="{{ $item->title }}"
-                            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            class="w-full h-full object-cover"
                         >
                         <div class="absolute top-3 left-3 flex gap-2">
-                            <span class="px-3 py-1 rounded-full text-[11px] font-bold bg-primary text-white shadow-md">
+                            <span class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-primary text-white shadow-sm">
                                 {{ $item->category }}
                             </span>
                             @if($item->status)
-                                <span class="px-3 py-1 rounded-full text-[11px] font-bold {{ $item->status === 'Selesai' ? 'bg-emerald-600' : 'bg-amber-600' }} text-white shadow-md">
+                                <span class="px-2.5 py-1 rounded-md text-[11px] font-semibold {{ $item->status === 'Selesai' ? 'bg-emerald-600' : 'bg-amber-600' }} text-white shadow-sm">
                                     {{ $item->status }}
                                 </span>
                             @endif
@@ -113,7 +112,7 @@
                                 <span class="material-symbols-outlined text-sm">location_on</span>
                                 {{ Str::limit($item->location, 20) }}
                             </span>
-                            <a href="{{ route('berita.acara.show', $item->id) }}" class="inline-flex items-center gap-1 text-sm font-bold text-primary group-hover:translate-x-1 transition-transform">
+                            <a href="{{ route('berita.acara.show', $item->id) }}" class="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
                                 Baca Notulensi
                                 <span class="material-symbols-outlined text-sm">arrow_forward</span>
                             </a>
@@ -128,15 +127,17 @@
             {{ $beritaAcaraList->links() }}
         </div>
     @else
-        <div class="text-center py-16 bg-surface border border-surface-container rounded-3xl space-y-4">
-            <div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mx-auto text-outline">
+        <div class="text-center py-16 bg-surface border border-surface-container rounded-2xl p-6 space-y-4">
+            <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mx-auto text-outline">
                 <span class="material-symbols-outlined text-3xl">article</span>
             </div>
-            <h3 class="text-lg font-bold text-on-surface">Tidak Ada Berita Acara Ditemukan</h3>
-            <p class="text-sm text-outline max-w-md mx-auto">
-                Silakan coba ubah kata kunci pencarian atau filter kategori kegiatan yang Anda gunakan.
-            </p>
-            <a href="{{ route('berita.acara.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-bold shadow-md">
+            <div class="space-y-1">
+                <h3 class="text-base font-bold text-on-surface">Belum ada berita acara yang cocok</h3>
+                <p class="text-sm text-outline max-w-md mx-auto">
+                    Coba ubah kata kunci pencarian atau pilih kategori lain untuk menemukan arsip notulensi kegiatan.
+                </p>
+            </div>
+            <a href="{{ route('berita.acara.index') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors">
                 Tampilkan Semua Berita Acara
             </a>
         </div>

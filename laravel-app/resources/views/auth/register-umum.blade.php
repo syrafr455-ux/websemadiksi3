@@ -4,17 +4,14 @@
         $kelasLabel = 'block text-xs font-bold text-on-surface uppercase tracking-wider mb-2';
     @endphp
 
-    <div class="py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-        <div class="organic-blob w-96 h-96 bg-primary top-10 right-10"></div>
-        <div class="organic-blob w-96 h-96 bg-secondary bottom-10 left-10"></div>
-
-        <div class="max-w-2xl mx-auto bg-surface/90 backdrop-blur-xl border border-surface-variant/40 rounded-3xl p-8 sm:p-12 shadow-2xl relative z-10">
+    <div class="py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-2xl mx-auto bg-surface border border-surface-container rounded-2xl p-8 sm:p-10 shadow-sm">
             <div class="text-center mb-8">
-                <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-primary-container mx-auto flex items-center justify-center text-white shadow-lg shadow-primary/20 mb-4">
-                    <span class="material-symbols-outlined text-3xl">how_to_reg</span>
+                <div class="w-12 h-12 rounded-xl bg-primary/10 mx-auto flex items-center justify-center text-primary mb-3">
+                    <span class="material-symbols-outlined text-2xl">how_to_reg</span>
                 </div>
-                <h2 class="text-2xl font-extrabold tracking-tight text-on-surface">Daftar Akun SEMADIKSI</h2>
-                <p class="text-sm text-outline mt-1.5">Untuk mahasiswa kampus lain atau masyarakat umum.</p>
+                <h2 class="text-2xl font-bold tracking-tight text-on-surface">Pendaftaran Peserta Umum</h2>
+                <p class="text-sm text-outline mt-1.5">Untuk mahasiswa dari luar UNUSA atau masyarakat umum.</p>
             </div>
 
             {{-- Jalur Peserta Umum: field & validasi sama dengan form admin (App\Http\Requests\Pengguna\UserUmumRequest) --}}

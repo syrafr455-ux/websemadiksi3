@@ -36,11 +36,11 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
                             SD
                         </div>
                         <div>
-                            <div className="text-base font-black tracking-wide bg-gradient-to-r from-emerald-400 via-teal-300 to-white bg-clip-text text-transparent">
+                            <div className="text-base font-bold tracking-wide text-emerald-400">
                                 SEMADIKSI
                             </div>
                             <div className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">
-                                Admin Portal • UNUSA
+                                Panel Admin • UNUSA
                             </div>
                         </div>
                     </div>

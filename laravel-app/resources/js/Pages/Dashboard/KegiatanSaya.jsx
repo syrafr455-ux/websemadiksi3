@@ -81,7 +81,7 @@ export default function KegiatanSaya({
                 {/* Enterprise Registrations List */}
                 <div className="space-y-4">
                     <h3 className="text-sm font-black text-emerald-400 tracking-wider uppercase">
-                        Pendaftaran Event Terbaru (Platform Enterprise)
+                        Pendaftaran Kegiatan Terbaru
                     </h3>
 
                     {enterpriseRegistrations && enterpriseRegistrations.length > 0 ? (
@@ -236,8 +236,8 @@ export default function KegiatanSaya({
                             })}
                         </div>
                     ) : (
-                        <div className="p-8 rounded-3xl bg-slate-900 border border-slate-800 text-center text-slate-500 text-xs">
-                            Anda belum memiliki riwayat pendaftaran kegiatan enterprise.
+                        <div className="p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center text-slate-400 text-xs">
+                            Belum ada riwayat pendaftaran kegiatan. Silakan telusuri jadwal kegiatan untuk mendaftar.
                         </div>
                     )}
                 </div>

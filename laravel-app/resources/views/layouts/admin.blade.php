@@ -23,12 +23,12 @@
     >
         <div class="h-20 px-6 border-b border-slate-800 flex items-center justify-between">
             <a href="{{ \App\Support\MenuAdmin::beranda(Auth::user()) ?? route('home') }}" class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center text-white shadow-lg shadow-amber-600/30">
+                <div class="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center text-white shadow-sm">
                     <span class="material-symbols-outlined text-2xl">admin_panel_settings</span>
                 </div>
                 <div>
                     <span class="text-base font-bold text-amber-500 block leading-none">SEMADIKSI</span>
-                    <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest block mt-1">Admin Central</span>
+                    <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest block mt-1">Panel Pengelola</span>
                 </div>
             </a>
             <button @click="sidebarOpen = false" class="lg:hidden p-1.5 rounded-lg text-slate-400 hover:bg-slate-800">
@@ -51,7 +51,7 @@
                 @csrf
                 <button type="submit" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-950/40 transition-colors">
                     <span class="material-symbols-outlined text-lg">logout</span>
-                    Keluar Admin
+                    Keluar
                 </button>
             </form>
         </div>
@@ -66,7 +66,7 @@
                 </button>
                 <div>
                     <h1 class="text-base font-bold text-white">@yield('pageTitle', $pageTitle ?? 'Panel Pengelola')</h1>
-                    <p class="text-xs text-slate-400">@yield('pageSubtitle', $pageSubtitle ?? 'Pusat Kontrol PostgreSQL SEMADIKSI')</p>
+                    <p class="text-xs text-slate-400">@yield('pageSubtitle', $pageSubtitle ?? 'Sistem Informasi SEMADIKSI UNUSA')</p>
                 </div>
             </div>
 

@@ -1,14 +1,11 @@
 <x-layouts.app title="Atur Ulang Kata Sandi">
-    <div class="min-h-[calc(100vh-160px)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-        <div class="organic-blob w-96 h-96 bg-primary top-10 left-10"></div>
-        <div class="organic-blob w-96 h-96 bg-secondary bottom-10 right-10"></div>
-
-        <div class="w-full max-w-md bg-surface/90 backdrop-blur-xl border border-surface-variant/40 rounded-3xl p-8 sm:p-10 shadow-2xl relative z-10" x-data="{ showPass: false }">
+    <div class="min-h-[calc(100vh-160px)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="w-full max-w-md bg-surface border border-surface-container rounded-2xl p-8 sm:p-10 shadow-sm" x-data="{ showPass: false }">
             <div class="text-center mb-8">
-                <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-primary-container mx-auto flex items-center justify-center text-white shadow-lg shadow-primary/20 mb-4">
-                    <span class="material-symbols-outlined text-3xl">password</span>
+                <div class="w-12 h-12 rounded-xl bg-primary/10 mx-auto flex items-center justify-center text-primary mb-3">
+                    <span class="material-symbols-outlined text-2xl">password</span>
                 </div>
-                <h2 class="text-2xl font-extrabold tracking-tight text-on-surface">Atur Ulang Kata Sandi</h2>
+                <h2 class="text-2xl font-bold tracking-tight text-on-surface">Atur Ulang Kata Sandi</h2>
                 <p class="text-sm text-outline mt-1.5">Buat kata sandi baru minimal 8 karakter yang memuat huruf dan angka.</p>
             </div>
 
@@ -75,7 +72,7 @@
 
                 <button
                     type="submit"
-                    class="w-full py-3.5 px-4 rounded-2xl bg-primary hover:bg-primary-container text-white font-bold text-sm shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2"
+                    class="w-full py-3 px-4 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-sm shadow-sm transition-colors flex items-center justify-center gap-2"
                 >
                     <span class="material-symbols-outlined text-xl">check_circle</span>
                     Simpan Kata Sandi Baru

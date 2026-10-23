@@ -1,38 +1,34 @@
 <x-layouts.app title="Beranda">
     {{-- Hero Section --}}
-    <section class="relative pt-12 pb-20 lg:pt-20 lg:pb-32 overflow-hidden">
-        {{-- Ambient gradient blobs --}}
-        <div class="organic-blob w-[500px] h-[500px] bg-primary/25 top-0 left-1/4 -translate-x-1/2"></div>
-        <div class="organic-blob w-[450px] h-[450px] bg-secondary-container/30 bottom-0 right-10"></div>
-
+    <section class="relative pt-10 pb-16 lg:pt-16 lg:pb-24 border-b border-surface-variant/40">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-                <div class="lg:col-span-7 space-y-6">
-                    <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold tracking-wide">
-                        <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+                <div class="lg:col-span-7 space-y-5">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold">
+                        <span class="w-2 h-2 rounded-full bg-primary"></span>
                         Sentra Komunikasi Mahasiswa KIP-K UNUSA
                     </div>
 
-                    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-on-surface leading-[1.15]">
-                        Satu Langkah, Sejuta Asa Menuju <span class="bg-gradient-to-r from-primary to-emerald-600 bg-clip-text text-transparent">Prestasi Gemilang</span>
+                    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-on-surface leading-[1.2]">
+                        Layanan Informasi dan Kegiatan <span class="text-primary">Mahasiswa KIP-K UNUSA</span>
                     </h1>
 
-                    <p class="text-base sm:text-lg text-outline leading-relaxed max-w-2xl">
-                        Sistem Informasi Terpadu SEMADIKSI Universitas Nahdlatul Ulama Surabaya. Memudahkan pendaftaran kegiatan, pengajuan pencairan, pelaporan keaktifan, dan evaluasi beasiswa secara transparan dan akuntabel.
+                    <p class="text-base text-outline leading-relaxed max-w-2xl">
+                        Portal resmi Serikat Mahasiswa KIP-K Universitas Nahdlatul Ulama Surabaya untuk pendaftaran kegiatan, pelaporan berkas beasiswa, presensi mandiri, dan perolehan e-sertifikat resmi.
                     </p>
 
-                    <div class="flex flex-wrap items-center gap-4 pt-2">
+                    <div class="flex flex-wrap items-center gap-3.5 pt-1">
                         @auth
-                            <a href="{{ route('dashboard.index') }}" class="px-6 py-3.5 rounded-2xl bg-primary hover:bg-primary-container text-white font-bold text-sm shadow-xl shadow-primary/25 transition-all hover:scale-105 active:scale-95 flex items-center gap-2">
-                                <span class="material-symbols-outlined text-xl">dashboard</span>
+                            <a href="{{ route('dashboard.index') }}" class="px-5 py-3 rounded-xl bg-primary hover:bg-primary-container text-white font-semibold text-sm transition-all flex items-center gap-2 active:scale-95">
+                                <span class="material-symbols-outlined text-lg">dashboard</span>
                                 Buka Dashboard Saya
                             </a>
                         @else
-                            <a href="{{ route('register') }}" class="px-6 py-3.5 rounded-2xl bg-primary hover:bg-primary-container text-white font-bold text-sm shadow-xl shadow-primary/25 transition-all hover:scale-105 active:scale-95 flex items-center gap-2">
-                                <span class="material-symbols-outlined text-xl">how_to_reg</span>
-                                Daftar Akun SEMADIKSI
+                            <a href="{{ route('register') }}" class="px-5 py-3 rounded-xl bg-primary hover:bg-primary-container text-white font-semibold text-sm transition-all flex items-center gap-2 active:scale-95">
+                                <span class="material-symbols-outlined text-lg">how_to_reg</span>
+                                Daftar Akun
                             </a>
-                            <a href="{{ route('login') }}" class="px-6 py-3.5 rounded-2xl bg-surface border border-surface-variant/60 hover:bg-surface-container text-on-surface font-semibold text-sm transition-all hover:scale-105">
+                            <a href="{{ route('login') }}" class="px-5 py-3 rounded-xl bg-surface border border-surface-variant hover:bg-surface-container text-on-surface font-semibold text-sm transition-all">
                                 Masuk ke Akun
                             </a>
                         @endauth
@@ -41,7 +37,7 @@
 
                 {{-- Hero Visual Service Info Card (Static) --}}
                 <div class="lg:col-span-5 relative">
-                    <div class="relative mx-auto max-w-md bg-surface/90 backdrop-blur-xl border border-surface-variant/50 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+                    <div class="relative mx-auto max-w-md bg-surface border border-surface-variant rounded-2xl p-6 sm:p-7 shadow-sm space-y-5">
                         <div class="flex items-center justify-between pb-4 border-b border-surface-variant/40">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
@@ -114,14 +110,14 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                 @forelse($activities as $act)
-                    <div class="bg-surface rounded-3xl border border-surface-variant/40 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
+                    <div class="bg-surface rounded-2xl border border-surface-variant overflow-hidden shadow-sm hover:border-primary/40 transition-all flex flex-col justify-between">
                         <div>
                             <div class="h-48 overflow-hidden relative">
                                 <img src="{{ $act->image_url }}" alt="{{ $act->title }}" class="w-full h-full object-cover">
-                                <div class="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold bg-surface/90 backdrop-blur-md text-primary shadow">
+                                <div class="absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface/95 text-primary shadow-sm">
                                     {{ $act->category }}
                                 </div>
-                                <div class="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-black/60 text-white backdrop-blur-sm">
+                                <div class="absolute bottom-3 left-3 px-2 py-0.5 rounded text-[11px] font-medium bg-black/70 text-white">
                                     {{ $act->date_text }}
                                 </div>
                             </div>
@@ -135,19 +131,19 @@
                             </div>
                         </div>
 
-                        <div class="p-6 pt-0 border-t border-surface-variant/30 mt-4 flex items-center justify-between">
-                            <span class="text-xs font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-lg">
+                        <div class="p-6 pt-0 border-t border-surface-variant/40 mt-4 flex items-center justify-between">
+                            <span class="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-md">
                                 {{ $act->price }}
                             </span>
-                            <a href="{{ !empty($act->is_kegiatan) ? route('kegiatan.detail', $act->id) : route('dashboard.kegiatan.show', $act->id) }}" class="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
+                            <a href="{{ !empty($act->is_kegiatan) ? route('kegiatan.detail', $act->id) : route('dashboard.kegiatan.show', $act->id) }}" class="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
                                 Rincian Kegiatan
                                 <span class="material-symbols-outlined text-sm">chevron_right</span>
                             </a>
                         </div>
                     </div>
                 @empty
-                    <div class="col-span-3 text-center py-12 text-outline text-sm">
-                        Belum ada kegiatan yang dipublikasikan.
+                    <div class="col-span-3 text-center py-12 text-outline text-sm bg-surface rounded-2xl border border-surface-variant">
+                        Saat ini belum ada agenda kegiatan baru yang dibuka.
                     </div>
                 @endforelse
             </div>
@@ -160,9 +156,9 @@
             <div class="flex flex-col md:flex-row md:items-end justify-between mb-10">
                 <div>
                     <span class="text-xs font-bold uppercase tracking-wider text-primary">Dokumentasi Resmi</span>
-                    <h2 class="text-2xl sm:text-3xl font-extrabold text-on-surface mt-1">Berita Acara & Rilis Kegiatan</h2>
+                    <h2 class="text-2xl sm:text-3xl font-extrabold text-on-surface mt-1">Berita Acara Kegiatan</h2>
                 </div>
-                <a href="{{ route('berita.acara.index') }}" class="mt-4 md:mt-0 inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:underline">
+                <a href="{{ route('berita.acara.index') }}" class="mt-4 md:mt-0 inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
                     Arsip Berita Acara
                     <span class="material-symbols-outlined text-base">arrow_forward</span>
                 </a>
@@ -170,9 +166,9 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                 @forelse($beritaAcara as $ba)
-                    <div class="bg-surface rounded-3xl border border-surface-variant/40 p-6 shadow-sm hover:shadow-lg transition-all space-y-4">
+                    <div class="bg-surface rounded-2xl border border-surface-variant p-6 shadow-sm hover:border-primary/40 transition-all space-y-4">
                         <div class="flex items-center justify-between text-xs text-outline">
-                            <span class="px-2.5 py-1 rounded-md bg-surface-container font-semibold text-primary">{{ $ba->category }}</span>
+                            <span class="px-2.5 py-0.5 rounded bg-surface-container font-medium text-primary">{{ $ba->category }}</span>
                             <span>{{ $ba->date_text }}</span>
                         </div>
                         <h3 class="text-base font-bold text-on-surface line-clamp-2">
@@ -181,14 +177,14 @@
                             </a>
                         </h3>
                         <p class="text-xs text-outline line-clamp-3 leading-relaxed">{{ $ba->summary }}</p>
-                        <div class="pt-3 border-t border-surface-variant/30 flex items-center justify-between text-xs">
+                        <div class="pt-3 border-t border-surface-variant/40 flex items-center justify-between text-xs">
                             <span class="text-outline truncate">Oleh: {{ $ba->author }}</span>
-                            <a href="{{ route('berita.acara.show', $ba->id) }}" class="font-bold text-primary hover:underline">Baca Selengkapnya &rarr;</a>
+                            <a href="{{ route('berita.acara.show', $ba->id) }}" class="font-semibold text-primary hover:underline">Baca Selengkapnya &rarr;</a>
                         </div>
                     </div>
                 @empty
-                    <div class="col-span-3 text-center py-12 text-outline text-sm">
-                        Belum ada berita acara.
+                    <div class="col-span-3 text-center py-12 text-outline text-sm bg-surface rounded-2xl border border-surface-variant">
+                        Belum ada berita acara yang diterbitkan.
                     </div>
                 @endforelse
             </div>
@@ -196,15 +192,15 @@
     </section>
 
     {{-- CTA Band --}}
-    <section class="py-16 bg-gradient-to-r from-primary to-primary-container text-white relative overflow-hidden">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 relative z-10">
-            <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight">Bergabung dan Raih Masa Depan Bersama SEMADIKSI UNUSA</h2>
-            <p class="text-base text-white/90 max-w-2xl mx-auto leading-relaxed">
-                Akses seluruh kemudahan pelaporan KIP-Kuliah, peroleh sertifikat resmi kegiatan, dan pantau perkembangan prestasi akademik Anda dalam satu portal terpadu.
+    <section class="py-14 bg-primary text-white">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-5">
+            <h2 class="text-2xl sm:text-3xl font-bold tracking-tight">Akses Layanan Mahasiswa KIP-K UNUSA</h2>
+            <p class="text-sm sm:text-base text-white/90 max-w-2xl mx-auto leading-relaxed">
+                Kelola pelaporan berkas beasiswa, ikuti kegiatan kemahasiswaan, dan peroleh e-sertifikat resmi dalam satu akun.
             </p>
             <div class="pt-2">
-                <a href="{{ route('register') }}" class="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-white text-primary hover:bg-slate-50 font-bold text-sm shadow-2xl hover:scale-105 active:scale-95 transition-all">
-                    Daftar Akun SEMADIKSI
+                <a href="{{ route('register') }}" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-primary hover:bg-slate-50 font-semibold text-sm shadow-sm transition-all active:scale-95">
+                    Daftar Akun
                     <span class="material-symbols-outlined text-lg">arrow_forward</span>
                 </a>
             </div>

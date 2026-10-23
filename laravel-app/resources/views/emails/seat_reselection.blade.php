@@ -7,7 +7,7 @@
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
     <div style="background-color: #0d9488; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
         <h2 style="margin: 0;">Pemberitahuan Pemindahan Ruangan Kegiatan</h2>
-        <p style="margin: 5px 0 0 0; font-size: 14px;">Platform Terpadu SEMADIKSI UNUSA</p>
+        <p style="margin: 5px 0 0 0; font-size: 14px;">Sistem Informasi SEMADIKSI UNUSA</p>
     </div>
 
     <div style="background-color: #f9fafb; padding: 24px; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
@@ -23,7 +23,7 @@
             @endif
         </div>
 
-        <p>Kursi Anda sebelumnya telah di-reset untuk menyesuaikan tata letak ruangan baru. <strong>Nomor E-Tiket dan status pendaftaran Anda tetap valid dan aman.</strong></p>
+        <p>Kursi Anda sebelumnya telah diatur ulang untuk menyesuaikan tata letak ruangan baru. <strong>Nomor E-Tiket dan status pendaftaran Anda tetap valid dan aman.</strong></p>
 
         @if(!empty($isBooker) && !empty($reselectionUrl))
             <p>Silakan segera memilih ulang kursi yang Anda inginkan (termasuk untuk delegasi Anda jika ada). Tautan berikut langsung membuka halaman pemilihan ulang kursi; bila belum masuk, Anda akan diminta masuk dulu ke akun SEMADIKSI.</p>

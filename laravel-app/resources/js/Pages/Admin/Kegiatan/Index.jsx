@@ -16,7 +16,7 @@ import {
 } from '@/lib/kegiatanForm';
 
 export default function KegiatanIndex({
-    title = 'Manajemen Kegiatan Enterprise',
+    title = 'Manajemen Kegiatan',
     kegiatans = {},
     filters = {},
     unusaFacilities = [],
@@ -148,7 +148,7 @@ export default function KegiatanIndex({
                     <div>
                         <h2 className="text-xl font-black text-white flex items-center gap-2">
                             <span className="material-symbols-outlined text-emerald-400">event_seat</span>
-                            Manajemen Kegiatan Enterprise &amp; Denah Kursi
+                            Manajemen Kegiatan &amp; Denah Kursi
                         </h2>
                         <p className="text-xs text-slate-400 mt-1">
                             Kelola jadwal, integrasi fasilitas UNUSA, denah kursi interaktif, tiket, dan sistem penjurian.
@@ -315,7 +315,7 @@ export default function KegiatanIndex({
                                 ) : (
                                     <tr>
                                         <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
-                                            Belum ada kegiatan enterprise yang terdaftar.
+                                            Belum ada kegiatan yang terdaftar. Klik tombol "Tambah Kegiatan" untuk membuat kegiatan baru.
                                         </td>
                                     </tr>
                                 )}
@@ -332,7 +332,7 @@ export default function KegiatanIndex({
                             <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950">
                                 <div>
                                     <h3 className="text-lg font-black text-white">
-                                        {editingItem ? 'Edit Kegiatan Enterprise' : 'Tambah Kegiatan Enterprise Baru'}
+                                        {editingItem ? 'Edit Kegiatan' : 'Tambah Kegiatan Baru'}
                                     </h3>
                                     <p className="text-xs text-slate-400 mt-0.5">Langkah {currentStep} dari 5: {
                                         currentStep === 1 ? 'Informasi Utama & Jadwal' :

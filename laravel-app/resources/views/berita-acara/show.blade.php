@@ -12,7 +12,7 @@
     </nav>
 
     {{-- Main Article Card --}}
-    <article class="bg-surface border border-surface-container rounded-3xl overflow-hidden shadow-sm">
+    <article class="bg-surface border border-surface-container rounded-2xl overflow-hidden shadow-sm">
         {{-- Banner Image --}}
         <div class="relative w-full aspect-video md:aspect-[21/9] bg-surface-container overflow-hidden">
             <img 
@@ -91,8 +91,8 @@
                         {{ $item->notes }}
                     </div>
                 @else
-                    <p class="italic text-outline">
-                        Kegiatan ini telah selesai dilaksanakan secara tertib sesuai dengan ketentuan organisasi SEMADIKSI dan pedoman kemahasiswaan Universitas Nahdlatul Ulama Surabaya.
+                    <p class="text-sm text-outline">
+                        Catatan dan notulensi rinci untuk kegiatan ini belum dilampirkan oleh panitia.
                     </p>
                 @endif
             </div>
