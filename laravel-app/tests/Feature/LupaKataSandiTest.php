@@ -203,11 +203,16 @@ class LupaKataSandiTest extends TestCase
         $this->minta('fajar@gmail.com', '10.3.3.3')->assertSessionHasNoErrors();
     }
 
-    public function test_registration_messages_link_to_the_forgot_password_page(): void
+    public function test_registration_page_tells_active_accounts_to_sign_in_or_reset_password(): void
     {
-        $this->withSession(['unusa_status' => 'sudah_terdaftar', 'unusa_pesan' => 'NIM ini sudah memiliki akun SEMADIKSI.'])
+        $halaman = $this->halamanInertia($this->withSession(['daftar_unusa' => ['status' => 'sudah_aktif', 'pesan' => 'NIM ini sudah memiliki akun SEMADIKSI.', 'kartu' => null]])
             ->get(route('register'))
-            ->assertOk()
-            ->assertSee(route('password.request'));
+            ->assertOk());
+
+        $this->assertSame('Auth/Daftar', $halaman['component']);
+        $this->assertSame('sudah_aktif', $halaman['props']['hasil']['status']);
+        // Tautan Masuk & Lupa Kata Sandi ada di halaman React untuk status ini; rutenya harus ada.
+        $this->assertSame('/lupa-kata-sandi', parse_url(route('password.request'), PHP_URL_PATH));
+        $this->assertSame('/masuk', parse_url(route('login'), PHP_URL_PATH));
     }
 }

@@ -2,77 +2,26 @@
     @php
         $kelasInput = 'w-full px-4 py-3 bg-surface-container rounded-2xl border border-surface-variant/40 focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm font-medium transition-all';
         $kelasLabel = 'block text-xs font-bold text-on-surface uppercase tracking-wider mb-2';
-        $jalurAwal = old('jalur', session('unusa_status') ? 'unusa' : '');
-        $statusUnusa = session('unusa_status');
     @endphp
 
     <div class="py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         <div class="organic-blob w-96 h-96 bg-primary top-10 right-10"></div>
         <div class="organic-blob w-96 h-96 bg-secondary bottom-10 left-10"></div>
 
-        <div class="max-w-2xl mx-auto bg-surface/90 backdrop-blur-xl border border-surface-variant/40 rounded-3xl p-8 sm:p-12 shadow-2xl relative z-10" x-data="{ jalur: @js($jalurAwal) }">
+        <div class="max-w-2xl mx-auto bg-surface/90 backdrop-blur-xl border border-surface-variant/40 rounded-3xl p-8 sm:p-12 shadow-2xl relative z-10">
             <div class="text-center mb-8">
                 <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-primary-container mx-auto flex items-center justify-center text-white shadow-lg shadow-primary/20 mb-4">
                     <span class="material-symbols-outlined text-3xl">how_to_reg</span>
                 </div>
                 <h2 class="text-2xl font-extrabold tracking-tight text-on-surface">Daftar Akun SEMADIKSI</h2>
-                <p class="text-sm text-outline mt-1.5">Pilih jalur pendaftaran yang sesuai dengan Anda.</p>
-            </div>
-
-            {{-- Langkah 1: pilih jalur --}}
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8" role="radiogroup" aria-label="Jalur pendaftaran">
-                <button type="button" role="radio" :aria-checked="jalur === 'unusa'" @click="jalur = 'unusa'" data-jalur="unusa"
-                    :class="jalur === 'unusa' ? 'border-primary bg-primary/10 ring-2 ring-primary/30' : 'border-surface-variant/60 hover:border-primary/50'"
-                    class="text-left p-5 rounded-2xl border transition-all">
-                    <span class="material-symbols-outlined text-primary text-2xl">school</span>
-                    <div class="font-extrabold text-on-surface mt-2">Mahasiswa UNUSA</div>
-                    <div class="text-xs text-outline mt-1">Data akademik terisi otomatis dari NIM. Status penerima KIP-K ditentukan sistem.</div>
-                </button>
-                <button type="button" role="radio" :aria-checked="jalur === 'umum'" @click="jalur = 'umum'" data-jalur="umum"
-                    :class="jalur === 'umum' ? 'border-primary bg-primary/10 ring-2 ring-primary/30' : 'border-surface-variant/60 hover:border-primary/50'"
-                    class="text-left p-5 rounded-2xl border transition-all">
-                    <span class="material-symbols-outlined text-primary text-2xl">public</span>
-                    <div class="font-extrabold text-on-surface mt-2">Peserta Umum</div>
-                    <div class="text-xs text-outline mt-1">Mahasiswa kampus lain atau masyarakat umum yang ingin mengikuti kegiatan.</div>
-                </button>
-            </div>
-
-            {{-- Jalur Mahasiswa UNUSA: NIM -> link aktivasi ke email kampus --}}
-            <div x-show="jalur === 'unusa'" @if($jalurAwal !== 'unusa') style="display: none" @endif data-bagian="unusa">
-                @if($statusUnusa)
-                    <div class="mb-6 p-4 rounded-2xl text-sm font-medium {{ $statusUnusa === 'terkirim' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-900 border border-amber-200' }}" role="status" data-status-unusa="{{ $statusUnusa }}">
-                        {{ session('unusa_pesan') }}
-                        @if($statusUnusa === 'sudah_terdaftar')
-                            <a href="{{ route('login') }}" class="block mt-2 font-bold text-primary hover:underline">Masuk ke akun Anda</a>
-                            <a href="{{ route('password.request') }}" class="block mt-1 font-bold text-primary hover:underline">Lupa kata sandi?</a>
-                        @endif
-                    </div>
-                @endif
-
-                <form action="{{ route('daftar.unusa.cek') }}" method="POST" class="space-y-5">
-                    @csrf
-                    <input type="hidden" name="jalur" value="unusa">
-                    <div>
-                        <label for="unusa_nim" class="{{ $kelasLabel }}">NIM UNUSA <span class="text-rose-500">*</span></label>
-                        <input type="text" id="unusa_nim" name="nim" value="{{ $jalurAwal === 'unusa' ? old('nim') : '' }}" required autocomplete="off"
-                            placeholder="Contoh: 2241010001" class="{{ $kelasInput }} @if($jalurAwal === 'unusa') @error('nim') border-rose-500 @enderror @endif">
-                        @if($jalurAwal === 'unusa') @error('nim') <p class="text-xs text-rose-600 font-medium mt-1">{{ $message }}</p> @enderror @endif
-                        <p class="text-xs text-outline mt-2">
-                            Demi keamanan, data Anda baru ditampilkan setelah Anda membuka link aktivasi yang kami kirim ke <strong>email kampus</strong> Anda.
-                        </p>
-                    </div>
-                    <button type="submit" class="w-full py-4 px-6 rounded-2xl bg-primary hover:bg-primary-container text-white font-bold text-base shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2">
-                        <span class="material-symbols-outlined text-xl">mail</span>
-                        Kirim Link Aktivasi
-                    </button>
-                </form>
+                <p class="text-sm text-outline mt-1.5">Untuk mahasiswa kampus lain atau masyarakat umum.</p>
             </div>
 
             {{-- Jalur Peserta Umum: field & validasi sama dengan form admin (App\Http\Requests\Pengguna\UserUmumRequest) --}}
-            <form action="{{ route('register.post') }}" method="POST" class="space-y-6" x-show="jalur === 'umum'" @if($jalurAwal !== 'umum') style="display: none" @endif data-bagian="umum">
+            <form action="{{ route('register.post') }}" method="POST" class="space-y-6">
                 @csrf
                 <input type="hidden" name="jalur" value="umum">
-                @php($umum = $jalurAwal === 'umum')
+                @php($umum = true)
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div class="sm:col-span-2">

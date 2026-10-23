@@ -26,6 +26,9 @@ class PenggunaFormPerRoleTest extends TestCase
     {
         parent::setUp();
 
+        // Pendaftaran umum publik disembunyikan secara bawaan; tes di sini menguji aturannya.
+        config(['unusa.registrasi_umum_aktif' => true]);
+
         $this->admin = User::factory()->superAdmin()->create();
     }
 

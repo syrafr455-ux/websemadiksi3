@@ -90,4 +90,49 @@ return [
     // Masa berlaku link aktivasi pendaftaran jalur Mahasiswa UNUSA (menit).
     'aktivasi_berlaku_menit' => 60,
 
+    // Kirim ulang link aktivasi: jeda antar kiriman (detik) dan batas per hari (24 jam) per NIM.
+    'aktivasi_jeda_detik' => 60,
+    'aktivasi_maks_per_hari' => 3,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Domain Email Mahasiswa yang Diizinkan
+    |--------------------------------------------------------------------------
+    |
+    | Link aktivasi hanya dikirim ke email master yang domainnya (persis) ada di daftar ini.
+    | Env UNUSA_STUDENT_EMAIL_DOMAINS dipisah koma.
+    |
+    */
+
+    'student_email_domains' => array_values(array_filter(array_map(
+        fn (string $domain): string => strtolower(trim($domain)),
+        explode(',', (string) env('UNUSA_STUDENT_EMAIL_DOMAINS', 'student.unusa.ac.id'))
+    ))),
+
+    // Jalur pendaftaran "Mahasiswa Umum" disembunyikan sementara. Role, tabel, dan form admin tetap ada.
+    'registrasi_umum_aktif' => (bool) env('REGISTRASI_UMUM_AKTIF', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Klien API UNUSA (dipakai bila UNUSA_ACADEMIC_PROVIDER=api)
+    |--------------------------------------------------------------------------
+    |
+    | Lihat docs/api-unusa.md. Verifikasi sertifikat TLS tidak boleh dimatikan.
+    |
+    */
+
+    'api' => [
+        'base_url' => env('UNUSA_API_BASE_URL'),
+        // Issuer OIDC (mis. https://sso.contoh.ac.id/realms/unusa). Endpoint token diambil dari discovery.
+        'issuer' => env('UNUSA_API_ISSUER'),
+        'client_id' => env('UNUSA_API_CLIENT_ID'),
+        'client_secret' => env('UNUSA_API_CLIENT_SECRET'),
+        'scope' => env('UNUSA_API_SCOPE'),
+        // Path data mahasiswa; {nim} diganti NIM.
+        'path_mahasiswa' => env('UNUSA_API_PATH_MAHASISWA', '/mahasiswa/{nim}'),
+        'timeout' => 5,
+        // Percobaan ulang setelah gagal tersambung (total percobaan = 1 + retry).
+        'retry' => 2,
+    ],
+
 ];

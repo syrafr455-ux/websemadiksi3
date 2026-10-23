@@ -11,12 +11,12 @@ use App\Models\KipkDocument;
 use App\Models\MasterMahasiswaUnusa;
 use App\Models\ProgramStudi;
 use App\Models\User;
+use App\Services\AktivasiMahasiswaService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\StrayRequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 /**
@@ -143,6 +143,7 @@ class PenyelarasanPenggunaTest extends TestCase
         $simpan($kipk('187003'))->assertSessionHasNoErrors();
 
         // Pendaftaran publik jalur Peserta Umum: bukan akun UNUSA, NIM boleh sama.
+        config(['unusa.registrasi_umum_aktif' => true]);
         auth()->logout();
         $this->post(route('register.post'), [
             'name' => 'Peserta Publik', 'asal_kampus' => 'Universitas Brawijaya', 'nim' => '187001', 'program_studi_teks' => 'S1 Gizi',
@@ -161,9 +162,9 @@ class PenyelarasanPenggunaTest extends TestCase
         ]);
         $lain = User::factory()->userUmum()->create(['nim' => '2241010001', 'email' => 'kampus.lain@gmail.com', 'password' => 'RahasiaKuat123']);
 
-        $this->post(URL::temporarySignedRoute('daftar.unusa.aktivasi', now()->addHour(), ['nim' => '2241010001']), [
-            'phone' => '081234567890', 'password' => 'RahasiaKuat1', 'password_confirmation' => 'RahasiaKuat1',
-        ])->assertRedirect(route('dashboard.index'));
+        $this->post(app(AktivasiMahasiswaService::class)->buatLink('2241010001'), [
+            'password' => 'RahasiaKuat1', 'password_confirmation' => 'RahasiaKuat1',
+        ])->assertRedirect(route('login'));
         $unusa = User::where('email', 'fauzan@student.unusa.ac.id')->firstOrFail();
         $this->assertTrue($unusa->is_unusa);
         $this->post(route('logout'));
