@@ -1,8 +1,17 @@
 <?php
 
+use App\Http\Middleware\EnsureActiveAccount;
+use App\Http\Middleware\EnsureAdmin;
+use App\Http\Middleware\EnsureEmailVerifiedForJalurUmum;
+use App\Http\Middleware\EnsureRole;
+use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -17,16 +26,16 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->web(append: [
-            \App\Http\Middleware\EnsureActiveAccount::class,
-            \App\Http\Middleware\HandleInertiaRequests::class,
+            EnsureActiveAccount::class,
+            HandleInertiaRequests::class,
         ]);
 
-        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+        $middleware->append(SecurityHeaders::class);
 
         $middleware->alias([
-            'admin' => \App\Http\Middleware\EnsureAdmin::class,
-            'role' => \App\Http\Middleware\EnsureRole::class,
-            'email.terverifikasi' => \App\Http\Middleware\EnsureEmailVerifiedForJalurUmum::class,
+            'admin' => EnsureAdmin::class,
+            'role' => EnsureRole::class,
+            'email.terverifikasi' => EnsureEmailVerifiedForJalurUmum::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -35,4 +44,16 @@ return Application::configure(basePath: dirname(__DIR__))
             'nomor_pendaftaran',
             'nomor_pendaftaran_kip',
         ]);
+
+        $exceptions->respond(function (Response $response, Throwable $e, Request $request) {
+            if ($request->header('X-Inertia') && in_array($response->getStatusCode(), [403, 404, 419, 429, 500])) {
+                return Inertia::render('Error', [
+                    'status' => $response->getStatusCode(),
+                ])
+                    ->toResponse($request)
+                    ->setStatusCode($response->getStatusCode());
+            }
+
+            return $response;
+        });
     })->create();

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Enums\UserRole;
 use App\Models\User;
+use App\Services\Auth\KeycloakService;
+use App\Support\MenuAdmin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,9 +19,11 @@ class AuthController extends Controller
     /**
      * Show student login form.
      */
-    public function showLogin(): View
+    public function showLogin(KeycloakService $keycloak): View
     {
-        return view('auth.login');
+        return view('auth.login', [
+            'ssoAktif' => $keycloak->isActive(),
+        ]);
     }
 
     /**
@@ -40,6 +44,7 @@ class AuthController extends Controller
 
         if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
             $seconds = RateLimiter::availableIn($throttleKey);
+
             return back()->withErrors([
                 'identity' => "Terlalu banyak percobaan masuk. Silakan coba lagi dalam {$seconds} detik.",
             ])->onlyInput('identity');
@@ -77,7 +82,7 @@ class AuthController extends Controller
 
         if ($user->isAdmin() || $user->isStaff()) {
             // Halaman pertama di menu admin role ini (verifikator/juri tidak punya akses ke ringkasan utama).
-            return redirect()->intended(\App\Support\MenuAdmin::beranda($user) ?? route('admin.dashboard'));
+            return redirect()->intended(MenuAdmin::beranda($user) ?? route('admin.dashboard'));
         }
 
         return redirect()->intended(route('dashboard.index'));
@@ -108,6 +113,7 @@ class AuthController extends Controller
 
         if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
             $seconds = RateLimiter::availableIn($throttleKey);
+
             return back()->withErrors([
                 'email' => "Terlalu banyak percobaan. Silakan coba lagi dalam {$seconds} detik.",
             ])->onlyInput('email');
@@ -115,9 +121,9 @@ class AuthController extends Controller
 
         $user = User::whereRaw('LOWER(email) = ?', [strtolower(trim($request->input('email')))])
             ->whereIn('role', [
-                \App\Enums\UserRole::SuperAdmin->value,
-                \App\Enums\UserRole::VerifikatorBerkas->value,
-                \App\Enums\UserRole::PenilaiKarya->value,
+                UserRole::SuperAdmin->value,
+                UserRole::VerifikatorBerkas->value,
+                UserRole::PenilaiKarya->value,
             ])
             ->first();
 
@@ -125,7 +131,7 @@ class AuthController extends Controller
             RateLimiter::hit($throttleKey, 60);
 
             return back()->withErrors([
-                'email' => 'Kredensial administrator tidak valid atau Anda bukan admin.',
+                'email' => 'Email atau kata sandi administrator tidak sesuai.',
             ])->onlyInput('email');
         }
 
@@ -145,8 +151,8 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         $targetRoute = match ($user->role) {
-            \App\Enums\UserRole::PenilaiKarya => route('admin.penilaian'),
-            \App\Enums\UserRole::VerifikatorBerkas => route('admin.berkas'),
+            UserRole::PenilaiKarya => route('admin.penilaian'),
+            UserRole::VerifikatorBerkas => route('admin.berkas'),
             default => route('admin.dashboard'),
         };
 
