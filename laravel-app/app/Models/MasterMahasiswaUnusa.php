@@ -19,6 +19,9 @@ class MasterMahasiswaUnusa extends Model
         'nim',
         'nama_lengkap',
         'email_kampus',
+        'no_telepon',
+        'prestasi',
+        'semester',
         'program_studi_id',
         'angkatan',
         'status_aktif',
@@ -30,6 +33,9 @@ class MasterMahasiswaUnusa extends Model
     {
         return [
             'diperbarui_pada' => 'datetime',
+            // Data pribadi: terenkripsi di database.
+            'no_telepon' => 'encrypted',
+            'prestasi' => 'encrypted:array',
         ];
     }
 

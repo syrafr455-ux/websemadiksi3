@@ -24,7 +24,7 @@ interface UnusaAcademicProvider
     /**
      * Data mahasiswa UNUSA berdasarkan NIM, atau null bila tidak ditemukan.
      *
-     * @return array{nim: string, nama_lengkap: string, email_kampus: ?string, program_studi_id: ?int, program_studi: ?string, fakultas_id: ?int, fakultas: ?string, angkatan: ?string, status_aktif: string}|null
+     * @return array{nim: string, nama_lengkap: string, email_kampus: ?string, program_studi_id: ?int, program_studi: ?string, fakultas_id: ?int, fakultas: ?string, angkatan: ?string, semester: ?int, no_telepon: ?string, prestasi: list<mixed>, status_aktif: string}|null
      */
     public function cariMahasiswaByNim(string $nim): ?array;
 

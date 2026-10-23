@@ -64,6 +64,7 @@ class ImporMasterMahasiswa
                 'nama_lengkap' => ['required', 'string', 'max:255'],
                 'email_kampus' => ['required', 'email:rfc', 'max:255'],
                 'angkatan' => ['nullable', 'regex:/^\d{4}$/'],
+                'semester' => ['nullable', 'integer', 'between:1,14'],
                 'status_aktif' => ['nullable', 'in:'.implode(',', MasterMahasiswaUnusa::STATUS_AKTIF)],
             ], [
                 'nim.required' => 'NIM kosong.',
@@ -72,6 +73,8 @@ class ImporMasterMahasiswa
                 'email_kampus.required' => 'Email kampus kosong.',
                 'email_kampus.email' => 'Email kampus tidak valid.',
                 'angkatan.regex' => 'Angkatan harus 4 digit tahun.',
+                'semester.integer' => 'Semester harus berupa angka.',
+                'semester.between' => 'Semester harus antara 1 dan 14.',
                 'status_aktif.in' => 'Status aktif harus salah satu: '.implode(', ', MasterMahasiswaUnusa::STATUS_AKTIF).'.',
             ]);
             $pesan = $validator->errors()->all();
@@ -102,6 +105,10 @@ class ImporMasterMahasiswa
                 'program_studi' => $prodiInput,
                 'angkatan' => ($data['angkatan'] ?? '') ?: null,
                 'status_aktif' => strtolower(($data['status_aktif'] ?? '') ?: 'aktif'),
+                'semester' => ($data['semester'] ?? '') !== '' ? (int) $data['semester'] : null,
+                'no_telepon' => ($data['no_telepon'] ?? '') ?: null,
+                // Prestasi: dipisah titik koma di CSV, disimpan sebagai daftar.
+                'prestasi' => ($data['prestasi'] ?? '') !== '' ? array_values(array_filter(array_map('trim', explode(';', $data['prestasi'])))) : null,
                 'status' => $pesan ? 'galat' : (isset($nimTerdaftar[$nim]) ? 'perbarui' : 'baru'),
                 'pesan' => $pesan,
             ];
@@ -137,6 +144,11 @@ class ImporMasterMahasiswa
                     'status_aktif' => $baris['status_aktif'],
                     'sumber' => 'impor_csv',
                     'diperbarui_pada' => now(),
+                    // Kolom opsional: yang kosong di CSV tidak menimpa data yang sudah ada.
+                    ...array_filter(
+                        ['semester' => $baris['semester'], 'no_telepon' => $baris['no_telepon'], 'prestasi' => $baris['prestasi']],
+                        fn ($nilai) => $nilai !== null
+                    ),
                 ]);
             }
         });

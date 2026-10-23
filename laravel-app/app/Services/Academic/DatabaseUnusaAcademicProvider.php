@@ -53,6 +53,9 @@ class DatabaseUnusaAcademicProvider implements UnusaAcademicProvider
             'fakultas_id' => $mahasiswa->programStudi?->fakultas_id,
             'fakultas' => $mahasiswa->programStudi?->fakultas?->nama,
             'angkatan' => $mahasiswa->angkatan,
+            'semester' => $mahasiswa->semester,
+            'no_telepon' => $mahasiswa->no_telepon,
+            'prestasi' => $mahasiswa->prestasi ?? [],
             'status_aktif' => $mahasiswa->status_aktif,
         ] : null;
     }
