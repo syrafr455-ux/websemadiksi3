@@ -91,7 +91,7 @@ export default function KegiatanSaya({
                                 const seat = reg.seat;
                                 const isPaidOrFree = reg.payment_status === 'paid' || reg.payment_status === 'free';
                                 const isPending = reg.payment_status === 'pending';
-                                const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(reg.nomor_tiket)}`;
+                                const qrCodeUrl = `/tiket/${encodeURIComponent(reg.nomor_tiket)}/qr`;
 
                                 return (
                                     <div
@@ -267,7 +267,7 @@ export default function KegiatanSaya({
                                 {/* Ticket QR Code */}
                                 <div className="text-center p-4 rounded-2xl bg-white text-slate-900 w-48 mx-auto shadow-xl">
                                     <img
-                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(activeTicket.nomor_tiket)}`}
+                                        src={`/tiket/${encodeURIComponent(activeTicket.nomor_tiket)}/qr`}
                                         alt="QR Tiket"
                                         className="w-full h-auto mx-auto rounded-lg"
                                     />

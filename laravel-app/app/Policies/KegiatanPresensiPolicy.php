@@ -32,4 +32,20 @@ class KegiatanPresensiPolicy
     {
         return $user->isSuperAdmin();
     }
+
+    /**
+     * Hanya super admin yang dapat memindai tiket (presensi awal).
+     */
+    public function scanTicket(User $user): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
+    /**
+     * Hanya super admin yang dapat mengelola sesi presensi akhir dan layar proyektor.
+     */
+    public function managePresensiAkhir(User $user): bool
+    {
+        return $user->isSuperAdmin();
+    }
 }

@@ -99,6 +99,13 @@ export default function KegiatanShow({
                             {kegiatan.status}
                         </span>
                         <a
+                            href={`/admin/kegiatan/${kegiatan.id}/pindai-tiket`}
+                            className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition-all"
+                        >
+                            <span className="material-symbols-outlined text-sm">qr_code_scanner</span>
+                            Pindai Tiket
+                        </a>
+                        <a
                             href={`/kegiatan/${kegiatan.id}`}
                             target="_blank"
                             rel="noreferrer"
