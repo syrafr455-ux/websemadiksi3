@@ -325,6 +325,21 @@ Status pelacakan pengerjaan bertahap:
     - Seluruh berkas duplikat dan usang di `laravel-app/docs/` telah dihapus bersih.
     - Aturan dokumentasi kanonik dicatat di `CLAUDE.md`.
 
+- [x] **Bagian 16: Date Picker di Form Kegiatan (Bagian 1)**
+  - **Standarisasi Input datetime-local Bawaan Browser**:
+    - Seluruh isian tanggal-waktu di form tambah dan edit kegiatan (`tanggal_mulai`, `tanggal_selesai`, `registration_deadline`, `submission_deadline`, `booking_opens_at`, `booking_closes_at`) menggunakan `<input type="datetime-local">` native tanpa paket baru.
+    - Konversi WIB-UTC yang konsisten dipertahankan: input pengguna dalam jam WIB dikonversi ke UTC oleh `App\Support\Wib::keUtc()` saat disimpan, dan data dari server dikirim dalam UTC lalu diformat ke nilai input WIB oleh `keInputWib()` di `waktuWib.js`.
+  - **Aturan Validasi & Pesan Bahasa Indonesia Sisi Klien & Server**:
+    - Waktu selesai harus strictly setelah waktu mulai (`tanggal_selesai` > `tanggal_mulai`). Bila tidak memenuhi, pesan galat: *"Waktu selesai harus setelah waktu mulai."*.
+    - Batas pendaftaran tidak boleh melewati waktu mulai (`registration_deadline` <= `tanggal_mulai`). Bila lewat, pesan galat: *"Batas pendaftaran tidak boleh melewati waktu mulai kegiatan."*.
+    - Jendela booking kursi konsisten dengan aturan `isSeatBookingOpen`: penutupan booking harus setelah pembukaan booking (`booking_closes_at` > `booking_opens_at`). Pesan galat: *"Waktu batas akhir booking kursi harus setelah waktu buka."*.
+    - Pesan galat divalidasi langsung di klien (inline dan penahan submit form) serta ditegakkan ketat di server (`KegiatanController@store`, `@update`, dan `UpdateVenueConfigRequest`).
+  - **Pengisian Otomatis Waktu Selesai (Mulai + 2 Jam)**:
+    - Di sisi klien: saat pengguna mengisi atau mengubah `tanggal_mulai` pada form, jika `tanggal_selesai` masih kosong, sistem otomatis mengisinya dengan waktu `mulai + 2 jam` via fungsi deterministik `tambahDuaJamWib` di `waktuWib.js` (pengguna tetap leluasa mengubahnya).
+    - Di sisi server: pada `KegiatanController@store`, jika `tanggal_selesai` dikirim kosong, sistem otomatis menyimpannya sebagai `tanggal_mulai + 2 jam` dalam UTC.
+  - **Pengujian Fitur**:
+    - Suite `Tests\Feature\TimezoneConsistencyTest` diperluas dengan 5 pengujian baru: auto-fill selesai +2 jam, penolakan selesai <= mulai, penolakan batas pendaftaran > mulai, validasi tanggal update, dan penolakan jendela booking tidak valid. Seluruh 15 tes lulus 100%.
+
 ## Jalur Presensi dan Pemicuan Sertifikat Otomatis
 1. **Rute `/dashboard/absensi` (`DashboardController@storeAbsensi`)**:
    - Jalur presensi mandiri dashboard (bukti kehadiran/swafoto).

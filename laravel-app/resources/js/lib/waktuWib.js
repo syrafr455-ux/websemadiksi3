@@ -56,3 +56,26 @@ export function keInputWib(iso) {
 
     return `${bagian.year}-${bagian.month}-${bagian.day}T${bagian.hour}:${bagian.minute}${detik}`;
 }
+
+/**
+ * Tambah 2 jam pada nilai <input type="datetime-local"> WIB ("YYYY-MM-DDTHH:mm").
+ * Menghasilkan string berformat sama yang dapat diedit langsung oleh pengguna.
+ */
+export function tambahDuaJamWib(input) {
+    if (!input) return '';
+    const match = String(input).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (!match) return '';
+
+    const [, y, m, d, h, min, s] = match;
+    const utc = new Date(Date.UTC(+y, +m - 1, +d, +h + 2, +min, s ? +s : 0));
+    const pad = (n) => String(n).padStart(2, '0');
+
+    const resY = utc.getUTCFullYear();
+    const resM = pad(utc.getUTCMonth() + 1);
+    const resD = pad(utc.getUTCDate());
+    const resH = pad(utc.getUTCHours());
+    const resMin = pad(utc.getUTCMinutes());
+    const resS = s && s !== '00' ? `:${pad(utc.getUTCSeconds())}` : '';
+
+    return `${resY}-${resM}-${resD}T${resH}:${resMin}${resS}`;
+}

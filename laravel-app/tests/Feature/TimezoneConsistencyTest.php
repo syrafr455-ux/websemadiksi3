@@ -362,4 +362,89 @@ class TimezoneConsistencyTest extends TestCase
             ->assertSee('2026, 09:00 WIB')
             ->assertDontSee('15:45 WIB');
     }
+
+    public function test_admin_store_without_selesai_auto_fills_two_hours_after_mulai(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+        $payload = $this->adminPayload([
+            'nama_kegiatan' => 'Workshop Auto Selesai',
+            'tanggal_mulai' => '2026-11-05T09:00',
+            'tanggal_selesai' => '',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.kegiatan.store'), $payload)
+            ->assertRedirect(route('admin.kegiatan'));
+
+        $kegiatan = Kegiatan::where('nama_kegiatan', 'Workshop Auto Selesai')->firstOrFail();
+
+        // Mulai 09:00 WIB = 02:00 UTC. Selesai otomatis 11:00 WIB = 04:00 UTC.
+        $this->assertSame('2026-11-05 02:00:00', $this->rawUtc($kegiatan, 'tanggal_mulai'));
+        $this->assertSame('2026-11-05 04:00:00', $this->rawUtc($kegiatan, 'tanggal_selesai'));
+    }
+
+    public function test_admin_store_rejects_selesai_before_or_equal_to_mulai(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+
+        // Selesai sama dengan mulai
+        $payloadSama = $this->adminPayload([
+            'tanggal_mulai' => '2026-11-01T08:00',
+            'tanggal_selesai' => '2026-11-01T08:00',
+        ]);
+        $this->actingAs($admin)->post(route('admin.kegiatan.store'), $payloadSama)
+            ->assertSessionHasErrors(['tanggal_selesai' => 'Waktu selesai harus setelah waktu mulai.']);
+
+        // Selesai sebelum mulai
+        $payloadSebelum = $this->adminPayload([
+            'tanggal_mulai' => '2026-11-01T08:00',
+            'tanggal_selesai' => '2026-11-01T07:00',
+        ]);
+        $this->actingAs($admin)->post(route('admin.kegiatan.store'), $payloadSebelum)
+            ->assertSessionHasErrors(['tanggal_selesai' => 'Waktu selesai harus setelah waktu mulai.']);
+    }
+
+    public function test_admin_store_rejects_registration_deadline_after_mulai(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+
+        $payload = $this->adminPayload([
+            'tanggal_mulai' => '2026-11-01T08:00',
+            'registration_deadline' => '2026-11-01T08:30',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.kegiatan.store'), $payload)
+            ->assertSessionHasErrors(['registration_deadline' => 'Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.']);
+    }
+
+    public function test_admin_update_validates_selesai_after_mulai_and_registration_deadline(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+        $kegiatan = $this->createKegiatan([
+            'tanggal_mulai' => Wib::keUtc('2026-11-01 08:00'),
+            'tanggal_selesai' => Wib::keUtc('2026-11-01 12:00'),
+        ]);
+
+        // Update selesai sebelum mulai
+        $this->actingAs($admin)->put(route('admin.kegiatan.update', $kegiatan->id), [
+            'tanggal_selesai' => '2026-11-01T07:30',
+        ])->assertSessionHasErrors(['tanggal_selesai' => 'Waktu selesai harus setelah waktu mulai.']);
+
+        // Update registration_deadline lewat dari mulai
+        $this->actingAs($admin)->put(route('admin.kegiatan.update', $kegiatan->id), [
+            'registration_deadline' => '2026-11-01T09:00',
+        ])->assertSessionHasErrors(['registration_deadline' => 'Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.']);
+    }
+
+    public function test_venue_config_rejects_booking_closes_at_before_or_equal_to_opens_at(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+        $kegiatan = $this->createKegiatan();
+
+        $this->actingAs($admin)->put(route('admin.kegiatan.venue-config', $kegiatan->id), [
+            'layout_changed' => false,
+            'is_seat_booking_active' => true,
+            'booking_opens_at' => '2026-10-20T10:00',
+            'booking_closes_at' => '2026-10-20T10:00',
+        ])->assertSessionHasErrors('booking_closes_at');
+    }
 }

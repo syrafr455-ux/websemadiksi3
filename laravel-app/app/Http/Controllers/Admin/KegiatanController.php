@@ -14,9 +14,11 @@ use App\Services\Kegiatan\DenahKursiService;
 use App\Services\Kegiatan\PetaKursiService;
 use App\Services\UnusaFacilityService;
 use App\Support\Wib;
+use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -34,7 +36,7 @@ class KegiatanController extends Controller
      */
     public function index(Request $request): Response
     {
-        \Illuminate\Support\Facades\Gate::authorize('viewAny', Kegiatan::class);
+        Gate::authorize('viewAny', Kegiatan::class);
 
         $query = Kegiatan::query()
             ->withCount(['seats', 'registrations', 'submissions'])
@@ -44,9 +46,9 @@ class KegiatanController extends Controller
             $q = trim($request->input('q'));
             $query->where(function ($w) use ($q) {
                 $w->where('nama_kegiatan', 'ilike', "%{$q}%")
-                  ->orWhere('kategori', 'ilike', "%{$q}%")
-                  ->orWhere('narasumber', 'ilike', "%{$q}%")
-                  ->orWhere('lokasi_nama', 'ilike', "%{$q}%");
+                    ->orWhere('kategori', 'ilike', "%{$q}%")
+                    ->orWhere('narasumber', 'ilike', "%{$q}%")
+                    ->orWhere('lokasi_nama', 'ilike', "%{$q}%");
             });
         }
 
@@ -75,10 +77,22 @@ class KegiatanController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        \Illuminate\Support\Facades\Gate::authorize('create', Kegiatan::class);
+        Gate::authorize('create', Kegiatan::class);
 
         $this->normalizeKegiatanInput($request);
-        $validated = $request->validate($this->kegiatanRules());
+        $validated = $request->validate($this->kegiatanRules(), $this->kegiatanMessages());
+
+        $tanggalMulaiUtc = Wib::keUtc($validated['tanggal_mulai']);
+        $tanggalSelesaiUtc = ! empty($validated['tanggal_selesai'])
+            ? Wib::keUtc($validated['tanggal_selesai'])
+            : $tanggalMulaiUtc->copy()->addHours(2);
+        $registrationDeadlineUtc = Wib::keUtc($validated['registration_deadline'] ?? null);
+
+        if ($registrationDeadlineUtc && $registrationDeadlineUtc->gt($tanggalMulaiUtc)) {
+            throw ValidationException::withMessages([
+                'registration_deadline' => 'Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.',
+            ]);
+        }
 
         $fasilitas = $this->facilityService->pilihanKampus($validated['lokasi_type'], $validated);
 
@@ -105,9 +119,9 @@ class KegiatanController extends Controller
                 'metode_pelaksanaan' => $validated['metode_pelaksanaan'] ?? ($lokasiType === 'online' ? 'online' : 'offline'),
                 'sasaran_peserta' => $validated['sasaran_peserta'] ?? 'umum',
                 // Input jadwal dianggap WIB, disimpan dalam UTC.
-                'tanggal_mulai' => Wib::keUtc($validated['tanggal_mulai']),
-                'tanggal_selesai' => Wib::keUtc($validated['tanggal_selesai'] ?? null),
-                'registration_deadline' => Wib::keUtc($validated['registration_deadline'] ?? null),
+                'tanggal_mulai' => $tanggalMulaiUtc,
+                'tanggal_selesai' => $tanggalSelesaiUtc,
+                'registration_deadline' => $registrationDeadlineUtc,
                 'submission_deadline' => Wib::keUtc($validated['submission_deadline'] ?? null),
                 'lokasi_type' => $lokasiType,
                 ...$fasilitas,
@@ -144,6 +158,7 @@ class KegiatanController extends Controller
             return redirect()->route('admin.kegiatan')->with('success', 'Kegiatan enterprise berhasil diterbitkan.');
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return back()->with('error', 'Gagal membuat kegiatan: '.$e->getMessage())->withInput();
         }
     }
@@ -154,7 +169,7 @@ class KegiatanController extends Controller
     public function show(int $id): Response
     {
         $kegiatan = Kegiatan::findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('update', $kegiatan);
+        Gate::authorize('update', $kegiatan);
 
         $pendaftar = $kegiatan->registrations()
             ->with(['participantUser:id,name,email,nim', 'bookerUser:id,name,email', 'seat:id,seat_code,tier'])
@@ -223,10 +238,10 @@ class KegiatanController extends Controller
     public function update(Request $request, int $id): RedirectResponse
     {
         $kegiatan = Kegiatan::with('seats')->findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('update', $kegiatan);
+        Gate::authorize('update', $kegiatan);
 
         $this->normalizeKegiatanInput($request);
-        $validated = $request->validate($this->kegiatanRules(update: true));
+        $validated = $request->validate($this->kegiatanRules(update: true), $this->kegiatanMessages());
 
         // Hanya field yang benar-benar dikirim yang diubah; field yang tidak dikirim tetap memakai nilai lama.
         $payload = $this->kegiatanUpdatePayload($request, $validated);
@@ -251,8 +266,13 @@ class KegiatanController extends Controller
 
         $mulai = $payload['tanggal_mulai'] ?? $kegiatan->tanggal_mulai;
         $selesai = array_key_exists('tanggal_selesai', $payload) ? $payload['tanggal_selesai'] : $kegiatan->tanggal_selesai;
-        if ($mulai && $selesai && $selesai->lt($mulai)) {
-            throw ValidationException::withMessages(['tanggal_selesai' => 'Waktu selesai harus sama dengan atau setelah waktu mulai.']);
+        if ($mulai && $selesai && $selesai->lte($mulai)) {
+            throw ValidationException::withMessages(['tanggal_selesai' => 'Waktu selesai harus setelah waktu mulai.']);
+        }
+
+        $regDeadline = array_key_exists('registration_deadline', $payload) ? $payload['registration_deadline'] : $kegiatan->registration_deadline;
+        if ($mulai && $regDeadline && $regDeadline->gt($mulai)) {
+            throw ValidationException::withMessages(['registration_deadline' => 'Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.']);
         }
 
         DB::beginTransaction();
@@ -317,6 +337,7 @@ class KegiatanController extends Controller
             throw $e;
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return back()->with('error', 'Gagal memperbarui kegiatan: '.$e->getMessage())->withInput();
         }
     }
@@ -327,7 +348,7 @@ class KegiatanController extends Controller
     public function destroy(int $id): RedirectResponse
     {
         $kegiatan = Kegiatan::findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('delete', $kegiatan);
+        Gate::authorize('delete', $kegiatan);
 
         $hasBooked = $kegiatan->registrations()->exists();
         if ($hasBooked) {
@@ -351,6 +372,7 @@ class KegiatanController extends Controller
             return redirect()->route('admin.kegiatan')->with('success', 'Kegiatan berhasil dihapus.');
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return back()->with('error', 'Gagal menghapus kegiatan: '.$e->getMessage());
         }
     }
@@ -371,8 +393,8 @@ class KegiatanController extends Controller
             'metode_pelaksanaan' => ['nullable', Rule::in(Kegiatan::METODE)],
             'tanggal_mulai' => [...$wajib, 'date'],
             // Saat update, urutan mulai/selesai dicek terhadap nilai efektif (lihat update()).
-            'tanggal_selesai' => $update ? ['nullable', 'date'] : ['nullable', 'date', 'after_or_equal:tanggal_mulai'],
-            'registration_deadline' => ['nullable', 'date'],
+            'tanggal_selesai' => $update ? ['nullable', 'date'] : ['nullable', 'date', 'after:tanggal_mulai'],
+            'registration_deadline' => $update ? ['nullable', 'date'] : ['nullable', 'date', 'before_or_equal:tanggal_mulai'],
             'submission_deadline' => ['nullable', 'date'],
             'lokasi_type' => [...$wajib, Rule::in(Kegiatan::LOKASI_TYPES)],
             // Pilihan fasilitas UNUSA; disimpan hanya untuk lokasi_type = unusa_campus (lihat UnusaFacilityService::pilihanKampus()).
@@ -409,6 +431,19 @@ class KegiatanController extends Controller
             'seat_layout_config.panitia_rows.*' => ['string', 'max:3'],
             'seat_layout_config.blocked_seats' => ['sometimes', 'nullable', 'array'],
             'seat_layout_config.blocked_seats.*' => ['string', 'max:8'],
+        ];
+    }
+
+    /**
+     * Pesan validasi dalam bahasa Indonesia untuk form kegiatan.
+     *
+     * @return array<string, string>
+     */
+    protected function kegiatanMessages(): array
+    {
+        return [
+            'tanggal_selesai.after' => 'Waktu selesai harus setelah waktu mulai.',
+            'registration_deadline.before_or_equal' => 'Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.',
         ];
     }
 
@@ -544,7 +579,7 @@ class KegiatanController extends Controller
      */
     protected function formatChangedValue(mixed $value): mixed
     {
-        if ($value instanceof \Carbon\CarbonInterface) {
+        if ($value instanceof CarbonInterface) {
             return Wib::dari($value)->format('Y-m-d H:i');
         }
 

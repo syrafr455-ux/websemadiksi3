@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { formatWib } from '@/lib/waktuWib';
+import { formatWib, tambahDuaJamWib } from '@/lib/waktuWib';
 import {
     KATEGORI_OPTIONS,
     LOKASI_TYPE_OPTIONS,
@@ -113,6 +113,20 @@ export default function KegiatanIndex({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        clearErrors();
+
+        if (data.tanggal_mulai && data.tanggal_selesai && data.tanggal_selesai <= data.tanggal_mulai) {
+            setError('tanggal_selesai', 'Waktu selesai harus setelah waktu mulai.');
+            setCurrentStep(1);
+            return;
+        }
+
+        if (data.tanggal_mulai && data.registration_deadline && data.registration_deadline > data.tanggal_mulai) {
+            setError('registration_deadline', 'Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.');
+            setCurrentStep(1);
+            return;
+        }
+
         if (editingItem && data.is_seat_booking_active && !(await konfirmasiDenah())) return;
         // Edit dikirim sebagai POST + _method=PUT agar berkas PDF ikut terunggah; error validasi masuk ke `errors`.
         post(editingItem ? `/admin/kegiatan/${editingItem.id}` : '/admin/kegiatan', {
@@ -437,7 +451,14 @@ export default function KegiatanIndex({
                                                     type="datetime-local"
                                                     step="1"
                                                     value={data.tanggal_mulai}
-                                                    onChange={(e) => setData('tanggal_mulai', e.target.value)}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setData((prev) => ({
+                                                            ...prev,
+                                                            tanggal_mulai: val,
+                                                            tanggal_selesai: !prev.tanggal_selesai && val ? tambahDuaJamWib(val) : prev.tanggal_selesai,
+                                                        }));
+                                                    }}
                                                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
                                                     required
                                                 />
@@ -453,6 +474,9 @@ export default function KegiatanIndex({
                                                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
                                                 />
                                                 {errors.tanggal_selesai && <span className="text-[10px] text-rose-400">{errors.tanggal_selesai}</span>}
+                                                {!errors.tanggal_selesai && data.tanggal_mulai && data.tanggal_selesai && data.tanggal_selesai <= data.tanggal_mulai && (
+                                                    <span className="text-[10px] text-rose-400">Waktu selesai harus setelah waktu mulai.</span>
+                                                )}
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-300 mb-1">Batas Pendaftaran (WIB)</label>
@@ -463,6 +487,10 @@ export default function KegiatanIndex({
                                                     onChange={(e) => setData('registration_deadline', e.target.value)}
                                                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
                                                 />
+                                                {errors.registration_deadline && <span className="text-[10px] text-rose-400">{errors.registration_deadline}</span>}
+                                                {!errors.registration_deadline && data.tanggal_mulai && data.registration_deadline && data.registration_deadline > data.tanggal_mulai && (
+                                                    <span className="text-[10px] text-rose-400">Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.</span>
+                                                )}
                                                 <span className="text-[10px] text-slate-500">Kosongkan bila tidak ada batas. Tertutup tepat pada jam ini.</span>
                                             </div>
                                         </div>

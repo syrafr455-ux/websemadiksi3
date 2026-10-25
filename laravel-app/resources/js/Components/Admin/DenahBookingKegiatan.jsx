@@ -59,6 +59,7 @@ export default function DenahBookingKegiatan({ kegiatan, kursi = [], denah = {},
     const [konfirmasi, setKonfirmasi] = useState(null);
     const [pesanTolak, setPesanTolak] = useState(null);
     const [errorPratinjau, setErrorPratinjau] = useState({});
+    const [pesanGalatJadwal, setPesanGalatJadwal] = useState(null);
     const [memproses, setMemproses] = useState(false);
 
     // Setelah tersimpan, server mengirim data terbaru: samakan form dengannya.
@@ -123,6 +124,11 @@ export default function DenahBookingKegiatan({ kegiatan, kursi = [], denah = {},
 
     const simpanJadwal = (e) => {
         e.preventDefault();
+        setPesanGalatJadwal(null);
+        if (jadwal.buka && jadwal.tutup && jadwal.tutup <= jadwal.buka) {
+            setPesanGalatJadwal('Waktu batas akhir booking kursi harus setelah waktu buka.');
+            return;
+        }
         router.put(url, payload(false), opsiKirim);
     };
 
@@ -213,10 +219,10 @@ export default function DenahBookingKegiatan({ kegiatan, kursi = [], denah = {},
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                     <Field label="Buka booking (WIB)" htmlFor="booking-buka" error={errors.booking_opens_at}>
-                        <input id="booking-buka" type="datetime-local" step="1" value={jadwal.buka} onChange={(e) => setJadwal({ ...jadwal, buka: e.target.value })} className={kelasInput} />
+                        <input id="booking-buka" type="datetime-local" step="1" value={jadwal.buka} onChange={(e) => { setPesanGalatJadwal(null); setJadwal({ ...jadwal, buka: e.target.value }); }} className={kelasInput} />
                     </Field>
-                    <Field label="Tutup booking (WIB)" htmlFor="booking-tutup" error={errors.booking_closes_at} bantuan="Tertutup tepat pada jam ini. Kosongkan bila tanpa batas.">
-                        <input id="booking-tutup" type="datetime-local" step="1" value={jadwal.tutup} onChange={(e) => setJadwal({ ...jadwal, tutup: e.target.value })} className={kelasInput} />
+                    <Field label="Tutup booking (WIB)" htmlFor="booking-tutup" error={errors.booking_closes_at || pesanGalatJadwal} bantuan="Tertutup tepat pada jam ini. Kosongkan bila tanpa batas.">
+                        <input id="booking-tutup" type="datetime-local" step="1" value={jadwal.tutup} onChange={(e) => { setPesanGalatJadwal(null); setJadwal({ ...jadwal, tutup: e.target.value }); }} className={kelasInput} />
                     </Field>
                     <label className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 cursor-pointer">
                         <span>
