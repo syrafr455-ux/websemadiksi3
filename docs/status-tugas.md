@@ -252,7 +252,28 @@ Status pelacakan pengerjaan bertahap:
     - Format kode rapi sesuai standar via `php vendor/bin/pint`.
     - `git diff --stat composer.json composer.lock` kosong (tidak ada dependensi composer baru).
 
+- [x] **Bagian 12: Penguncian Presensi Akhir Lewat Pindai QR Layar & Aturan Skrip Sementara**
+  - **Pembuktian Dugaan Masalah**:
+    - Terbukti bahwa rute presensi mandiri lama (`PresensiController@showSelfAttendance` dan `@submitSelfAttendance` pada `/kegiatan/{kegiatan}/presensi` dan `/presensi/{kegiatan}`) sebelumnya dapat dibuka dan dikirim langsung oleh peserta tanpa melewati pendaratan QR layar proyektor.
+    - Pembuktian diawali dengan pengujian yang gagal (`Expected 302 but received 200`) di `PresensiAkhirQrLockTest`.
+  - **Penguncian Akses Sisi Server**:
+    - Tampilan dan pengiriman presensi akhir fase 2 kini diwajibkan memenuhi 3 syarat:
+      1. Sesi presensi akhir dibuka dan dalam jendela aktif (`isPresensiAkhirOpen()`).
+      2. Peserta terdaftar dengan tiket sah (lunas/gratis) dan telah check-in fase 1 (`checked_in`).
+      3. Ada izin sisi server di sesi per kegiatan (`presensi_akhir_unlocked_{id}`) yang dibuat secara eksklusif oleh pendaratan QR layar dengan token HMAC valid (`PresensiScannerController@scanPresensiAkhir`). Izin memiliki masa berlaku 15 menit dan langsung dihapus dari sesi setelah pengiriman presensi tersimpan.
+    - Tanpa izin yang valid, permintaan dialihkan ke `dashboard.kegiatan.saya` dengan flash error: *"Pindai QR di layar acara untuk presensi akhir."*.
+    - Presensi akhir manual oleh super admin tidak terpengaruh dan tetap berfungsi penuh.
+    - Pada modal E-Tiket halaman Kegiatan Saya (`KegiatanSaya.jsx`), ditambahkan banner petunjuk: *"Presensi Akhir Acara: Pindai QR di layar acara untuk presensi akhir dan penerbitan e-sertifikat resmi."*.
+    - **Catatan Pembuatan Sertifikat Otomatis**: Logika penerbitan e-sertifikat resmi masih terpicu secara otomatis oleh rute presensi akhir ini (tahap berikutnya untuk modularisasi/pemisahan alur).
+  - **Aturan Skrip Sementara di CLAUDE.md**:
+    - Menambahkan klausul aturan data di `CLAUDE.md`: skrip sementara seperti `php -r`, `tinker`, dan perintah artisan ad hoc tidak boleh memakai factory atau menulis ke database pengembangan; verifikasi perilaku hanya lewat PHPUnit dengan SQLite in-memory.
+  - **Pengujian & Verifikasi**:
+    - Suite baru `Tests\Feature\PresensiAkhirQrLockTest` (7 tes, 41 assertions) memverifikasi: penolakan tanpa izin QR, keberhasilan via token QR valid, penolakan izin kedaluwarsa / beda kegiatan, penolakan pemakaian ulang (one-time use), penolakan sesi tertutup, penolakan jika belum check-in fase 1 dengan pesan yang sama seperti jalur QR, dan kelancaran presensi manual admin.
+    - Tes lama yang menguji alur presensi mandiri (`TwoPhaseAttendanceAndCertificateTest`, `AlurKegiatanPesertaTest`, `TimezoneConsistencyTest`, `LandingPageCleanupAndAdminStatsTest`, `AdminPresensiAkhirTest`) disesuaikan agar menyimulasikan pendaratan QR yang sah.
+    - Seluruh rangkaian tes PHPUnit lulus 100%.
+
 ## Temuan Belum Ditangani / Catatan
 - Pemasangan paket `phpoffice/phpspreadsheet` dan `openspout/openspout` via Composer dist zipball mengalami kegagalan izin penulisan file sementara pada Windows (`vendor/composer/tmp-*.zip: Permission denied`). Sesuai aturan tugas, berkas composer di-revert bersih dan sistem menggunakan cadangan OpenXML .xlsx engine bawaan PHP (`ZipArchive` + XML) dengan CSV cadangan yang tetap aktif.
-- Seluruh tugas pemindai QR tiket fase 1, sesi presensi akhir fase 2, layar proyektor, batas waktu sesi kios 4 jam, dan verifikasi multi-role telah selesai dikerjakan, diuji, dan diverifikasi end-to-end.
+- Catatan tugas: Pembuatan sertifikat masih terpicu otomatis oleh rute presensi akhir ini (akan ditangani pada tahap berikutnya).
+
 

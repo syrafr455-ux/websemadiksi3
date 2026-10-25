@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AttendanceStatus;
 use App\Enums\KegiatanStatus;
 use App\Enums\UserRole;
 use App\Models\Activity;
@@ -10,13 +11,16 @@ use App\Models\Certificate;
 use App\Models\CustomForm;
 use App\Models\CustomFormSubmission;
 use App\Models\Kegiatan;
+use App\Models\KegiatanRegistration;
 use App\Models\User;
+use App\Services\Kegiatan\PresensiAkhirTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class LandingPageCleanupAndAdminStatsTest extends TestCase
 {
     use RefreshDatabase;
+
     /**
      * 1. Landing page tidak lagi memuat angka statistik dan menu yang dihapus.
      */
@@ -252,7 +256,7 @@ class LandingPageCleanupAndAdminStatsTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Presensi Mandiri');
 
-        // 2. Presensi Kegiatan (Self Attendance)
+        // 2. Presensi Kegiatan (Self Attendance) sesuai aturan dua fase & izin QR
         $kegiatan = Kegiatan::create([
             'nama_kegiatan' => 'Seminar Inovasi Digital',
             'deskripsi' => 'Deskripsi kegiatan seminar.',
@@ -270,9 +274,38 @@ class LandingPageCleanupAndAdminStatsTest extends TestCase
             'status' => KegiatanStatus::Published,
             'is_seat_booking_active' => false,
             'is_submission_active' => false,
+            'presensi_akhir_dibuka' => true,
+            'presensi_akhir_mulai' => now()->subMinutes(15),
+            'presensi_akhir_selesai' => now()->addHours(2),
         ]);
 
-        $responseKegiatan = $this->get(route('presensi.self', $kegiatan->id));
+        $peserta = User::factory()->create([
+            'role' => UserRole::MahasiswaKipk,
+            'name' => 'Peserta Uji',
+            'nim' => '2240021088',
+            'email' => 'pesertauji@unusa.ac.id',
+        ]);
+
+        KegiatanRegistration::create([
+            'kegiatan_id' => $kegiatan->id,
+            'booker_user_id' => $peserta->id,
+            'participant_user_id' => $peserta->id,
+            'nomor_tiket' => 'TKT-LANDING-001',
+            'ticket_code' => 'TKT-LANDING-001',
+            'participant_name' => $peserta->name,
+            'participant_identity' => $peserta->nim,
+            'status_pembayaran' => 'free',
+            'status_kehadiran' => AttendanceStatus::CheckedIn,
+            'checked_in_at' => now()->subMinutes(30),
+        ]);
+
+        $token = app(PresensiAkhirTokenService::class)->generateToken($kegiatan->id);
+        $this->actingAs($peserta)->get(route('kegiatan.presensi-akhir.scan', [
+            'kegiatan' => $kegiatan->id,
+            'token' => $token,
+        ]))->assertRedirect(route('kegiatan.presensi.show', $kegiatan->id));
+
+        $responseKegiatan = $this->actingAs($peserta)->get(route('presensi.self', $kegiatan->id));
         $responseKegiatan->assertStatus(200);
         $responseKegiatan->assertSee('Presensi Mandiri & Tanda Tangan Digital', false);
     }

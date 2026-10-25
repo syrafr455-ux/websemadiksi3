@@ -17,6 +17,7 @@ use App\Models\KegiatanPresensi;
 use App\Models\KegiatanRegistration;
 use App\Models\User;
 use App\Services\CertificateGeneratorService;
+use App\Services\Kegiatan\PresensiAkhirTokenService;
 use App\Support\Wib;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -259,11 +260,28 @@ class TimezoneConsistencyTest extends TestCase
 
     public function test_self_attendance_page_shows_wib_times(): void
     {
-        $kegiatan = $this->createKegiatan();
+        $kegiatan = $this->createKegiatan([
+            'presensi_akhir_dibuka' => true,
+            'presensi_akhir_mulai' => now()->subMinutes(30),
+            'presensi_akhir_selesai' => now()->addHours(2),
+        ]);
         $mahasiswa = $this->createMahasiswa();
+        $reg = $this->createRegistration($kegiatan, $mahasiswa);
+        $reg->update([
+            'status_kehadiran' => AttendanceStatus::CheckedIn,
+            'checked_in_at' => now()->subHour(),
+        ]);
+
+        $token = app(PresensiAkhirTokenService::class)->generateToken($kegiatan->id);
+        $this->actingAs($mahasiswa)->get(route('kegiatan.presensi-akhir.scan', [
+            'kegiatan' => $kegiatan->id,
+            'token' => $token,
+        ]))->assertRedirect(route('kegiatan.presensi.show', $kegiatan->id));
+
         KegiatanPresensi::create([
             'kegiatan_id' => $kegiatan->id,
             'user_id' => $mahasiswa->id,
+            'registration_id' => $reg->id,
             'nama_lengkap' => $mahasiswa->name,
             'nim' => $mahasiswa->nim,
             'prodi' => 'S1 Sistem Informasi',

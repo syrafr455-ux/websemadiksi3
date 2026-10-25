@@ -12,6 +12,7 @@ use App\Models\KegiatanRegistration;
 use App\Models\Sertifikat;
 use App\Models\User;
 use App\Services\CertificateGeneratorService;
+use App\Services\Kegiatan\PresensiAkhirTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -31,7 +32,7 @@ class TwoPhaseAttendanceAndCertificateTest extends TestCase
     protected function createKegiatan(array $attributes = []): Kegiatan
     {
         return Kegiatan::create(array_merge([
-            'nama_kegiatan' => 'Workshop Teknologi Modern ' . Str::random(5),
+            'nama_kegiatan' => 'Workshop Teknologi Modern '.Str::random(5),
             'deskripsi' => 'Deskripsi kegiatan pelatihan dan workshop teknologi.',
             'kategori' => 'workshop',
             'metode_pelaksanaan' => 'offline',
@@ -52,7 +53,7 @@ class TwoPhaseAttendanceAndCertificateTest extends TestCase
 
     protected function createRegistration(Kegiatan $kegiatan, User $user, array $attributes = []): KegiatanRegistration
     {
-        $ticket = $attributes['ticket_code'] ?? $attributes['nomor_tiket'] ?? ('TKT-' . strtoupper(Str::random(8)));
+        $ticket = $attributes['ticket_code'] ?? $attributes['nomor_tiket'] ?? ('TKT-'.strtoupper(Str::random(8)));
 
         return KegiatanRegistration::create(array_merge([
             'kegiatan_id' => $kegiatan->id,
@@ -185,12 +186,28 @@ class TwoPhaseAttendanceAndCertificateTest extends TestCase
     {
         $kegiatan = $this->createKegiatan([
             'nama_kegiatan' => 'Workshop Nasional Kecerdasan Buatan',
+            'presensi_akhir_dibuka' => true,
+            'presensi_akhir_mulai' => now()->subMinutes(10),
+            'presensi_akhir_selesai' => now()->addHour(),
         ]);
         $user = User::factory()->create([
             'name' => 'Ahmad Dahlan',
             'nim' => '2240021055',
             'email' => 'ahmad@unusa.ac.id',
         ]);
+
+        $this->createRegistration($kegiatan, $user, [
+            'status_kehadiran' => AttendanceStatus::CheckedIn,
+            'checked_in_at' => now()->subMinutes(30),
+        ]);
+
+        // Pindai QR layar proyektor untuk mendapatkan izin presensi akhir
+        $token = app(PresensiAkhirTokenService::class)->generateToken($kegiatan->id);
+        $scanResponse = $this->actingAs($user)->get(route('kegiatan.presensi-akhir.scan', [
+            'kegiatan' => $kegiatan->id,
+            'token' => $token,
+        ]));
+        $scanResponse->assertRedirect(route('kegiatan.presensi.show', $kegiatan->id));
 
         // Halaman form presensi terbuka dengan sukses
         $showResponse = $this->actingAs($user)->get(route('kegiatan.presensi.show', $kegiatan->id));
@@ -209,7 +226,7 @@ class TwoPhaseAttendanceAndCertificateTest extends TestCase
             'signature' => $dummyBase64Png,
         ]);
 
-        $submitResponse->assertRedirect();
+        $submitResponse->assertRedirect(route('dashboard.kegiatan.saya'));
 
         // Verifikasi tabel kegiatan_presensi
         $presensi = KegiatanPresensi::where('kegiatan_id', $kegiatan->id)
@@ -244,7 +261,7 @@ class TwoPhaseAttendanceAndCertificateTest extends TestCase
         $kegiatan = $this->createKegiatan(['nama_kegiatan' => 'Seminar Transformasi Digital']);
         $user = User::factory()->create(['name' => 'Siti Fatimah']);
 
-        $service = new CertificateGeneratorService();
+        $service = new CertificateGeneratorService;
         $sertifikat = $service->generate($kegiatan, $user, PeranSertifikat::Peserta);
 
         // Verifikasi via GET /verifikasi?code=...

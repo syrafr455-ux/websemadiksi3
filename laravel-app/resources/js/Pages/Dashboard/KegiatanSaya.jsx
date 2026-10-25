@@ -310,6 +310,17 @@ export default function KegiatanSaya({
                                     </div>
                                 </div>
 
+                                {/* Panduan Presensi Akhir */}
+                                <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-800/50 text-[11px] text-emerald-300 flex items-start gap-2.5">
+                                    <span className="material-symbols-outlined text-emerald-400 text-base shrink-0 mt-0.5">qr_code_scanner</span>
+                                    <div>
+                                        <div className="font-bold text-emerald-200">Presensi Akhir Acara:</div>
+                                        <p className="text-emerald-400/90 mt-0.5 leading-relaxed">
+                                            Pindai QR di layar acara untuk presensi akhir dan penerbitan e-sertifikat resmi.
+                                        </p>
+                                    </div>
+                                </div>
+
                                 {/* Print & Download Action (hidden during print) */}
                                 <div className="pt-3 print:hidden">
                                     <button

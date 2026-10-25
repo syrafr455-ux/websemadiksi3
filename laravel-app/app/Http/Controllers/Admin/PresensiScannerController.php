@@ -544,12 +544,20 @@ class PresensiScannerController extends Controller
             ->exists();
 
         if ($alreadyPresensi) {
+            session()->put("presensi_akhir_unlocked_{$kegiatan->id}", [
+                'kegiatan_id' => $kegiatan->id,
+                'expires_at' => now()->addMinutes(15)->timestamp,
+            ]);
+
             return redirect()->route('kegiatan.presensi.show', $kegiatan->id)
                 ->with('info', 'Anda sudah melakukan presensi akhir untuk kegiatan ini.');
         }
 
-        // Set kunci buka kunci presensi akhir di sesi
-        session()->put("presensi_akhir_unlocked_{$kegiatan->id}", true);
+        // Set kunci buka kunci presensi akhir di sesi (berlaku 15 menit)
+        session()->put("presensi_akhir_unlocked_{$kegiatan->id}", [
+            'kegiatan_id' => $kegiatan->id,
+            'expires_at' => now()->addMinutes(15)->timestamp,
+        ]);
 
         return redirect()->route('kegiatan.presensi.show', $kegiatan->id)
             ->with('success', 'Verifikasi QR presensi akhir berhasil! Silakan bubuhkan tanda tangan digital Anda di bawah ini.');

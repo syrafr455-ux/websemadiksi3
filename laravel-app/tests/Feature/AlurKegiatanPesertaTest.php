@@ -12,6 +12,7 @@ use App\Models\KegiatanRegistration;
 use App\Models\KegiatanSeat;
 use App\Models\Sertifikat;
 use App\Models\User;
+use App\Services\Kegiatan\PresensiAkhirTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -295,7 +296,22 @@ class AlurKegiatanPesertaTest extends TestCase
         $registration->refresh();
         $this->assertEquals(AttendanceStatus::CheckedIn, $registration->status_kehadiran);
 
-        // 6. Presensi akhir fase 2 (self attendance dengan tanda tangan touchscreen)
+        // 6. Presensi akhir fase 2 (pindai QR layar proyektor + self attendance dengan tanda tangan touchscreen)
+        $kegiatan->update([
+            'presensi_akhir_dibuka' => true,
+            'presensi_akhir_mulai' => now()->subMinutes(10),
+            'presensi_akhir_selesai' => now()->addHour(),
+        ]);
+
+        $tokenService = app(PresensiAkhirTokenService::class);
+        $token = $tokenService->generateToken($kegiatan->id);
+
+        $scanResponse = $this->actingAs($peserta)->get(route('kegiatan.presensi-akhir.scan', [
+            'kegiatan' => $kegiatan->id,
+            'token' => $token,
+        ]));
+        $scanResponse->assertRedirect(route('kegiatan.presensi.show', $kegiatan->id));
+
         $dummySignature = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
         $resPresensi = $this->actingAs($peserta)->post(route('kegiatan.presensi.submit', $kegiatan->id), [
             'nama_lengkap' => $peserta->name,

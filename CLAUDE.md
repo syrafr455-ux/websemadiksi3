@@ -36,6 +36,7 @@ Aturan ini berlaku untuk setiap tugas di repo ini.
 - Jangan menjalankan `git checkout`, `git restore`, `git reset`, atau `git clean` yang membuang perubahan.
 - Jangan memasang paket baru (composer maupun npm) tanpa izin.
 - Tes memakai SQLite in-memory (`phpunit.xml`). Jangan arahkan tes ke koneksi lain.
+- Aturan data & skrip sementara: skrip sementara seperti `php -r`, `tinker`, dan perintah artisan ad hoc tidak boleh memakai factory atau menulis ke database pengembangan. Verifikasi perilaku hanya lewat PHPUnit dengan SQLite in-memory.
 - Zona waktu (`laravel-app/`): semua waktu disimpan dalam UTC (`config/app.php` dan koneksi `pgsql` sama-sama UTC). Input dari pengguna dianggap WIB (Asia/Jakarta) dan dikonversi ke UTC saat disimpan dengan `App\Support\Wib::keUtc()`. Saat ditampilkan, waktu dikonversi ke WIB: di PHP/Blade/email dengan `Wib::dari()`, di React dengan `formatWib()`/`keInputWib()` dari `resources/js/lib/waktuWib.js`. Label "WIB" hanya boleh muncul bila nilainya sudah dikonversi. Deadline dan batas tutup bersifat eksklusif: tertutup tepat pada detik batasnya.
 - Satu tugas per giliran. Satu prompt dihitung sebagai satu tugas walaupun berisi beberapa bagian (A, B, C, ...).
 - Untuk tugas besar, tulis rencananya dulu dan tunggu persetujuan sebelum mengedit. Pengecualian: prompt yang bertuliskan "kerjakan sampai selesai" dikerjakan langsung tanpa rencana terpisah dan tanpa menunggu persetujuan di tiap langkah (batasan lain di Aturan Kerja dan di prompt itu tetap berlaku).
