@@ -32,6 +32,8 @@ class KeycloakSsoAndSecurityTest extends TestCase
         Config::set('services.keycloak.client_id', 'simadiksi');
         Config::set('services.keycloak.client_secret', 'secret-keycloak-test');
         Config::set('services.keycloak.redirect', 'http://localhost:8000/auth/login/callback');
+        Config::set('services.keycloak.logout_enabled', false);
+        Config::set('services.keycloak.post_logout_redirect_uri', 'http://localhost:8000/masuk');
     }
 
     public function test_fitur_nonaktif_mengembalikan_404_tanpa_error(): void
@@ -117,7 +119,8 @@ class KeycloakSsoAndSecurityTest extends TestCase
         ])->get('/auth/login/callback?state=valid_state&code=test_code');
 
         $response->assertRedirect(route('login'));
-        $response->assertSessionHasErrors('identity');
+        $response->assertSessionHasErrors('sso');
+        $response->assertSessionDoesntHaveErrors('identity');
         $this->assertGuest();
     }
 
@@ -144,7 +147,8 @@ class KeycloakSsoAndSecurityTest extends TestCase
         ])->get('/auth/login/callback?state=valid_state&code=test_code');
 
         $response->assertRedirect(route('login'));
-        $response->assertSessionHasErrors(['identity' => 'Akun belum terdaftar. Hubungi admin.']);
+        $response->assertSessionHasErrors(['sso' => 'Akun belum terdaftar. Hubungi admin.']);
+        $response->assertSessionDoesntHaveErrors('identity');
         $this->assertGuest();
     }
 
@@ -359,7 +363,8 @@ class KeycloakSsoAndSecurityTest extends TestCase
         ])->get('/auth/login/callback?state=valid_state&code=test_code');
 
         $response->assertRedirect(route('login'));
-        $response->assertSessionHasErrors('identity');
+        $response->assertSessionHasErrors('sso');
+        $response->assertSessionDoesntHaveErrors('identity');
         $this->assertGuest();
     }
 
@@ -442,7 +447,8 @@ class KeycloakSsoAndSecurityTest extends TestCase
         ])->get('/auth/login/callback?state=valid_state&code=test_code');
 
         $response->assertRedirect(route('login'));
-        $response->assertSessionHasErrors('identity');
+        $response->assertSessionHasErrors('sso');
+        $response->assertSessionDoesntHaveErrors('identity');
         $this->assertGuest();
 
         $admin->refresh();

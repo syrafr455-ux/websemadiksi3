@@ -26,6 +26,9 @@ class KeycloakController extends Controller
             abort(404);
         }
 
+        // Menekan tombol SSO membersihkan galat dan isian formulir kata sandi sebelumnya
+        $request->session()->forget(['errors', '_old_input']);
+
         $state = Str::random(40);
         $codeVerifier = Str::random(64);
         $codeChallenge = rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=');
@@ -56,43 +59,57 @@ class KeycloakController extends Controller
         }
 
         if ($request->has('error')) {
+            $request->session()->forget('_old_input');
+
             return redirect()->route('login')->withErrors([
-                'identity' => 'Proses masuk dengan akun UNUSA dibatalkan atau ditolak.',
+                'sso' => 'Proses masuk dengan akun UNUSA dibatalkan atau ditolak.',
             ]);
         }
 
         $code = (string) $request->query('code', '');
         if ($code === '' || empty($codeVerifier)) {
+            $request->session()->forget('_old_input');
+
             return redirect()->route('login')->withErrors([
-                'identity' => 'Otorisasi gagal. Silakan coba kembali.',
+                'sso' => 'Otorisasi gagal. Silakan coba kembali.',
             ]);
         }
 
         $tokenData = $this->keycloak->exchangeCode($code, $codeVerifier);
         if (! $tokenData || empty($tokenData['access_token'])) {
+            $request->session()->forget('_old_input');
+
             return redirect()->route('login')->withErrors([
-                'identity' => 'Gagal memperoleh token akses dari server SSO UNUSA.',
+                'sso' => 'Gagal memperoleh token akses dari server SSO UNUSA.',
             ]);
         }
 
         $userInfo = $this->keycloak->getUserInfo($tokenData['access_token']);
         if (! $userInfo || empty($userInfo['sub'])) {
+            $request->session()->forget('_old_input');
+
             return redirect()->route('login')->withErrors([
-                'identity' => 'Gagal membaca profil pengguna dari server SSO UNUSA.',
+                'sso' => 'Gagal membaca profil pengguna dari server SSO UNUSA.',
             ]);
         }
 
         try {
             $user = $this->keycloak->matchOrCreateUser($userInfo);
         } catch (Exception $e) {
+            $request->session()->forget('_old_input');
+
             return redirect()->route('login')->withErrors([
-                'identity' => $e->getMessage(),
+                'sso' => $e->getMessage(),
             ]);
         }
 
         Auth::login($user);
         $request->session()->regenerate();
         $request->session()->put('auth_via_sso', true);
+
+        if ($this->keycloak->isLogoutEnabled() && ! empty($tokenData['id_token'])) {
+            $request->session()->put('keycloak_id_token', $tokenData['id_token']);
+        }
 
         $user->forceFill([
             'last_login_at' => now(),

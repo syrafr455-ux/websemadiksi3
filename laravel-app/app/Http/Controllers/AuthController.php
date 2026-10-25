@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 class AuthController extends Controller
 {
@@ -174,18 +176,38 @@ class AuthController extends Controller
     /**
      * Log out of the application.
      */
-    public function logout(Request $request): RedirectResponse
+    public function logout(Request $request, KeycloakService $keycloak): RedirectResponse|Response
     {
-        $isAdmin = Auth::check() && Auth::user()->isAdmin();
+        $user = Auth::user();
+        $isStaff = $user && $user->isStaff();
+        $isSso = (bool) $request->session()->get('auth_via_sso', false);
+        $idToken = $request->session()->get('keycloak_id_token');
 
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        if ($isAdmin) {
-            return redirect()->route('admin.login')->with('info', 'Anda telah berhasil keluar dari akun administrator.');
+        if ($isSso && $keycloak->isLogoutEnabled()) {
+            $logoutUrl = $keycloak->getLogoutUrl($idToken);
+
+            if ($request->header('X-Inertia')) {
+                return Inertia::location($logoutUrl);
+            }
+
+            return redirect()->away($logoutUrl);
         }
 
-        return redirect()->route('home')->with('info', 'Anda telah berhasil keluar.');
+        $targetRoute = $isStaff ? route('admin.login') : route('login');
+        $infoMessage = $isStaff
+            ? 'Anda telah berhasil keluar dari akun administrator.'
+            : 'Anda telah berhasil keluar.';
+
+        $request->session()->flash('info', $infoMessage);
+
+        if ($request->header('X-Inertia')) {
+            return Inertia::location($targetRoute);
+        }
+
+        return redirect()->to($targetRoute);
     }
 }

@@ -50,6 +50,8 @@ return [
         'client_id' => env('KEYCLOAK_CLIENT_ID', 'simadiksi'),
         'client_secret' => env('KEYCLOAK_CLIENT_SECRET'),
         'redirect' => env('KEYCLOAK_REDIRECT_URI'),
+        'logout_enabled' => filter_var(env('KEYCLOAK_LOGOUT_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'post_logout_redirect_uri' => env('KEYCLOAK_POST_LOGOUT_REDIRECT_URI'),
     ],
 
 ];

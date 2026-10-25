@@ -94,6 +94,39 @@ class KeycloakService
     }
 
     /**
+     * Memeriksa apakah fitur RP-initiated logout Keycloak diaktifkan.
+     */
+    public function isLogoutEnabled(): bool
+    {
+        return (bool) config('services.keycloak.logout_enabled', false);
+    }
+
+    /**
+     * URL RP-initiated logout Keycloak lewat end_session_endpoint dari discovery OIDC.
+     */
+    public function getLogoutUrl(?string $idToken = null): string
+    {
+        $endpoints = $this->getEndpoints();
+        $endSessionEndpoint = $endpoints['end_session_endpoint'];
+
+        $postLogoutRedirectUri = (string) (config('services.keycloak.post_logout_redirect_uri') ?: route('login'));
+        $clientId = (string) config('services.keycloak.client_id', 'simadiksi');
+
+        $params = [
+            'client_id' => $clientId,
+            'post_logout_redirect_uri' => $postLogoutRedirectUri,
+        ];
+
+        if (! empty($idToken)) {
+            $params['id_token_hint'] = $idToken;
+        }
+
+        $separator = str_contains($endSessionEndpoint, '?') ? '&' : '?';
+
+        return $endSessionEndpoint.$separator.http_build_query($params);
+    }
+
+    /**
      * Tukar authorization code + code verifier ke token endpoint.
      *
      * @return array<string, mixed>|null

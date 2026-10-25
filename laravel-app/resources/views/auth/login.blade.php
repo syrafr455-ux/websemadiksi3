@@ -9,10 +9,20 @@
                 <p class="text-sm text-outline mt-1.5">Gunakan akun UNUSA atau NIM/email yang terdaftar.</p>
             </div>
 
+            @if($errors->has('sso') || session('sso_error'))
+                <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-3 text-sm" role="alert" id="sso-error-banner">
+                    <span class="material-symbols-outlined text-rose-600 text-xl shrink-0 mt-0.5">error</span>
+                    <div class="flex-1 font-medium leading-relaxed">
+                        {{ $errors->first('sso') ?: session('sso_error') }}
+                    </div>
+                </div>
+            @endif
+
             @if(!empty($ssoAktif))
                 <div class="mb-6">
                     <a 
                         href="{{ route('auth.login') }}" 
+                        id="btn-sso-unusa"
                         class="w-full py-3 px-4 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary font-semibold text-sm transition-all flex items-center justify-center gap-2.5 active:scale-[0.99]"
                     >
                         <span class="material-symbols-outlined text-xl">account_circle</span>
@@ -104,15 +114,20 @@
                 </button>
             </form>
 
-            <div class="mt-8 pt-6 border-t border-surface-variant/80 text-center space-y-2 text-xs text-outline">
+            <div class="mt-8 pt-6 border-t border-surface-variant/80 text-center space-y-3 text-xs text-outline">
                 <p>
                     Belum memiliki akun? 
                     <a href="{{ route('register') }}" class="font-semibold text-primary hover:underline">Daftar sekarang</a>
                 </p>
-                <p>
-                    Akses pengurus: 
-                    <a href="{{ route('admin.login') }}" class="font-medium text-on-surface hover:underline">Masuk sebagai staf</a>
-                </p>
+                <div class="pt-1">
+                    <p class="text-xs text-outline">
+                        Akses pengelola (super admin, verifikator, juri): 
+                        <a href="{{ route('admin.login') }}" class="font-semibold text-amber-700 hover:underline inline-flex items-center gap-1">
+                            <span>Masuk sebagai staf</span>
+                            <span class="material-symbols-outlined text-xs">arrow_forward</span>
+                        </a>
+                    </p>
+                </div>
             </div>
         </div>
     </div>
