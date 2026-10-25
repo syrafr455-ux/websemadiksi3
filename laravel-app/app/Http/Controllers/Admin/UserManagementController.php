@@ -11,13 +11,16 @@ use App\Http\Requests\Pengguna\SuperAdminRequest;
 use App\Http\Requests\Pengguna\UserUmumRequest;
 use App\Http\Requests\Pengguna\VerifikatorBerkasRequest;
 use App\Models\AuditLog;
+use App\Models\Fakultas;
 use App\Models\Kegiatan;
+use App\Models\ProgramStudi;
 use App\Models\User;
 use App\Services\Kip\StatusKipService;
 use App\Services\UnusaAcademicService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -29,7 +32,7 @@ class UserManagementController extends Controller
      */
     public function index(Request $request): Response
     {
-        \Illuminate\Support\Facades\Gate::authorize('viewAny', User::class);
+        Gate::authorize('viewAny', User::class);
 
         $query = User::query()
             ->with(['programStudi:id,nama,fakultas_id', 'fakultas:id,nama', 'lombaDinilai:id,nama_kegiatan', 'penerimaKipk', 'klaimKipk'])
@@ -38,15 +41,15 @@ class UserManagementController extends Controller
         // Pencarian case-insensitive (PostgreSQL ILIKE / SQLite LIKE)
         if ($request->filled('q')) {
             $q = trim($request->input('q'));
-            $likeOp = \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $likeOp = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
             $query->where(function ($w) use ($q, $likeOp) {
                 $w->where('name', $likeOp, "%{$q}%")
-                  ->orWhere('email', $likeOp, "%{$q}%")
-                  ->orWhere('nim', $likeOp, "%{$q}%")
-                  ->orWhere('prodi', $likeOp, "%{$q}%")
-                  ->orWhere('asal_kampus', $likeOp, "%{$q}%")
-                  ->orWhere('program_studi_teks', $likeOp, "%{$q}%")
-                  ->orWhere('last_login_ip', $likeOp, "%{$q}%");
+                    ->orWhere('email', $likeOp, "%{$q}%")
+                    ->orWhere('nim', $likeOp, "%{$q}%")
+                    ->orWhere('prodi', $likeOp, "%{$q}%")
+                    ->orWhere('asal_kampus', $likeOp, "%{$q}%")
+                    ->orWhere('program_studi_teks', $likeOp, "%{$q}%")
+                    ->orWhere('last_login_ip', $likeOp, "%{$q}%");
             });
         }
 
@@ -92,7 +95,7 @@ class UserManagementController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        \Illuminate\Support\Facades\Gate::authorize('create', User::class);
+        Gate::authorize('create', User::class);
 
         $request->validate(['role' => ['required', Rule::enum(UserRole::class)]]);
         $roleEnum = UserRole::from($request->input('role'));
@@ -131,7 +134,7 @@ class UserManagementController extends Controller
     public function update(int $id): RedirectResponse
     {
         $user = User::findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('update', $user);
+        Gate::authorize('update', $user);
 
         if ($user->role === UserRole::MahasiswaKipk) {
             return back()->with('error', 'Edit akun Mahasiswa KIP-K belum tersedia di form ini.');
@@ -163,7 +166,7 @@ class UserManagementController extends Controller
     public function statusKip(Request $request, int $id, StatusKipService $statusKip): RedirectResponse
     {
         $user = User::findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('update', $user);
+        Gate::authorize('update', $user);
         abort_unless(in_array($user->role, [UserRole::MahasiswaKipk, UserRole::UserUmum], true), 422, 'Status KIP-K hanya untuk akun mahasiswa.');
 
         $data = $request->validate([
@@ -198,7 +201,7 @@ class UserManagementController extends Controller
     public function akademik(Request $request, int $id): RedirectResponse
     {
         $user = User::findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('update', $user);
+        Gate::authorize('update', $user);
         abort_unless($user->role === UserRole::MahasiswaKipk, 422, 'Fakultas & prodi hanya diatur di sini untuk akun Mahasiswa KIP-K.');
 
         $data = $request->validate([
@@ -218,8 +221,8 @@ class UserManagementController extends Controller
 
         $user->forceFill($baru)->save();
 
-        $nama = fn (array $ids): string => (\App\Models\ProgramStudi::find($ids['program_studi_id'])?->nama ?? '-')
-            .' / '.(\App\Models\Fakultas::find($ids['fakultas_id'])?->nama ?? '-');
+        $nama = fn (array $ids): string => (ProgramStudi::find($ids['program_studi_id'])?->nama ?? '-')
+            .' / '.(Fakultas::find($ids['fakultas_id'])?->nama ?? '-');
         AuditLog::record(
             auth()->id(),
             'update_user_akademik',
@@ -251,7 +254,7 @@ class UserManagementController extends Controller
     public function toggleBlock(int $id): RedirectResponse
     {
         $user = User::findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('toggleBlock', $user);
+        Gate::authorize('toggleBlock', $user);
 
         if ($user->id === auth()->id()) {
             return back()->with('error', 'Anda tidak dapat menonaktifkan akun Anda sendiri.');
@@ -278,7 +281,7 @@ class UserManagementController extends Controller
     public function verify(int $id): RedirectResponse
     {
         $user = User::findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('verify', $user);
+        Gate::authorize('verify', $user);
 
         $user->verification_status = 'Verified';
         $user->save();
@@ -291,5 +294,36 @@ class UserManagementController extends Controller
         );
 
         return back()->with('success', "Akun '{$user->name}' telah berhasil diverifikasi.");
+    }
+
+    /**
+     * Reset 2FA akun pengguna oleh Super Admin (wajib menyertakan alasan).
+     */
+    public function resetTwoFactor(Request $request, int $id): RedirectResponse
+    {
+        $user = User::findOrFail($id);
+        Gate::authorize('update', $user);
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'reason.required' => 'Alasan reset 2FA wajib diisi.',
+            'reason.min' => 'Alasan reset minimal 5 karakter.',
+        ]);
+
+        $user->forceFill([
+            'two_factor_secret' => null,
+            'two_factor_confirmed_at' => null,
+            'two_factor_recovery_codes' => null,
+        ])->save();
+
+        AuditLog::record(
+            auth()->id(),
+            'reset_two_factor',
+            "Mereset autentikasi dua faktor (2FA) akun '{$user->name}' (ID: {$user->id}). Alasan: {$validated['reason']}",
+            $user
+        );
+
+        return back()->with('success', "Autentikasi dua faktor (2FA) akun '{$user->name}' berhasil diatur ulang.");
     }
 }

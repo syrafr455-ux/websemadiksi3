@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureEmailVerifiedForJalurUmum;
 use App\Http\Middleware\EnsureRole;
+use App\Http\Middleware\EnsureTwoFactorAuthenticated;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
@@ -27,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [
             EnsureActiveAccount::class,
+            EnsureTwoFactorAuthenticated::class,
             HandleInertiaRequests::class,
         ]);
 
@@ -36,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => EnsureAdmin::class,
             'role' => EnsureRole::class,
             'email.terverifikasi' => EnsureEmailVerifiedForJalurUmum::class,
+            '2fa' => EnsureTwoFactorAuthenticated::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

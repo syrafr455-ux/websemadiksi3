@@ -80,6 +80,12 @@ class AuthController extends Controller
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
+        if ($user->requiresTwoFactor()) {
+            $request->session()->put('two_factor_required', true);
+
+            return redirect()->route($user->hasEnabledTwoFactor() ? 'two-factor.challenge' : 'two-factor.setup');
+        }
+
         if ($user->isAdmin() || $user->isStaff()) {
             // Halaman pertama di menu admin role ini (verifikator/juri tidak punya akses ke ringkasan utama).
             return redirect()->intended(MenuAdmin::beranda($user) ?? route('admin.dashboard'));
@@ -149,6 +155,12 @@ class AuthController extends Controller
 
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
+
+        if ($user->requiresTwoFactor()) {
+            $request->session()->put('two_factor_required', true);
+
+            return redirect()->route($user->hasEnabledTwoFactor() ? 'two-factor.challenge' : 'two-factor.setup');
+        }
 
         $targetRoute = match ($user->role) {
             UserRole::PenilaiKarya => route('admin.penilaian'),

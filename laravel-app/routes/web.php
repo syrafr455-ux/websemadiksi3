@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\MasterMahasiswaController;
 use App\Http\Controllers\Admin\PenerimaKipkController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Auth\KeycloakController;
+use App\Http\Controllers\Auth\TwoFactorController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CertificateController;
 use App\Http\Controllers\DashboardController;
@@ -85,6 +86,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/email/verifikasi', [VerifikasiEmailController::class, 'pemberitahuan'])->name('verification.notice');
     Route::get('/email/verifikasi/{id}/{hash}', [VerifikasiEmailController::class, 'verifikasi'])->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
     Route::post('/email/verifikasi/kirim-ulang', [VerifikasiEmailController::class, 'kirimUlang'])->middleware('throttle:6,1')->name('verification.send');
+});
+
+// Two-Factor Authentication (2FA) Routes
+Route::middleware('auth')->prefix('two-factor')->name('two-factor.')->group(function () {
+    Route::get('/setup', [TwoFactorController::class, 'setup'])->name('setup');
+    Route::post('/confirm', [TwoFactorController::class, 'confirm'])->name('confirm');
+    Route::get('/recovery-codes', [TwoFactorController::class, 'recoveryCodes'])->name('recovery-codes');
+    Route::get('/challenge', [TwoFactorController::class, 'challenge'])->name('challenge');
+    Route::post('/challenge', [TwoFactorController::class, 'verify'])->name('challenge.verify');
 });
 
 // Authenticated Logout
@@ -170,6 +180,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::match(['post', 'patch'], '/pengguna/{id}/toggle-block', [UserManagementController::class, 'toggleBlock'])->name('users.toggle-block');
         Route::match(['post', 'patch'], '/pengguna/{id}/toggle_block', [UserManagementController::class, 'toggleBlock'])->name('users.toggle_block');
         Route::match(['post', 'patch'], '/pengguna/{id}/verify', [UserManagementController::class, 'verify'])->name('users.verify');
+        Route::post('/pengguna/{id}/reset-2fa', [UserManagementController::class, 'resetTwoFactor'])->whereNumber('id')->name('users.reset-2fa');
 
         // Data Mahasiswa UNUSA (master hasil impor CSV)
         Route::get('/mahasiswa-unusa', [MasterMahasiswaController::class, 'index'])->name('mahasiswa-unusa');

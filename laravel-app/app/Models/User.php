@@ -56,6 +56,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'jalur_pendaftaran',
         'is_unusa',
         'keycloak_sub',
+        'two_factor_secret',
+        'two_factor_confirmed_at',
+        'two_factor_recovery_codes',
     ];
 
     /**
@@ -78,6 +81,8 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $hidden = [
         'password',
         'remember_token',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
     ];
 
     /**
@@ -94,7 +99,29 @@ class User extends Authenticatable implements MustVerifyEmail
             'is_blocked' => 'boolean',
             'is_unusa' => 'boolean',
             'role' => UserRole::class,
+            'two_factor_secret' => 'encrypted',
+            'two_factor_confirmed_at' => 'datetime',
+            'two_factor_recovery_codes' => 'encrypted:array',
         ];
+    }
+
+    /**
+     * Cek apakah role pengguna mewajibkan 2FA saat login kata sandi.
+     */
+    public function requiresTwoFactor(): bool
+    {
+        $roleStr = $this->role instanceof UserRole ? $this->role->value : (string) $this->role;
+        $configuredRoles = (array) config('unusa.two_factor_roles', ['user_umum', 'penilai_karya']);
+
+        return in_array($roleStr, $configuredRoles, true);
+    }
+
+    /**
+     * Cek apakah 2FA sudah aktif dan dikonfirmasi.
+     */
+    public function hasEnabledTwoFactor(): bool
+    {
+        return ! empty($this->two_factor_secret) && ! is_null($this->two_factor_confirmed_at);
     }
 
     /**

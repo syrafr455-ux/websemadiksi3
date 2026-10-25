@@ -92,6 +92,7 @@ class KeycloakController extends Controller
 
         Auth::login($user);
         $request->session()->regenerate();
+        $request->session()->put('auth_via_sso', true);
 
         $user->forceFill([
             'last_login_at' => now(),

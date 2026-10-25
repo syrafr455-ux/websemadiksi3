@@ -145,4 +145,14 @@ return [
         'retry' => 2,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Role Wajib 2FA (Two Factor Authentication) Saat Login Kata Sandi
+    |--------------------------------------------------------------------------
+    |
+    | Login SSO otomatis melewati kewajiban 2FA ini.
+    |
+    */
+    'two_factor_roles' => array_values(array_filter(array_map('trim', explode(',', env('TWO_FACTOR_ROLES', 'user_umum,penilai_karya'))))),
+
 ];
