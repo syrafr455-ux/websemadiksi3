@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AttendanceStatus;
+use App\Enums\GatewayPaymentStatus;
 use App\Enums\KegiatanStatus;
 use App\Enums\RegistrationPaymentStatus;
 use App\Enums\SeatStatus;
@@ -53,7 +54,7 @@ class BookingLifecycleAndVenueTest extends TestCase
     protected function createKegiatanWithSeats(int $rowsCount = 3, int $colsCount = 5): Kegiatan
     {
         $kegiatan = Kegiatan::create([
-            'nama_kegiatan' => 'Seminar Teknologi Nasional ' . Str::random(4),
+            'nama_kegiatan' => 'Seminar Teknologi Nasional '.Str::random(4),
             'deskripsi' => 'Seminar teknologi cloud dan AI.',
             'kategori' => 'seminar',
             'metode_pelaksanaan' => 'offline',
@@ -84,7 +85,7 @@ class BookingLifecycleAndVenueTest extends TestCase
 
         foreach ($rows as $r) {
             for ($c = 1; $c <= $colsCount; $c++) {
-                $seatCode = $r . str_pad((string) $c, 2, '0', STR_PAD_LEFT);
+                $seatCode = $r.str_pad((string) $c, 2, '0', STR_PAD_LEFT);
                 $seats[] = [
                     'kegiatan_id' => $kegiatan->id,
                     'seat_code' => $seatCode,
@@ -433,7 +434,7 @@ class BookingLifecycleAndVenueTest extends TestCase
         $kegiatan = $this->createKegiatanWithSeats(2, 5);
 
         $payment = Payment::create([
-            'order_id' => 'ORDER-' . Str::random(10),
+            'order_id' => 'ORDER-'.Str::random(10),
             'user_id' => $student->id,
             'gross_amount' => 50000,
             'payment_method' => 'QRIS',
@@ -476,7 +477,7 @@ class BookingLifecycleAndVenueTest extends TestCase
         $this->assertSame('TKT-PAID-IMMUTABLE-01', $registration->nomor_tiket);
         $this->assertSame($payment->id, $registration->payment_id);
         $this->assertSame(RegistrationPaymentStatus::Paid, $registration->status_pembayaran);
-        $this->assertSame('settlement', $payment->payment_status instanceof \App\Enums\GatewayPaymentStatus ? $payment->payment_status->value : $payment->payment_status);
+        $this->assertSame('settlement', $payment->payment_status instanceof GatewayPaymentStatus ? $payment->payment_status->value : $payment->payment_status);
     }
 
     /**
@@ -639,7 +640,7 @@ class BookingLifecycleAndVenueTest extends TestCase
         $this->assertStringNotContainsString('Pilih Ulang Kursi Sekarang', $renderedHtml);
 
         // 3. Delegasi mencoba memilih kursi langsung untuk tiketnya (bukan booker) -> DITOLAK
-        $newSeat = $kegiatan->seats()->where('seat_code', 'A02')->first();
+        $newSeat = $kegiatan->seats()->where('seat_code', 'B02')->first();
 
         $responseDelegate = $this->actingAs($delegate)->post(route('kegiatan.reselect-seat', $kegiatan->id), [
             'registration_id' => $regDelegate->id,

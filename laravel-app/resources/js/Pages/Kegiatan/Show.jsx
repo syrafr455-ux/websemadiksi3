@@ -202,7 +202,7 @@ export default function KegiatanShow({
         switch (k.status) {
             case 'tersedia':
                 return {
-                    kelas: k.tier === 'vip' ? GAYA_KURSI.vip : GAYA_KURSI.tersedia,
+                    kelas: GAYA_KURSI.tersedia,
                     status: bisaPilih ? 'tersedia' : 'tersedia, belum bisa dipilih',
                     bisaDipilih: bisaPilih && (
                         mode === 'pilih_ulang'
@@ -214,12 +214,12 @@ export default function KegiatanShow({
                 };
             case 'milik':
                 return { kelas: GAYA_KURSI.milik, status: `kursi Anda/delegasi Anda (${k.pemegang || '-'})`, bisaDipilih: false, isi: '★' };
+            case 'tidak_tersedia':
             case 'panitia':
-                return { kelas: GAYA_KURSI.panitia, status: 'khusus panitia', bisaDipilih: false };
             case 'diblokir':
-                return { kelas: GAYA_KURSI.diblokir, status: 'tidak tersedia', bisaDipilih: false, isi: '×' };
+                return { kelas: GAYA_KURSI.tidak_tersedia, status: 'tidak tersedia', bisaDipilih: false, isi: '×' };
             default:
-                return { kelas: GAYA_KURSI.terisi, status: 'sudah terisi', bisaDipilih: false };
+                return { kelas: GAYA_KURSI.terisi, status: 'tidak tersedia', bisaDipilih: false };
         }
     };
 
@@ -567,12 +567,9 @@ export default function KegiatanShow({
                                     aisleAfterCol={kegiatan.seat_layout_config?.aisle_after_col}
                                     legenda={[
                                         { label: 'Tersedia', kelas: GAYA_KURSI.tersedia },
-                                        { label: 'VIP', kelas: GAYA_KURSI.vip },
                                         { label: 'Pilihan Anda', kelas: GAYA_KURSI.dipilih },
                                         { label: 'Kursi saya / delegasi', kelas: GAYA_KURSI.milik },
-                                        { label: 'Terisi', kelas: GAYA_KURSI.terisi },
-                                        { label: 'Panitia', kelas: GAYA_KURSI.panitia },
-                                        { label: 'Tidak tersedia', kelas: GAYA_KURSI.diblokir },
+                                        { label: 'Tidak tersedia', kelas: GAYA_KURSI.tidak_tersedia },
                                     ]}
                                 />
                             </section>

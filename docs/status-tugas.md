@@ -272,8 +272,56 @@ Status pelacakan pengerjaan bertahap:
     - Tes lama yang menguji alur presensi mandiri (`TwoPhaseAttendanceAndCertificateTest`, `AlurKegiatanPesertaTest`, `TimezoneConsistencyTest`, `LandingPageCleanupAndAdminStatsTest`, `AdminPresensiAkhirTest`) disesuaikan agar menyimulasikan pendaratan QR yang sah.
     - Seluruh rangkaian tes PHPUnit lulus 100%.
 
+- [x] **Bagian 13: Presensi Mandiri Dashboard Hanya untuk Kegiatan yang Diikuti**
+  - **Temuan Jalur Presensi**:
+    - Formulir legacy dashboard `/dashboard/absensi` (`DashboardController@absensi` dan `@storeAbsensi`) menulis ke tabel `kegiatan_presensi` dan memperbarui `kegiatan_registrations.status_kehadiran = 'attended'`. Jalur ini **tidak memicu pembuatan sertifikat otomatis** (sertifikat hanya dipicu oleh `PresensiController@submitSelfAttendance` pada alur presensi akhir ber-QR).
+    - Dropdown agenda sebelumnya mengambil seluruh kegiatan berstatus Published/Ongoing tanpa memfilter kepemilikan registrasi user.
+  - **Penguncian & Validasi Sisi Server**:
+    - Dropdown `/dashboard/absensi` kini hanya memuat kegiatan yang diikuti oleh peserta yang login dengan status pembayaran terkonfirmasi (`isConfirmed()`, Free/Paid), tidak dibatalkan, status Published/Ongoing, dan belum pernah presensi.
+    - Menampilkan *empty state* informatif jika tidak ada kegiatan yang memenuhi syarat: *"Belum ada kegiatan yang sedang membuka presensi untuk Anda"* lengkap dengan tombol tautan ke halaman Kegiatan Saya.
+    - Pada `DashboardController@storeAbsensi`, input `kegiatan_id` dari klien tidak dipercaya: registrasi dicek dari user login. Jika kegiatan tidak diikuti (IDOR), registrasi belum lunas / dibatalkan, kegiatan berstatus draft/cancelled, atau peserta sudah pernah presensi (presensi ganda), server menolak dengan HTTP 403 / 422 dengan pesan bahasa Indonesia yang ramah.
+    - Ditambahkan banner panduan di formulir absensi dashboard bahwa Presensi Akhir Acara wajib melalui pemindaian QR di layar acara.
+  - **Pengujian & Verifikasi**:
+    - Suite `Tests\Feature\AbsensiDashboardPesertaTest` (7 tes, 20 assertions) lulus 100%.
+
+- [x] **Bagian 14: Pembatasan Kursi VIP, Panitia, dan Diblokir untuk Peserta**
+  - **Fungsi Pemeriksa Bersama Sisi Server**:
+    - Menambahkan method pembantu di model `KegiatanSeat`:
+      - `isNonPeserta()`: mengembalikan true jika kursi berstatus Blocked, ber-tier Panitia, atau ber-tier VIP.
+      - `isAvailableForParticipant()`: mengembalikan true hanya jika status Available dan bukan non-peserta (reguler).
+      - `isAvailableForAdmin()`: mengembalikan true jika status Available dan bukan diblokir (VIP dan Panitia diizinkan untuk admin).
+      - `pastikanBisaDipesan(KegiatanSeat $seat, bool $isAdmin = false, string $field = 'seat_id')`: fungsi sentral bersama di dalam transaksi / lock database yang melempar `ValidationException` (HTTP 422) dengan pesan netral bahasa Indonesia: *"Kursi ini tidak tersedia. Silakan pilih kursi lain."* tanpa membocorkan alasan status internalnya.
+    - Seluruh jalur peserta memesan/memindahkan kursi (`KegiatanBookingController@checkout`, `@bookSeats`, `@reselectSeat`) kini menggunakan fungsi sentral ini.
+  - **Pencegahan Kebocoran Data & UI Peserta**:
+    - Pada `PetaKursiService@untukPeserta` dan `@statusRingkas`, kursi VIP, panitia, dan diblokir dipetakan ke status netral `'tidak_tersedia'`, dan properti `tier` diset `null` agar kategori/tier internal tidak bocor ke klien peserta.
+    - Komponen UI `PetaKursi.jsx` dan `Show.jsx`: kursi `tidak_tersedia` dinonaktifkan (`disabled`, `aria-disabled="true"`, `tabIndex="-1"`, tidak bisa difokus atau diklik). Teks 'VIP' dihapus dari aria-label peserta.
+    - Legenda denah peserta disesuaikan: hanya menampilkan 'Tersedia', 'Pilihan Anda', 'Kursi saya / delegasi', dan 'Tidak tersedia'.
+  - **Jalur Admin Tetap Berfungsi**:
+    - Admin (Super Admin) tetap dapat memesankan/menempatkan peserta di kursi VIP maupun Panitia melalui jalur booking admin (`bookSeats` dengan `$isAdmin = true`), dan peta admin (`untukAdmin`) tidak berubah sehingga status asli (`vip`, `panitia`, `blocked`) dan pemegang kursi tetap transparan bagi pengurus.
+  - **Perilaku Registrasi Ber-kursi Eksisting & Kapasitas**:
+    - Registrasi lama yang sudah memegang kursi VIP/panitia tidak diubah datanya.
+    - Pada peta peserta, kursi VIP, panitia, dan diblokir berstatus `tidak_tersedia` sehingga tidak dihitung sebagai kursi yang `'tersedia'`.
+  - **Pengujian & Verifikasi**:
+    - Suite baru `Tests\Feature\SeatNonPesertaRestrictionTest` (8 tes, 53 assertions) memvalidasi seluruh skenario penolakan, netralitas pesan, pencegahan kebocoran payload, kapasitas denah peserta, penempatan oleh admin, dan proteksi balapan (race condition).
+    - Seluruh rangkaian pengujian sistem `php artisan test` (**403 tes, 3295 assertions**) lulus 100%.
+
+## Jalur Presensi dan Pemicuan Sertifikat Otomatis
+1. **Rute `/dashboard/absensi` (`DashboardController@storeAbsensi`)**:
+   - Jalur presensi mandiri dashboard (bukti kehadiran/swafoto).
+   - Menulis ke tabel: `kegiatan_presensi`, memperbarui status kehadiran di `kegiatan_registrations`.
+   - **TIDAK** memicu pembuatan sertifikat otomatis.
+2. **Rute `/kegiatan/{kegiatan}/presensi` dan `/presensi/{kegiatan}` (`PresensiController@submitSelfAttendance`)**:
+   - Jalur presensi akhir fase 2 setelah sesi acara berakhir.
+   - Menulis ke tabel: `kegiatan_presensi`, `kegiatan_registrations`, dan **YA** menerbitkan sertifikat di tabel `sertifikat`.
+   - Jalur ini **SUDAH** dikunci rapat oleh gerbang izin QR layar acara (`presensi_akhir_unlocked_{id}`) dengan masa berlaku 15 menit dan sekali pakai (one-time use).
+3. **Rute `/kegiatan/{kegiatan}/presensi-akhir` (`PresensiScannerController@scanPresensiAkhir`)**:
+   - Pendaratan pemindaian QR proyektor layar acara.
+   - Menulis ke sesi browser: `presensi_akhir_unlocked_{kegiatan_id}` selama 15 menit.
+   - **TIDAK** memicu pembuatan sertifikat secara langsung.
+
 ## Temuan Belum Ditangani / Catatan
 - Pemasangan paket `phpoffice/phpspreadsheet` dan `openspout/openspout` via Composer dist zipball mengalami kegagalan izin penulisan file sementara pada Windows (`vendor/composer/tmp-*.zip: Permission denied`). Sesuai aturan tugas, berkas composer di-revert bersih dan sistem menggunakan cadangan OpenXML .xlsx engine bawaan PHP (`ZipArchive` + XML) dengan CSV cadangan yang tetap aktif.
-- Catatan tugas: Pembuatan sertifikat masih terpicu otomatis oleh rute presensi akhir ini (akan ditangani pada tahap berikutnya).
+- Catatan tugas: Pembuatan sertifikat masih terpicu otomatis oleh rute presensi akhir `PresensiController@submitSelfAttendance` (akan ditangani pada tahap berikutnya).
+
 
 

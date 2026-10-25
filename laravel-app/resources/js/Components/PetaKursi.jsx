@@ -66,10 +66,11 @@ export default function PetaKursi({
                 data-kursi-id={k.id}
                 data-kursi-kode={k.kode}
                 data-kursi-status={k.status}
-                tabIndex={k.id === idTab ? 0 : -1}
-                aria-label={`Kursi ${k.kode}, ${t.status}${k.tier === 'vip' ? ', VIP' : ''}${label ? `, dipilih untuk ${label}` : ''}`}
+                tabIndex={t.bisaDipilih && k.id === idTab ? 0 : -1}
+                aria-label={`Kursi ${k.kode}, ${t.status}${label ? `, dipilih untuk ${label}` : ''}`}
                 aria-pressed={label ? true : undefined}
                 aria-disabled={!t.bisaDipilih}
+                disabled={!t.bisaDipilih}
                 onClick={() => {
                     setSorot(k);
                     setFokusId(k.id);
@@ -78,7 +79,7 @@ export default function PetaKursi({
                 onKeyDown={(e) => pindahFokus(e, k)}
                 onMouseEnter={() => setSorot(k)}
                 onFocus={() => setSorot(k)}
-                className={`w-10 h-10 sm:w-8 sm:h-8 shrink-0 rounded-lg border text-[11px] sm:text-[10px] font-bold flex items-center justify-center transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${kelas} ${t.bisaDipilih ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                className={`w-10 h-10 sm:w-8 sm:h-8 shrink-0 rounded-lg border text-[11px] sm:text-[10px] font-bold flex items-center justify-center transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${kelas} ${t.bisaDipilih ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
             >
                 {label || t.isi || k.kolom}
             </button>

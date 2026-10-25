@@ -32,6 +32,7 @@ export const GAYA_KURSI = {
     panitia: 'bg-violet-500/20 border-violet-400/60 text-violet-200',
     terisi: 'bg-rose-500/30 border-rose-500/60 text-rose-100',
     diblokir: 'bg-slate-800 border-slate-600 text-slate-500 line-through',
+    tidak_tersedia: 'bg-slate-800/80 border-slate-700 text-slate-500 cursor-not-allowed',
     milik: 'bg-sky-500/30 border-sky-400 text-sky-100',
     dipilih: 'bg-sky-500 border-sky-200 text-white ring-2 ring-sky-300',
     pilihUlang: 'bg-amber-400/20 border-amber-300 text-amber-100 border-dashed',
@@ -45,7 +46,7 @@ export function daftarDariTeks(teks) {
 export const kodeKursi = (baris, kolom) => `${baris}${String(kolom).padStart(2, '0')}`;
 
 /** Kapasitas kursi peserta (sama dengan DenahKursiService::kapasitas). */
-export function kapasitasDenah({ rows = [], cols_per_row: kolom = 0, panitia_rows: panitia = [], blocked_seats: blokir = [] }) {
+export function kapasitasDenah({ rows = [], cols_per_row: kolom = 0, panitia_rows: panitia = [], vip_rows: vip = [], blocked_seats: blokir = [] }) {
     let jumlah = 0;
     rows.filter((b) => !panitia.includes(b)).forEach((baris) => {
         for (let k = 1; k <= kolom; k++) {

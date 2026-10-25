@@ -46,10 +46,8 @@ class KursiPesertaTest extends TestCase
             'is_seat_booking_active' => true, 'booking_opens_at' => now()->subDay(), 'booking_closes_at' => now()->addDays(3),
         ]);
         $this->kegiatan->update(['seat_layout_config' => app(DenahKursiService::class)->buat($this->kegiatan, [
-            'rows' => ['A', 'B'], 'cols_per_row' => 4, 'vip_rows' => ['A'], 'panitia_rows' => ['B'], 'blocked_seats' => ['A04'],
+            'rows' => ['A', 'B', 'C'], 'cols_per_row' => 4, 'vip_rows' => ['A'], 'panitia_rows' => ['C'], 'blocked_seats' => ['A04'],
         ])]);
-        // B: baris panitia; buka B01 & B02 sebagai kursi biasa untuk peserta.
-        $this->kegiatan->seats()->whereIn('seat_code', ['B01', 'B02'])->update(['status' => SeatStatus::Available->value]);
 
         $this->budi = User::factory()->mahasiswaKipk()->create(['name' => 'Budi Pemesan', 'email' => 'budi@gmail.com']);
         $this->rina = User::factory()->userUmum()->create(['name' => 'Rina Delegasi', 'email' => 'rina@gmail.com']);
@@ -104,10 +102,10 @@ class KursiPesertaTest extends TestCase
         $this->assertSame(['milik', 'Budi Pemesan'], [$kursi['A01']['status'], $kursi['A01']['pemegang']]);
         $this->assertSame(['milik', 'Rina Delegasi'], [$kursi['A02']['status'], $kursi['A02']['pemegang']], 'Kursi delegasi ditandai milik pemesan.');
         $this->assertSame(['terisi', null], [$kursi['A03']['status'], $kursi['A03']['pemegang']]);
-        $this->assertSame('diblokir', $kursi['A04']['status']);
+        $this->assertSame('tidak_tersedia', $kursi['A04']['status']);
         $this->assertSame('tersedia', $kursi['B01']['status']);
-        $this->assertSame('panitia', $kursi['B03']['status']);
-        $this->assertSame('vip', $kursi['A01']['tier']);
+        $this->assertSame('tidak_tersedia', $kursi['C01']['status']);
+        $this->assertNull($kursi['A01']['tier'], 'Tier kursi tidak dibocorkan ke peserta.');
         $this->assertStringNotContainsString('Orang Lain Rahasia', $respons->getContent());
 
         // Delegasi melihat kursinya sendiri sebagai milik; kursi pemesannya tidak.
@@ -147,44 +145,44 @@ class KursiPesertaTest extends TestCase
     public function test_checkout_with_seats_for_self_and_delegate(): void
     {
         $this->actingAs($this->budi)->post(route('kegiatan.checkout', $this->kegiatan->id), ['delegates' => [
-            ['name' => 'Budi Pemesan', 'email' => 'budi@gmail.com', 'seat_id' => $this->kursi('A01')->id],
-            ['name' => 'Rina Delegasi', 'email' => 'rina@gmail.com', 'seat_id' => $this->kursi('B01')->id],
+            ['name' => 'Budi Pemesan', 'email' => 'budi@gmail.com', 'seat_id' => $this->kursi('B01')->id],
+            ['name' => 'Rina Delegasi', 'email' => 'rina@gmail.com', 'seat_id' => $this->kursi('B02')->id],
         ]])->assertRedirect(route('dashboard.kegiatan.saya'))->assertSessionHasNoErrors();
 
-        $this->assertSame(SeatStatus::Booked, $this->kursi('A01')->status);
         $this->assertSame(SeatStatus::Booked, $this->kursi('B01')->status);
-        $rina = KegiatanRegistration::where('seat_id', $this->kursi('B01')->id)->firstOrFail();
+        $this->assertSame(SeatStatus::Booked, $this->kursi('B02')->status);
+        $rina = KegiatanRegistration::where('seat_id', $this->kursi('B02')->id)->firstOrFail();
         $this->assertSame([$this->budi->id, $this->rina->id], [$rina->booker_user_id, $rina->participant_user_id]);
     }
 
     public function test_taken_seat_is_rejected_per_participant_and_other_choices_stay_untouched(): void
     {
-        $this->pesan('B01', $this->lain, $this->lain, 'Orang Lain Rahasia');
+        $this->pesan('B02', $this->lain, $this->lain, 'Orang Lain Rahasia');
 
         $respons = $this->actingAs($this->budi)->post(route('kegiatan.checkout', $this->kegiatan->id), ['delegates' => [
-            ['name' => 'Budi Pemesan', 'email' => 'budi@gmail.com', 'seat_id' => $this->kursi('A01')->id],
-            ['name' => 'Rina Delegasi', 'email' => 'rina@gmail.com', 'seat_id' => $this->kursi('B01')->id],
+            ['name' => 'Budi Pemesan', 'email' => 'budi@gmail.com', 'seat_id' => $this->kursi('B01')->id],
+            ['name' => 'Rina Delegasi', 'email' => 'rina@gmail.com', 'seat_id' => $this->kursi('B02')->id],
         ]]);
 
-        $respons->assertSessionHasErrors(['delegates.1.seat_id' => 'Kursi B01 baru saja diambil atau tidak tersedia. Silakan pilih kursi lain.']);
+        $respons->assertSessionHasErrors(['delegates.1.seat_id' => 'Kursi ini tidak tersedia. Silakan pilih kursi lain.']);
         $respons->assertSessionDoesntHaveErrors('delegates.0.seat_id');
-        $this->assertSame(SeatStatus::Available, $this->kursi('A01')->status, 'Seluruh pemesanan dibatalkan; kursi A01 tetap tersedia untuk dipilih lagi.');
+        $this->assertSame(SeatStatus::Available, $this->kursi('B01')->status, 'Seluruh pemesanan dibatalkan; kursi B01 tetap tersedia untuk dipilih lagi.');
         $this->assertSame(0, KegiatanRegistration::where('booker_user_id', $this->budi->id)->count());
     }
 
     public function test_seat_event_requires_a_distinct_seat_per_participant(): void
     {
         $this->actingAs($this->budi)->post(route('kegiatan.checkout', $this->kegiatan->id), ['delegates' => [
-            ['name' => 'Budi Pemesan', 'email' => 'budi@gmail.com', 'seat_id' => $this->kursi('A01')->id],
+            ['name' => 'Budi Pemesan', 'email' => 'budi@gmail.com', 'seat_id' => $this->kursi('B01')->id],
             ['name' => 'Rina Delegasi', 'email' => 'rina@gmail.com'],
         ]])->assertSessionHasErrors(['delegates.1.seat_id' => 'Pilih kursi untuk peserta ke-2.']);
 
         $this->actingAs($this->budi)->post(route('kegiatan.checkout', $this->kegiatan->id), ['delegates' => [
-            ['name' => 'Budi Pemesan', 'email' => 'budi@gmail.com', 'seat_id' => $this->kursi('A01')->id],
-            ['name' => 'Rina Delegasi', 'email' => 'rina@gmail.com', 'seat_id' => $this->kursi('A01')->id],
+            ['name' => 'Budi Pemesan', 'email' => 'budi@gmail.com', 'seat_id' => $this->kursi('B01')->id],
+            ['name' => 'Rina Delegasi', 'email' => 'rina@gmail.com', 'seat_id' => $this->kursi('B01')->id],
         ]])->assertSessionHasErrors(['delegates.1.seat_id' => 'Satu kursi hanya untuk satu peserta.']);
 
-        $this->assertSame(SeatStatus::Available, $this->kursi('A01')->status);
+        $this->assertSame(SeatStatus::Available, $this->kursi('B01')->status);
     }
 
     public function test_reselection_link_from_email_opens_the_flow_and_booker_reselects_for_delegate(): void
@@ -230,18 +228,18 @@ class KursiPesertaTest extends TestCase
 
         // Kursi yang sudah diambil ditolak dengan pesan jelas; registrasi tetap menunggu.
         $this->actingAs($this->budi)->post(route('kegiatan.reselect-seat', $this->kegiatan->id), ['registration_id' => $milikBudi->id, 'seat_id' => $this->kursi('B02')->id])
-            ->assertSessionHasErrors(['seat_id' => 'Kursi B02 tidak tersedia atau baru saja diambil. Silakan pilih kursi lain.']);
+            ->assertSessionHasErrors(['seat_id' => 'Kursi ini tidak tersedia. Silakan pilih kursi lain.']);
         $this->assertTrue($milikBudi->fresh()->needs_seat_reselection);
 
         // Registrasi terakhir -> selesai, ke Kegiatan Saya.
-        $this->actingAs($this->budi)->post(route('kegiatan.reselect-seat', $this->kegiatan->id), ['registration_id' => $milikBudi->id, 'seat_id' => $this->kursi('A02')->id])
+        $this->actingAs($this->budi)->post(route('kegiatan.reselect-seat', $this->kegiatan->id), ['registration_id' => $milikBudi->id, 'seat_id' => $this->kursi('B03')->id])
             ->assertRedirect(route('dashboard.kegiatan.saya'));
         $this->assertFalse($milikBudi->fresh()->needs_seat_reselection);
 
         // Registrasi yang tidak sedang menunggu kursi baru tidak bisa pindah kursi lewat jalur ini.
-        $this->actingAs($this->budi)->post(route('kegiatan.reselect-seat', $this->kegiatan->id), ['registration_id' => $milikBudi->id, 'seat_id' => $this->kursi('A03')->id])
+        $this->actingAs($this->budi)->post(route('kegiatan.reselect-seat', $this->kegiatan->id), ['registration_id' => $milikBudi->id, 'seat_id' => $this->kursi('B04')->id])
             ->assertSessionHas('error', 'Registrasi ini tidak sedang menunggu pemilihan ulang kursi.');
-        $this->assertSame($this->kursi('A02')->id, $milikBudi->fresh()->seat_id);
+        $this->assertSame($this->kursi('B03')->id, $milikBudi->fresh()->seat_id);
     }
 
     public function test_reselection_is_rejected_outside_the_booking_window(): void

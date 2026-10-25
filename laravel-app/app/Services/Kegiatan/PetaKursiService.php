@@ -25,6 +25,8 @@ class PetaKursiService
 
     public const MILIK = 'milik';
 
+    public const TIDAK_TERSEDIA = 'tidak_tersedia';
+
     /**
      * Kursi berurutan sesuai urutan baris di denah, lalu nomor kolom.
      *
@@ -61,7 +63,7 @@ class PetaKursiService
             $reg = $pemegang->get($seat->id);
 
             return [
-                ...$this->dasar($seat),
+                ...$this->dasar($seat, false),
                 'status' => $seat->status?->value,
                 'pemegang' => $reg?->ticket_holder_name,
                 'tiket' => $reg?->nomor_tiket,
@@ -72,6 +74,7 @@ class PetaKursiService
     /**
      * Peta untuk peserta/tamu: status disederhanakan; kursi milik $user (sebagai pemesan atau peserta)
      * ditandai "milik" beserta nama peserta di registrasi itu. Pemegang kursi lain tidak disebutkan.
+     * Kursi non-peserta (VIP, Panitia, Diblokir) bertatus 'tidak_tersedia' tanpa membocorkan kategori/tier.
      *
      * @return list<array<string, mixed>>
      */
@@ -80,8 +83,8 @@ class PetaKursiService
         $milik = $this->kursiMilik($kegiatan, $user);
 
         return $this->kursiTerurut($kegiatan)->map(fn (KegiatanSeat $seat) => [
-            ...$this->dasar($seat),
-            'status' => isset($milik[$seat->id]) ? self::MILIK : $this->statusPeserta($seat->status),
+            ...$this->dasar($seat, true),
+            'status' => isset($milik[$seat->id]) ? self::MILIK : $this->statusPeserta($seat),
             'pemegang' => $milik[$seat->id] ?? null,
         ])->all();
     }
@@ -95,12 +98,12 @@ class PetaKursiService
     {
         $milik = $this->kursiMilik($kegiatan, $user);
 
-        return $kegiatan->seats()->get(['id', 'status'])->map(function (KegiatanSeat $seat) use ($milik) {
+        return $kegiatan->seats()->get(['id', 'status', 'tier'])->map(function (KegiatanSeat $seat) use ($milik) {
             if (isset($milik[$seat->id])) {
                 return ['id' => $seat->id, 'status' => self::MILIK, 'pemegang' => $milik[$seat->id]];
             }
 
-            return ['id' => $seat->id, 'status' => $this->statusPeserta($seat->status)];
+            return ['id' => $seat->id, 'status' => $this->statusPeserta($seat)];
         })->values()->all();
     }
 
@@ -125,27 +128,30 @@ class PetaKursiService
             ->all();
     }
 
-    protected function statusPeserta(?SeatStatus $status): string
+    public function statusPeserta(KegiatanSeat $seat): string
     {
-        return match ($status) {
-            SeatStatus::Available => self::TERSEDIA,
-            SeatStatus::ReservedPanitia => self::PANITIA,
-            SeatStatus::Blocked => self::DIBLOKIR,
-            default => self::TERISI,
-        };
+        if ($seat->status === SeatStatus::Booked) {
+            return self::TERISI;
+        }
+
+        if ($seat->isAvailableForParticipant()) {
+            return self::TERSEDIA;
+        }
+
+        return self::TIDAK_TERSEDIA;
     }
 
     /**
      * @return array{id: int, kode: string, baris: string, kolom: int, tier: string|null}
      */
-    protected function dasar(KegiatanSeat $seat): array
+    protected function dasar(KegiatanSeat $seat, bool $isParticipant = false): array
     {
         return [
             'id' => $seat->id,
             'kode' => $seat->seat_code,
             'baris' => $seat->row_label,
             'kolom' => (int) $seat->col_number,
-            'tier' => $seat->tier?->value,
+            'tier' => $isParticipant ? null : $seat->tier?->value,
         ];
     }
 }

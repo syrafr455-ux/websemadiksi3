@@ -21,7 +21,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -212,6 +211,7 @@ class KegiatanBookingController extends Controller
             if ($kegiatan->hasSeatLayout()) {
                 if (! $kegiatan->isSeatBookingOpen()) {
                     DB::rollBack();
+
                     return back()->with('error', 'Pemilihan kursi untuk kegiatan ini sedang ditutup atau berada di luar jadwal booking.');
                 }
 
@@ -229,6 +229,7 @@ class KegiatanBookingController extends Controller
                 }
                 if ($errorKursi !== []) {
                     DB::rollBack();
+
                     return back()->withErrors($errorKursi)->with('error', reset($errorKursi));
                 }
             }
@@ -252,13 +253,18 @@ class KegiatanBookingController extends Controller
                     $seat = $lockedSeats[$sId] ?? null;
                     if (! $seat) {
                         $bentrok["delegates.{$i}.seat_id"] = 'Kursi yang dipilih tidak valid.';
-                    } elseif ($seat->status !== SeatStatus::Available) {
-                        $bentrok["delegates.{$i}.seat_id"] = "Kursi {$seat->seat_code} baru saja diambil atau tidak tersedia. Silakan pilih kursi lain.";
+                    } else {
+                        try {
+                            KegiatanSeat::pastikanBisaDipesan($seat, false, "delegates.{$i}.seat_id");
+                        } catch (ValidationException $e) {
+                            $bentrok["delegates.{$i}.seat_id"] = $e->validator->errors()->first("delegates.{$i}.seat_id");
+                        }
                     }
                 }
 
                 if ($bentrok !== []) {
                     DB::rollBack();
+
                     return back()->withErrors($bentrok)->with('error', implode(' ', array_unique($bentrok)));
                 }
             }
@@ -301,6 +307,7 @@ class KegiatanBookingController extends Controller
 
                     if ($alreadyReg) {
                         DB::rollBack();
+
                         return back()->with('error', "Peserta {$delegate['name']} sudah terdaftar pada kegiatan ini.");
                     }
                 }
@@ -372,6 +379,7 @@ class KegiatanBookingController extends Controller
             return redirect()->route('dashboard.kegiatan.saya')->with('success', 'Pemesanan berhasil dibuat! Silakan selesaikan pembayaran sebelum batas waktu.');
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return back()->with('error', 'Terjadi kesalahan saat memproses pendaftaran: '.$e->getMessage())->withInput();
         }
     }
@@ -421,11 +429,13 @@ class KegiatanBookingController extends Controller
 
             if (! $registration || (int) $registration->booker_user_id !== (int) $user->id) {
                 DB::rollBack();
+
                 return back()->with('error', 'Registrasi tidak valid atau Anda bukan pemesan tiket/delegasi ini.');
             }
 
             if (! $registration->needs_seat_reselection || ! in_array($registration->status_pembayaran?->value, RegistrationPaymentStatus::activeValues(), true)) {
                 DB::rollBack();
+
                 return back()->with('error', 'Registrasi ini tidak sedang menunggu pemilihan ulang kursi.');
             }
 
@@ -436,13 +446,16 @@ class KegiatanBookingController extends Controller
 
             if (! $seat || (int) $seat->kegiatan_id !== (int) $kegiatan->id) {
                 DB::rollBack();
+
                 return back()->with('error', 'Kursi yang dipilih tidak valid atau berasal dari kegiatan lain.');
             }
 
-            // 3. Revisi 5: Validasi status kursi harus Available (tolak kursi tidak available)
-            if ($seat->status !== SeatStatus::Available) {
+            // 3. Revisi 5: Validasi status kursi (harus sah dan tersedia untuk peserta)
+            try {
+                KegiatanSeat::pastikanBisaDipesan($seat, false, 'seat_id');
+            } catch (ValidationException $e) {
                 DB::rollBack();
-                $pesan = "Kursi {$seat->seat_code} tidak tersedia atau baru saja diambil. Silakan pilih kursi lain.";
+                $pesan = $e->validator->errors()->first('seat_id');
 
                 return back()->withErrors(['seat_id' => $pesan])->with('error', $pesan);
             }
@@ -479,6 +492,7 @@ class KegiatanBookingController extends Controller
             return redirect()->route('dashboard.kegiatan.saya')->with('success', 'Kursi berhasil dipilih kembali. Selamat menikmati kegiatan!');
         } catch (\Throwable $e) {
             DB::rollBack();
+
             return back()->with('error', 'Gagal memilih ulang kursi: '.$e->getMessage());
         }
     }
@@ -519,7 +533,7 @@ class KegiatanBookingController extends Controller
             ->where(function ($q) use ($user) {
                 // Jangan sertakan registrasi atas nama diri sendiri dalam daftar cari teman
                 $q->where('participant_user_id', '!=', $user->id)
-                  ->orWhereNull('participant_user_id');
+                    ->orWhereNull('participant_user_id');
             });
 
         if ($request->filled('search')) {
@@ -639,36 +653,43 @@ class KegiatanBookingController extends Controller
                 $reg = $lockedRegistrations->get($regId);
                 if (! $reg) {
                     $errors["allocations.{$index}.registration_id"] = 'Peserta tidak ditemukan atau belum terdaftar pada kegiatan ini.';
+
                     continue;
                 }
 
                 // Syarat: User B sudah terdaftar secara resmi (status pembayaran valid/lunas/gratis)
                 if (! in_array($reg->status_pembayaran?->value, [RegistrationPaymentStatus::Free->value, RegistrationPaymentStatus::Paid->value], true)) {
                     $errors["allocations.{$index}.registration_id"] = "Pendaftaran untuk peserta {$reg->ticket_holder_name} belum lunas atau tidak aktif.";
+
                     continue;
                 }
 
                 // Syarat: User B saat ini BELUM memiliki kursi (seat_id IS NULL atau needs_seat_reselection = true)
                 if ($reg->seat_id !== null && ! $reg->needs_seat_reselection) {
                     $errors["allocations.{$index}.registration_id"] = "Peserta {$reg->ticket_holder_name} sudah memiliki kursi.";
+
                     continue;
                 }
 
                 $seat = $lockedSeats->get($sId);
                 if (! $seat) {
                     $errors["allocations.{$index}.seat_id"] = 'Kursi yang dipilih tidak valid atau berada pada koordinat gang.';
+
                     continue;
                 }
 
-                // Pastikan kursi berstatus available (bukan panitia, VIP tertutup, atau terisi)
-                if ($seat->status !== SeatStatus::Available) {
-                    $errors["allocations.{$index}.seat_id"] = "Kursi {$seat->seat_code} tidak tersedia atau baru saja diambil oleh peserta lain. Silakan pilih kursi lain.";
+                // Pastikan kursi sah dan tersedia (peserta dilarang memesan VIP/Panitia/Diblokir)
+                $isAdmin = ($user->role === UserRole::SuperAdmin);
+                try {
+                    KegiatanSeat::pastikanBisaDipesan($seat, $isAdmin, "allocations.{$index}.seat_id");
+                } catch (ValidationException $e) {
+                    $errors["allocations.{$index}.seat_id"] = $e->validator->errors()->first("allocations.{$index}.seat_id");
+
                     continue;
                 }
             }
 
             if ($errors !== []) {
-                DB::rollBack();
                 throw ValidationException::withMessages($errors);
             }
 
