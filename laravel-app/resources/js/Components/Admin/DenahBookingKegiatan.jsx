@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { router, usePage } from '@inertiajs/react';
 import PetaKursi from '@/Components/PetaKursi';
+import InputWaktuWib from '@/Components/Form/InputWaktuWib';
 import { keInputWib } from '@/lib/waktuWib';
 import { GAYA_KURSI, STATUS_BOOKING, daftarDariTeks, kapasitasDenah, keteranganBooking } from '@/lib/kursi';
 import { LOKASI_TYPE_OPTIONS } from '@/lib/kegiatanForm';
@@ -217,20 +218,53 @@ export default function DenahBookingKegiatan({ kegiatan, kursi = [], denah = {},
                     </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                    <Field label="Buka booking (WIB)" htmlFor="booking-buka" error={errors.booking_opens_at}>
-                        <input id="booking-buka" type="datetime-local" step="1" value={jadwal.buka} onChange={(e) => { setPesanGalatJadwal(null); setJadwal({ ...jadwal, buka: e.target.value }); }} className={kelasInput} />
-                    </Field>
-                    <Field label="Tutup booking (WIB)" htmlFor="booking-tutup" error={errors.booking_closes_at || pesanGalatJadwal} bantuan="Tertutup tepat pada jam ini. Kosongkan bila tanpa batas.">
-                        <input id="booking-tutup" type="datetime-local" step="1" value={jadwal.tutup} onChange={(e) => { setPesanGalatJadwal(null); setJadwal({ ...jadwal, tutup: e.target.value }); }} className={kelasInput} />
-                    </Field>
-                    <label className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 cursor-pointer">
-                        <span>
-                            <span className="font-bold block">Booking kursi aktif</span>
-                            <span className="text-[10px] text-slate-500">Nonaktif = dibekukan; kursi yang ada tetap tersimpan.</span>
-                        </span>
-                        <input id="booking-aktif" type="checkbox" checked={jadwal.aktif} onChange={(e) => setJadwal({ ...jadwal, aktif: e.target.checked })} className="w-5 h-5 rounded text-emerald-600 bg-slate-900 border-slate-700" />
-                    </label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+                    <InputWaktuWib
+                        id="booking-buka"
+                        name="booking_opens_at"
+                        label="Buka booking (WIB)"
+                        value={jadwal.buka}
+                        opsional
+                        onChange={(e) => {
+                            setPesanGalatJadwal(null);
+                            setJadwal({ ...jadwal, buka: e.target.value });
+                        }}
+                        onKosongkan={() => {
+                            setPesanGalatJadwal(null);
+                            setJadwal({ ...jadwal, buka: '' });
+                        }}
+                        error={errors.booking_opens_at}
+                    />
+                    <InputWaktuWib
+                        id="booking-tutup"
+                        name="booking_closes_at"
+                        label="Tutup booking (WIB)"
+                        value={jadwal.tutup}
+                        opsional
+                        min={jadwal.buka}
+                        onChange={(e) => {
+                            setPesanGalatJadwal(null);
+                            setJadwal({ ...jadwal, tutup: e.target.value });
+                        }}
+                        onKosongkan={() => {
+                            setPesanGalatJadwal(null);
+                            setJadwal({ ...jadwal, tutup: '' });
+                        }}
+                        error={errors.booking_closes_at || pesanGalatJadwal}
+                        bantuan="Tertutup tepat pada jam ini. Kosongkan bila tanpa batas."
+                    />
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="block text-xs font-bold text-slate-300">Status Booking</span>
+                        </div>
+                        <label className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 cursor-pointer min-h-[38px]">
+                            <span>
+                                <span className="font-bold block">Booking kursi aktif</span>
+                                <span className="text-[10px] text-slate-500">Nonaktif = dibekukan; kursi yang ada tetap tersimpan.</span>
+                            </span>
+                            <input id="booking-aktif" type="checkbox" checked={jadwal.aktif} onChange={(e) => setJadwal({ ...jadwal, aktif: e.target.checked })} className="w-5 h-5 rounded text-emerald-600 bg-slate-900 border-slate-700" />
+                        </label>
+                    </div>
                 </div>
                 <div className="flex justify-end">
                     <button type="submit" disabled={memproses} className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold">

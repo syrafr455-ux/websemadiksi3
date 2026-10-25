@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
+import InputWaktuWib from '@/Components/Form/InputWaktuWib';
 import { formatWib, tambahDuaJamWib } from '@/lib/waktuWib';
 import {
     KATEGORI_OPTIONS,
@@ -478,57 +479,59 @@ export default function KegiatanIndex({
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-1">Waktu Mulai (WIB) *</label>
-                                                <input
-                                                    type="datetime-local"
-                                                    step="1"
-                                                    value={data.tanggal_mulai}
-                                                    disabled={isFieldKritisTerkunci}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        setData((prev) => ({
-                                                            ...prev,
-                                                            tanggal_mulai: val,
-                                                            tanggal_selesai: !prev.tanggal_selesai && val ? tambahDuaJamWib(val) : prev.tanggal_selesai,
-                                                        }));
-                                                    }}
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    required
-                                                />
-                                                {errors.tanggal_mulai && <span className="text-[10px] text-rose-400">{errors.tanggal_mulai}</span>}
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-1">Waktu Selesai (WIB)</label>
-                                                <input
-                                                    type="datetime-local"
-                                                    step="1"
-                                                    value={data.tanggal_selesai}
-                                                    disabled={isFieldKritisTerkunci}
-                                                    onChange={(e) => setData('tanggal_selesai', e.target.value)}
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                                                />
-                                                {errors.tanggal_selesai && <span className="text-[10px] text-rose-400">{errors.tanggal_selesai}</span>}
-                                                {!errors.tanggal_selesai && data.tanggal_mulai && data.tanggal_selesai && data.tanggal_selesai <= data.tanggal_mulai && (
-                                                    <span className="text-[10px] text-rose-400">Waktu selesai harus setelah waktu mulai.</span>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-300 mb-1">Batas Pendaftaran (WIB)</label>
-                                                <input
-                                                    type="datetime-local"
-                                                    step="1"
-                                                    value={data.registration_deadline}
-                                                    disabled={isFieldKritisTerkunci}
-                                                    onChange={(e) => setData('registration_deadline', e.target.value)}
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                                                />
-                                                {errors.registration_deadline && <span className="text-[10px] text-rose-400">{errors.registration_deadline}</span>}
-                                                {!errors.registration_deadline && data.tanggal_mulai && data.registration_deadline && data.registration_deadline > data.tanggal_mulai && (
-                                                    <span className="text-[10px] text-rose-400">Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.</span>
-                                                )}
-                                                <span className="text-[10px] text-slate-500">Kosongkan bila tidak ada batas. Tertutup tepat pada jam ini.</span>
-                                            </div>
+                                            <InputWaktuWib
+                                                id="tanggal_mulai"
+                                                name="tanggal_mulai"
+                                                label="Waktu Mulai (WIB)"
+                                                value={data.tanggal_mulai}
+                                                disabled={isFieldKritisTerkunci}
+                                                required
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setData((prev) => ({
+                                                        ...prev,
+                                                        tanggal_mulai: val,
+                                                        tanggal_selesai: !prev.tanggal_selesai && val ? tambahDuaJamWib(val) : prev.tanggal_selesai,
+                                                    }));
+                                                }}
+                                                error={errors.tanggal_mulai}
+                                            />
+                                            <InputWaktuWib
+                                                id="tanggal_selesai"
+                                                name="tanggal_selesai"
+                                                label="Waktu Selesai (WIB)"
+                                                value={data.tanggal_selesai}
+                                                disabled={isFieldKritisTerkunci}
+                                                opsional
+                                                min={data.tanggal_mulai}
+                                                onChange={(e) => setData('tanggal_selesai', e.target.value)}
+                                                onKosongkan={() => setData('tanggal_selesai', '')}
+                                                error={
+                                                    errors.tanggal_selesai ||
+                                                    (!errors.tanggal_selesai && data.tanggal_mulai && data.tanggal_selesai && data.tanggal_selesai <= data.tanggal_mulai
+                                                        ? 'Waktu selesai harus setelah waktu mulai.'
+                                                        : null)
+                                                }
+                                                bantuan="Bawaan: 2 jam setelah waktu mulai bila dikosongkan."
+                                            />
+                                            <InputWaktuWib
+                                                id="registration_deadline"
+                                                name="registration_deadline"
+                                                label="Batas Pendaftaran (WIB)"
+                                                value={data.registration_deadline}
+                                                disabled={isFieldKritisTerkunci}
+                                                opsional
+                                                max={data.tanggal_mulai}
+                                                onChange={(e) => setData('registration_deadline', e.target.value)}
+                                                onKosongkan={() => setData('registration_deadline', '')}
+                                                error={
+                                                    errors.registration_deadline ||
+                                                    (!errors.registration_deadline && data.tanggal_mulai && data.registration_deadline && data.registration_deadline > data.tanggal_mulai
+                                                        ? 'Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.'
+                                                        : null)
+                                                }
+                                                bantuan="Kosongkan bila tidak ada batas. Tertutup tepat pada jam ini."
+                                            />
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -894,16 +897,17 @@ export default function KegiatanIndex({
 
                                         {data.is_submission_active && (
                                             <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
-                                                <div>
-                                                    <label className="block text-xs font-bold text-slate-300 mb-1">Tenggat Waktu Pengumpulan (WIB)</label>
-                                                    <input
-                                                        type="datetime-local"
-                                                        step="1"
+                                                    <InputWaktuWib
+                                                        id="submission_deadline"
+                                                        name="submission_deadline"
+                                                        label="Tenggat Waktu Pengumpulan (WIB)"
                                                         value={data.submission_deadline}
+                                                        opsional
                                                         onChange={(e) => setData('submission_deadline', e.target.value)}
-                                                        className="w-full px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                                                        onKosongkan={() => setData('submission_deadline', '')}
+                                                        error={errors.submission_deadline}
+                                                        bantuan="Tertutup tepat pada jam ini. Kosongkan bila tanpa tenggat."
                                                     />
-                                                </div>
                                                 <div>
                                                     <label className="block text-xs font-bold text-slate-300 mb-1">Ketentuan &amp; Format Karya</label>
                                                     <textarea

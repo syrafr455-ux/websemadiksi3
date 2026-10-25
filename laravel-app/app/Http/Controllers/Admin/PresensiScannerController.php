@@ -187,11 +187,16 @@ class PresensiScannerController extends Controller
         $validated = $request->validate([
             'waktu_mulai' => ['nullable', 'string'],
             'waktu_selesai' => ['nullable', 'string'],
+            'presensi_akhir_mulai' => ['nullable', 'string'],
+            'presensi_akhir_selesai' => ['nullable', 'string'],
         ]);
 
+        $inputMulai = $validated['waktu_mulai'] ?? $validated['presensi_akhir_mulai'] ?? null;
+        $inputSelesai = $validated['waktu_selesai'] ?? $validated['presensi_akhir_selesai'] ?? null;
+
         $mulai = null;
-        if (! empty($validated['waktu_mulai'])) {
-            $mulai = Wib::keUtc($validated['waktu_mulai']);
+        if (! empty($inputMulai)) {
+            $mulai = Wib::keUtc($inputMulai);
         } else {
             $mulai = $kegiatan->tanggal_selesai
                 ? $kegiatan->tanggal_selesai->copy()->subMinutes(15)
@@ -199,8 +204,8 @@ class PresensiScannerController extends Controller
         }
 
         $selesai = null;
-        if (! empty($validated['waktu_selesai'])) {
-            $selesai = Wib::keUtc($validated['waktu_selesai']);
+        if (! empty($inputSelesai)) {
+            $selesai = Wib::keUtc($inputSelesai);
         } else {
             $selesai = $kegiatan->tanggal_selesai
                 ? $kegiatan->tanggal_selesai->copy()->addMinutes(60)

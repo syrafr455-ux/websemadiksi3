@@ -400,3 +400,26 @@ Status pelacakan pengerjaan bertahap:
   - **Pengujian Fitur**:
     - Suite `Tests\Feature\PengamananPengirimanTest` (11 tes, 42 assertions) lulus 100%: rate limit antrean, backoff bertahap, kuota harian menunda email massal tetapi tetap mengirim email kritis, logging tanpa PII, antrean palsu (`Queue::fake()`), `sync` driver, banner dashboard & preflight 80%, rate limit klien API UNUSA, penanganan 429 Retry-After, circuit breaker & fallback CSV, serta cache singkat NIM.
     - Seluruh pengujian sistem Feature suite (**422 tes, 3376 assertions**) dan Unit suite (**13 tes, 68 assertions**) lulus 100%.
+
+- [x] **Bagian 19: Perbaikan Tampilan dan Perilaku Pemilih Tanggal-Waktu pada Form Admin**
+  - **Penyatuan Komponen**: Dibuat komponen bersama tunggal `resources/js/Components/Form/InputWaktuWib.jsx` yang membungkus input datetime-local standar HTML5 dengan `step="60"` sehingga detik tidak pernah tampil (`--:--` bukan `--:--:--`).
+  - **Normalisasi Nilai**: Nilai input selalu dinormalisasi ke format `YYYY-MM-DDTHH:mm` tanpa detik (`normalisasiWaktuWib`), serta fungsi `keInputWib()` dan `tambahDuaJamWib()` di `lib/waktuWib.js` dinormalisasi tanpa detik tanpa mengubah konversi UTC &harr; WIB.
+  - **Interaksi Picker & Tema Gelap**:
+    - Klik atau fokus pada kolom memicu `showPicker()` native di dalam blok `try/catch` aman (diabaikan bila browser tidak mendukung).
+    - Tema gelap (`color-scheme: dark`) diterapkan sehingga ikon kalender bawaan browser kontras dan terlihat jelas di atas latar gelap.
+    - Indikator kalender diberi kontras tinggi, efek hover, kursor pointer, dan ukuran memadai untuk perangkat seluler.
+  - **Aksesibilitas & Fitur Form**:
+    - Label "WIB" dipertahankan jelas.
+    - Teks bantu ringkas *"Klik kolom atau ikon kalender untuk memilih"* disematkan di bawah kolom.
+    - Tombol kecil *"Kosongkan"* otomatis muncul pada kolom opsional (seperti waktu selesai, batas pendaftaran, batas karya, dan batas booking) ketika nilai terisi untuk memudahkan reset nilai tanpa tombol keyboard backspace.
+    - Atribut `aria-label`, `aria-invalid`, dan `aria-describedby` tersambung ke teks bantu dan pesan galat.
+    - Mendukung `min` dan `max` dari props.
+    - Format 12 atau 24 jam mengikuti locale dan pengaturan OS/browser pengguna (standar shadow DOM HTML5).
+  - **Cakupan Penggantian**:
+    - `resources/js/Pages/Admin/Kegiatan/Index.jsx`: waktu mulai, waktu selesai, batas pendaftaran kegiatan, dan tenggat waktu pengumpulan karya lomba. Logika auto-isi selesai = mulai + 2 jam dan validasi tetap utuh.
+    - `resources/js/Components/Admin/DenahBookingKegiatan.jsx`: jadwal buka booking kursi dan tutup booking kursi.
+    - `resources/views/admin/attendances/index.blade.php`: modal buka sesi presensi akhir Blade diperbarui dengan `step="60"`, `color-scheme: dark`, `showPicker()`, dan teks bantuan yang setara.
+  - **Pengujian**:
+    - Seluruh tes round-trip WIB (`KegiatanEditFormRoundTripTest` 8 tes, `TimezoneConsistencyTest` 16 tes) lulus 100%.
+    - Ditambahkan tes `test_payload_from_form_without_seconds_is_stored_as_correct_utc` yang memvalidasi bahwa payload form tanpa detik (`YYYY-MM-DDTHH:mm`) diterima dan disimpan sebagai UTC yang benar di database.
+    - Total suite PHPUnit: **436 passed (3458 assertions)**. Kompilasi `npm run build` dan linter `vendor/bin/pint` sukses.

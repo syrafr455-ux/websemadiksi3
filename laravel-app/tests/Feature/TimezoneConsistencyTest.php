@@ -447,4 +447,68 @@ class TimezoneConsistencyTest extends TestCase
             'booking_closes_at' => '2026-10-20T10:00',
         ])->assertSessionHasErrors('booking_closes_at');
     }
+
+    public function test_payload_from_form_without_seconds_is_stored_as_correct_utc(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+
+        // 1. Kirim payload kegiatan baru tanpa detik (format YYYY-MM-DDTHH:mm, step="60")
+        $payload = [
+            'nama_kegiatan' => 'Seminar Format Menit WIB',
+            'deskripsi' => 'Pengujian input datetime-local tanpa detik.',
+            'kategori' => 'seminar',
+            'sasaran_peserta' => 'umum',
+            'metode_pelaksanaan' => 'offline',
+            'tanggal_mulai' => '2026-11-20T08:30', // 08:30 WIB = 01:30 UTC
+            'tanggal_selesai' => '2026-11-20T11:45', // 11:45 WIB = 04:45 UTC
+            'registration_deadline' => '2026-11-19T23:59', // 23:59 WIB = 16:59 UTC
+            'submission_deadline' => '2026-11-19T17:00', // 17:00 WIB = 10:00 UTC
+            'lokasi_type' => 'unusa_campus',
+            'lokasi_kampus' => 'Kampus B (Jemursari)',
+            'lokasi_gedung' => 'Tower UNUSA',
+            'lokasi_ruangan' => 'Auditorium Lt. 9',
+            'lokasi_nama' => 'Tower UNUSA - Kampus B',
+            'lokasi_detail' => 'Auditorium Lantai 9',
+            'biaya' => 0,
+            'kuota' => 80,
+            'poin_xp' => 10,
+            'is_seat_booking_active' => false,
+            'is_submission_active' => true,
+            'submission_instructions' => 'Kirim PDF.',
+            'status' => 'published',
+        ];
+
+        $this->actingAs($admin)->post(route('admin.kegiatan.store'), $payload)
+            ->assertRedirect(route('admin.kegiatan'))
+            ->assertSessionHasNoErrors();
+
+        $kegiatan = Kegiatan::where('nama_kegiatan', 'Seminar Format Menit WIB')->firstOrFail();
+
+        $this->assertSame('2026-11-20 01:30:00', $this->rawUtc($kegiatan, 'tanggal_mulai'));
+        $this->assertSame('2026-11-20 04:45:00', $this->rawUtc($kegiatan, 'tanggal_selesai'));
+        $this->assertSame('2026-11-19 16:59:00', $this->rawUtc($kegiatan, 'registration_deadline'));
+        $this->assertSame('2026-11-19 10:00:00', $this->rawUtc($kegiatan, 'submission_deadline'));
+
+        // 2. Update jadwal booking kursi (venue-config) dengan format tanpa detik
+        $this->actingAs($admin)->put(route('admin.kegiatan.venue-config', $kegiatan->id), [
+            'layout_changed' => false,
+            'is_seat_booking_active' => true,
+            'booking_opens_at' => '2026-11-01T08:00', // 08:00 WIB = 01:00 UTC
+            'booking_closes_at' => '2026-11-10T17:00', // 17:00 WIB = 10:00 UTC
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('2026-11-01 01:00:00', $this->rawUtc($kegiatan, 'booking_opens_at'));
+        $this->assertSame('2026-11-10 10:00:00', $this->rawUtc($kegiatan, 'booking_closes_at'));
+
+        // 3. Buka sesi presensi akhir dengan format tanpa detik
+        $this->actingAs($admin)->post(route('admin.kegiatan.presensi-akhir.buka', $kegiatan->id), [
+            'waktu_mulai' => '2026-11-20T11:30', // 11:30 WIB = 04:30 UTC
+            'waktu_selesai' => '2026-11-20T12:45', // 12:45 WIB = 05:45 UTC
+        ])->assertSessionHasNoErrors();
+
+        $kegiatanSegar = $kegiatan->fresh();
+        $this->assertTrue($kegiatanSegar->presensi_akhir_dibuka);
+        $this->assertSame('2026-11-20 04:30:00', Carbon::parse($kegiatanSegar->presensi_akhir_mulai)->utc()->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-11-20 05:45:00', Carbon::parse($kegiatanSegar->presensi_akhir_selesai)->utc()->format('Y-m-d H:i:s'));
+    }
 }

@@ -452,32 +452,42 @@
                         $defaultSelesai = $selesaiWib->copy()->addMinutes(60)->format('Y-m-d\TH:i');
                     @endphp
 
-                    <div class="space-y-1.5">
+                    <div class="space-y-1">
                         <label for="presensi_akhir_mulai" class="block text-xs font-bold text-slate-300">
                             Waktu Mulai Presensi Akhir (WIB)
                         </label>
                         <input 
                             type="datetime-local" 
+                            step="60"
                             id="presensi_akhir_mulai"
                             name="presensi_akhir_mulai" 
                             value="{{ $defaultMulai }}"
-                            class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500"
+                            style="color-scheme: dark;"
+                            onclick="try { this.showPicker(); } catch(e) {}"
+                            onfocus="try { this.showPicker(); } catch(e) {}"
+                            aria-describedby="presensi_akhir_mulai_help"
+                            class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs cursor-pointer min-h-[38px] focus:outline-none focus:border-amber-500 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-90 [&::-webkit-calendar-picker-indicator]:hover:opacity-100 [&::-webkit-calendar-picker-indicator]:p-1 [&::-webkit-calendar-picker-indicator]:rounded-md [&::-webkit-calendar-picker-indicator]:hover:bg-slate-800 [&::-webkit-calendar-picker-indicator]:transition-all [&::-webkit-calendar-picker-indicator]:scale-110"
                         >
-                        <p class="text-[10px] text-slate-500">Bawaan: 15 menit sebelum kegiatan selesai.</p>
+                        <p id="presensi_akhir_mulai_help" class="text-[10px] text-slate-400">Klik kolom atau ikon kalender untuk memilih • Bawaan: 15 menit sebelum kegiatan selesai.</p>
                     </div>
 
-                    <div class="space-y-1.5">
+                    <div class="space-y-1">
                         <label for="presensi_akhir_selesai" class="block text-xs font-bold text-slate-300">
                             Waktu Selesai Presensi Akhir (WIB)
                         </label>
                         <input 
                             type="datetime-local" 
+                            step="60"
                             id="presensi_akhir_selesai"
                             name="presensi_akhir_selesai" 
                             value="{{ $defaultSelesai }}"
-                            class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500"
+                            style="color-scheme: dark;"
+                            onclick="try { this.showPicker(); } catch(e) {}"
+                            onfocus="try { this.showPicker(); } catch(e) {}"
+                            aria-describedby="presensi_akhir_selesai_help"
+                            class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs cursor-pointer min-h-[38px] focus:outline-none focus:border-amber-500 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-90 [&::-webkit-calendar-picker-indicator]:hover:opacity-100 [&::-webkit-calendar-picker-indicator]:p-1 [&::-webkit-calendar-picker-indicator]:rounded-md [&::-webkit-calendar-picker-indicator]:hover:bg-slate-800 [&::-webkit-calendar-picker-indicator]:transition-all [&::-webkit-calendar-picker-indicator]:scale-110"
                         >
-                        <p class="text-[10px] text-slate-500">Bawaan: 60 menit setelah kegiatan selesai.</p>
+                        <p id="presensi_akhir_selesai_help" class="text-[10px] text-slate-400">Klik kolom atau ikon kalender untuk memilih • Bawaan: 60 menit setelah kegiatan selesai.</p>
                     </div>
 
                     <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
