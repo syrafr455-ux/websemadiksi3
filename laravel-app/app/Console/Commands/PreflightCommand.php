@@ -3,7 +3,10 @@
 namespace App\Console\Commands;
 
 use App\Services\Auth\KeycloakService;
+use App\Services\EmailProtectionService;
+use App\Services\Unusa\UnusaApiClient;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 class PreflightCommand extends Command
 {
@@ -140,6 +143,39 @@ class PreflightCommand extends Command
         } else {
             $rows[] = ['QUEUE_CONNECTION', $queue, 'PASS', "Koneksi antrean: {$queue}"];
         }
+
+        // 10. Pengamanan Pengiriman Email (Rate Limit, Kuota Harian, Retry Backoff)
+        $emailRate = (int) config('unusa.email_protection.rate_limit_per_minute', 20);
+        $rows[] = ['EMAIL_RATE_LIMIT', "{$emailRate}/menit", 'PASS', 'Batas laju pengiriman antrean email'];
+
+        $quotaStatus = app(EmailProtectionService::class)->getQuotaStatus();
+        $rows[] = [
+            'EMAIL_DAILY_QUOTA',
+            "{$quotaStatus['used']}/{$quotaStatus['quota']} ({$quotaStatus['percentage']}%)",
+            $quotaStatus['is_near_limit'] ? 'WARN' : 'PASS',
+            $quotaStatus['is_near_limit']
+                ? 'Penggunaan kuota harian >= 80% (email massal ditunda saat batas tercapai)'
+                : 'Kuota harian email terkendali (bawaan 400)',
+        ];
+
+        $backoffMinutes = implode(', ', array_map(fn ($s) => ($s / 60).' menit', config('unusa.email_protection.retry_backoff', [60, 300, 900])));
+        $rows[] = ['EMAIL_RETRY_BACKOFF', "{$backoffMinutes} (maks 3x)", 'PASS', 'Percobaan ulang bertahap tanpa pencatatan data pribadi'];
+
+        // 11. Pengamanan Klien API UNUSA (Rate Limit, Circuit Breaker, Cache NIM)
+        $apiRate = (int) config('unusa.api.rate_limit_per_minute', 60);
+        $cbThreshold = (int) config('unusa.api.circuit_breaker_threshold', 3);
+        $cbCooldown = ((int) config('unusa.api.circuit_breaker_cooldown_seconds', 300)) / 60;
+        $cacheTtl = (int) config('unusa.api.cache_ttl_seconds', 300);
+
+        $circuitOpenUntil = Cache::get(UnusaApiClient::KUNCI_CIRCUIT_OPEN_UNTIL);
+        $cbStatus = ($circuitOpenUntil && now()->timestamp < $circuitOpenUntil) ? 'TERBUKA (Aktif)' : 'Normal';
+
+        $rows[] = [
+            'UNUSA_API_PROTECTION',
+            "Rate: {$apiRate}/m | CB: {$cbThreshold}x/{$cbCooldown}m ({$cbStatus})",
+            $cbStatus === 'Normal' ? 'PASS' : 'WARN',
+            "Cache NIM: {$cacheTtl}d, tangani 429 & Retry-After, fallback ke CSV tanpa log PII",
+        ];
 
         $this->table(['Komponen', 'Nilai', 'Status', 'Keterangan'], $rows);
         $this->newLine();

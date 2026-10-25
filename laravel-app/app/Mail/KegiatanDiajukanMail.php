@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Traits\ProtectedEmail;
 use App\Models\Kegiatan;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
@@ -13,7 +14,7 @@ use Illuminate\Queue\SerializesModels;
 
 class KegiatanDiajukanMail extends Mailable implements ShouldQueue
 {
-    use Queueable, SerializesModels;
+    use ProtectedEmail, Queueable, SerializesModels;
 
     public function __construct(
         public Kegiatan $kegiatan,

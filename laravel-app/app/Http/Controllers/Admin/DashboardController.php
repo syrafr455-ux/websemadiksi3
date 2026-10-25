@@ -16,6 +16,7 @@ use App\Models\KipkDocument;
 use App\Models\Sertifikat;
 use App\Models\User;
 use App\Services\CertificateGeneratorService;
+use App\Services\EmailProtectionService;
 use App\Support\Wib;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -92,8 +93,9 @@ class DashboardController extends Controller
         $recentStudents = (clone $mahasiswa)->latest('id')->take(5)->get();
         $recentPresensi = KegiatanPresensi::with('kegiatan')->latest('check_in_at')->latest('id')->take(5)->get();
         $recentDocs = KipkDocument::latest('id')->take(5)->get();
+        $emailQuotaStatus = app(EmailProtectionService::class)->getQuotaStatus();
 
-        return view('admin.dashboard', compact('stats', 'recentStudents', 'recentPresensi', 'recentDocs'));
+        return view('admin.dashboard', compact('stats', 'recentStudents', 'recentPresensi', 'recentDocs', 'emailQuotaStatus'));
     }
 
     /**

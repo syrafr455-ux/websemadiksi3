@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Mail\SeatReselectionMail;
 use App\Models\Kegiatan;
 use App\Models\KegiatanRegistration;
+use App\Services\EmailProtectionService;
 use App\Support\Wib;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -18,6 +19,13 @@ use Illuminate\Support\Facades\Mail;
 class SendSeatReselectionNotificationJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public int $tries = 3;
+
+    public function backoff(): array
+    {
+        return config('unusa.email_protection.retry_backoff', [60, 300, 900]);
+    }
 
     public function __construct(
         public Kegiatan $kegiatan
@@ -43,6 +51,7 @@ class SendSeatReselectionNotificationJob implements ShouldQueue
 
         // Tautan langsung membuka alur pilih ulang kursi di halaman kegiatan (hanya untuk pemesan).
         $reselectionUrl = self::urlPilihUlang($this->kegiatan);
+        $protection = app(EmailProtectionService::class);
 
         foreach ($penerima as $p) {
             try {
@@ -53,10 +62,19 @@ class SendSeatReselectionNotificationJob implements ShouldQueue
                     reselectionUrl: $p['pemesan'] ? $reselectionUrl : null,
                     isBooker: $p['pemesan']
                 ));
+                $protection->recordSent(isCritical: true);
             } catch (\Throwable $e) {
                 Log::error('Gagal mengirim email pemilihan ulang kursi (kegiatan '.$this->kegiatan->id.'): '.$e->getMessage());
             }
         }
+    }
+
+    public function failed(?\Throwable $exception): void
+    {
+        Log::error('Job pengiriman email pemilihan ulang kursi gagal permanen setelah batas percobaan ulang.', [
+            'kegiatan_id' => $this->kegiatan->id,
+            'pesan_galat' => $exception?->getMessage(),
+        ]);
     }
 
     public static function urlPilihUlang(Kegiatan $kegiatan): string

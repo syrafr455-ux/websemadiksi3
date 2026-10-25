@@ -143,6 +143,27 @@ return [
         'timeout' => 5,
         // Percobaan ulang setelah gagal tersambung (total percobaan = 1 + retry).
         'retry' => 2,
+        // Pengamanan klien API: batas laju per menit sisi klien, circuit breaker, dan cache TTL.
+        'rate_limit_per_minute' => (int) env('UNUSA_API_RATE_LIMIT_PER_MINUTE', 60),
+        'circuit_breaker_threshold' => (int) env('UNUSA_API_CB_THRESHOLD', 3),
+        'circuit_breaker_cooldown_seconds' => (int) env('UNUSA_API_CB_COOLDOWN_SECONDS', 300),
+        'cache_ttl_seconds' => (int) env('UNUSA_API_CACHE_TTL_SECONDS', 300),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Pengamanan Pengiriman Email
+    |--------------------------------------------------------------------------
+    |
+    | Batas laju antrean, kuota harian, percobaan ulang bertahap (1, 5, 15 menit),
+    | dan penundaan email massal saat kuota harian tercapai.
+    |
+    */
+    'email_protection' => [
+        'rate_limit_per_minute' => (int) env('EMAIL_RATE_LIMIT_PER_MINUTE', 20),
+        'daily_quota' => (int) env('EMAIL_DAILY_QUOTA', 400),
+        'retry_backoff' => [60, 300, 900], // 1, 5, 15 menit
+        'max_retries' => 3,
     ],
 
     /*

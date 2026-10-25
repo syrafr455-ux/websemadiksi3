@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Traits\ProtectedEmail;
 use App\Models\Kegiatan;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
@@ -12,10 +13,12 @@ use Illuminate\Queue\SerializesModels;
 
 class KegiatanUpdatedMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use ProtectedEmail, Queueable, SerializesModels;
 
     public Kegiatan $kegiatan;
+
     public User $user;
+
     public array $changedAttributes;
 
     public function __construct(Kegiatan $kegiatan, User $user, array $changedAttributes = [])

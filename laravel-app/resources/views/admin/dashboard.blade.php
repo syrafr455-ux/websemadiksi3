@@ -1,5 +1,24 @@
 <x-layouts.admin title="Dashboard Pengelola" pageTitle="Dashboard Utama Pengurus" pageSubtitle="Ringkasan Utama aktivitas beasiswa & basis data PostgreSQL">
     <div class="space-y-8">
+        @if(!empty($emailQuotaStatus['is_near_limit']))
+            <div class="bg-amber-950/40 border border-amber-600/40 rounded-2xl p-4 sm:p-5 flex items-start gap-4 text-amber-200">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined text-2xl">mail_lock</span>
+                </div>
+                <div class="space-y-1">
+                    <h4 class="text-sm font-bold text-amber-300">Peringatan Kuota Pengiriman Email</h4>
+                    <p class="text-xs text-amber-200/90 leading-relaxed">
+                        Pengiriman email hari ini telah mencapai <strong>{{ $emailQuotaStatus['used'] }}</strong> dari kuota <strong>{{ $emailQuotaStatus['quota'] }}</strong> ({{ $emailQuotaStatus['percentage'] }}%).
+                        @if($emailQuotaStatus['is_exceeded'])
+                            Batas kuota harian telah tercapai. Email massal (pengingat dan pengumuman) ditunda otomatis ke hari esok, sedangkan email kritis (aktivasi, reset kata sandi, tiket) tetap dikirim.
+                        @else
+                            Penggunaan email mendekati batas harian (&gt;= 80%). Jika kuota habis, email massal akan ditunda ke hari esok.
+                        @endif
+                    </p>
+                </div>
+            </div>
+        @endif
+
         {{-- Kartu Data Terkini Sistem (Pindahan dari Landing Page, Khusus Super Admin) --}}
         <div class="bg-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6">
             <div class="flex items-center justify-between pb-4 border-b border-slate-800">

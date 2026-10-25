@@ -379,5 +379,24 @@ Status pelacakan pengerjaan bertahap:
     - Suite pengujian baru `Tests\Feature\KegiatanApprovalTest` (10 tes, 57 assertions) lulus 100% mencakup: skenario 1, 2, dan 3 super admin, pencegahan self-approval oleh pembuat, penolakan dengan catatan wajib, reset persetujuan saat edit, penyisihan akun diblokir, proteksi draft/diajukan dari publik, serta penguncian field kritis pada kegiatan terbit.
     - Seluruh pengujian sistem Feature suite (**411 tes, 3334 assertions**) lulus tanpa ada kegagalan.
 
-
-
+- [x] **Bagian 18: Pengamanan Pengiriman Email & Klien API UNUSA (Bagian 3)**
+  - **Pengamanan Pengiriman Email**:
+    - **Antrean & Rate Limiting**: Seluruh email dikirim melalui antrean (`SendProtectedEmailJob` atau mailable berantrean) dengan pembatas laju standar 20 email per menit (`EMAIL_RATE_LIMIT_PER_MINUTE` di `config/unusa.php`). Bila laju terlampaui di worker antrean, job dilepas kembali (`release`) secara otomatis. Sistem kompatibel penuh dan tetap beroperasi normal pada `QUEUE_CONNECTION=sync` untuk pengujian dan lokal.
+    - **Percobaan Ulang Bertahap (Backoff)**: Menggunakan percobaan maksimal 3 kali (`tries = 3`) dengan jeda bertahap 1 menit, 5 menit, dan 15 menit (`[60, 300, 900]` detik).
+    - **Pencatatan Kegagalan Akhir Bersih PII**: Method `failed()` mencatat galat teknis tanpa memuat alamat email, nama, token, atau data pribadi apa pun ke log aplikasi.
+    - **Kuota Harian & Kategori Email**: Kuota harian bawaan 400 email (`EMAIL_DAILY_QUOTA`). Email dibedakan antara:
+      - *Kritis*: `ActivationLinkMail`, `ResetKataSandiMail`, `TicketIssuedMail`, dan `SeatReselectionMail`.
+      - *Massal*: `KegiatanUpdatedMail`, `KegiatanDiajukanMail`.
+      - Peringatan kuota mendekati $\ge 80\%$ (320 email) muncul di perintah `semadiksi:preflight` dan banner peringatan di dashboard Super Administrator.
+      - Bila kuota habis, email massal otomatis ditunda ke hari berikutnya (pukul 00:01 WIB), sedangkan email kritis tetap diizinkan terkirim.
+  - **Pengamanan Klien API UNUSA**:
+    - **Batas Laju Sisi Klien**: Membatasi frekuensi pemanggilan ke gateway UNUSA (standar 60 request/menit, `UNUSA_API_RATE_LIMIT_PER_MINUTE`).
+    - **Penanganan HTTP 429 & Retry-After**: Klien membaca header `Retry-After` saat menerima respons 429 dan mengunci panggilan selama durasi tersebut untuk mencegah pemblokiran gateway.
+    - **Pemutus Sirkuit (Circuit Breaker)**: Aktif setelah 3 kali kegagalan beruntun (`UNUSA_API_CB_THRESHOLD`) dengan waktu cooldown 5 menit (`UNUSA_API_CB_COOLDOWN_SECONDS` = 300 detik). Selama sirkuit terbuka, panggilan API dialihkan seketika ke data CSV lokal (*graceful fallback*) tanpa menampilkan galat teknis ke pengguna.
+    - **Cache Singkat Pencarian NIM**: Hasil pencarian NIM di-cache selama 5 menit (`UNUSA_API_CACHE_TTL_SECONDS` = 300 detik) menggunakan kunci hash `sha256` untuk mencegah kebocoran NIM. Log sistem tidak mencatat data pribadi mahasiswa.
+  - **Preflight & Dokumentasi**:
+    - Perintah `php artisan semadiksi:preflight` diperluas dengan baris status: `EMAIL_RATE_LIMIT`, `EMAIL_DAILY_QUOTA` (beserta persentase & status WARN jika $\ge 80\%$), `EMAIL_RETRY_BACKOFF`, dan `UNUSA_API_PROTECTION` (rate limit, circuit breaker, cache TTL).
+    - Dibuat panduan teknis `docs/pengamanan-pengiriman.md` (1 halaman) yang merangkum seluruh arsitektur dan variabel pengamanan transmisi.
+  - **Pengujian Fitur**:
+    - Suite `Tests\Feature\PengamananPengirimanTest` (11 tes, 42 assertions) lulus 100%: rate limit antrean, backoff bertahap, kuota harian menunda email massal tetapi tetap mengirim email kritis, logging tanpa PII, antrean palsu (`Queue::fake()`), `sync` driver, banner dashboard & preflight 80%, rate limit klien API UNUSA, penanganan 429 Retry-After, circuit breaker & fallback CSV, serta cache singkat NIM.
+    - Seluruh pengujian sistem Feature suite (**422 tes, 3376 assertions**) dan Unit suite (**13 tes, 68 assertions**) lulus 100%.

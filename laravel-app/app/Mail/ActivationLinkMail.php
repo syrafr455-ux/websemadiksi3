@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Traits\ProtectedEmail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -14,7 +15,7 @@ use Illuminate\Queue\SerializesModels;
  */
 class ActivationLinkMail extends Mailable implements ShouldQueue
 {
-    use Queueable, SerializesModels;
+    use ProtectedEmail, Queueable, SerializesModels;
 
     public function __construct(
         public string $nama,
