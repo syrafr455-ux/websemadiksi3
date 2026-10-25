@@ -13,11 +13,12 @@ Status pelacakan pengerjaan bertahap:
   - Dibuat perintah `php artisan semadiksi:migrasi-alur-lama` dengan dry-run bawaan (tanpa ubah data) dan opsi `--eksekusi` yang idempoten tanpa menimpa data baru.
   - Kode mati `HomeController@verifikasiSertifikat` yang tidak dirujuk telah dibersihkan.
   - Tes fitur `Tests\Feature\PenyatuanAlurLamaTest` (4 tes, 37 assertions) lulus.
-- [ ] **Bagian 3: Halaman Admin Presensi Akhir**
-  - Menu "Presensi & Kehadiran" di Admin untuk super_admin.
-  - Tabel peserta: fase 1 check-in, fase 2 presensi akhir (WIB, pratinjau tanda tangan via policy khusus super_admin, status sertifikat).
-  - Filter, pencarian, dan ekspor.
-  - Tes akses per role & WIB.
+- [x] **Bagian 3: Halaman Admin Presensi Akhir**
+  - Menu "Presensi & Kehadiran" di Admin ditingkatkan khusus super_admin: pemilih kegiatan, rekapitulasi check-in fase 1, presensi mandiri fase 2, tanda tangan digital, dan status sertifikat.
+  - Format waktu presensi disajikan dalam zona waktu WIB (`Asia/Jakarta`).
+  - Tanda tangan digital dilindungi ketat lewat `KegiatanPresensiPolicy@viewSignature` dan endpoint khusus `/admin/presensi/{id}/signature` (hanya dapat diakses oleh super admin, tidak pernah terekspos ke publik atau staf lain).
+  - Filter (status check-in, presensi akhir, sertifikat), pencarian multifield, dan ekspor CSV/Excel (`admin.attendances.export`) selesai.
+  - Tes fitur `Tests\Feature\AdminPresensiAkhirTest` (5 tes, 63 assertions) lulus mencakup pengujian otorisasi per role, validasi policy, dan format WIB.
 - [ ] **Bagian 4: Penilaian Karya Format Excel (.xlsx)**
   - Ekspor/impor .xlsx (CSV sebagai cadangan).
   - Kolom: id karya, judul, nama peserta, nilai, catatan.
@@ -35,4 +36,4 @@ Status pelacakan pengerjaan bertahap:
   - Pembersihan route/halaman/kode mati.
 
 ## Temuan Belum Ditangani / Catatan
-- Bagian 1 & 2 selesai. Lanjut ke Bagian 3 (Halaman Admin Presensi Akhir).
+- Bagian 1, 2, 3 selesai. Lanjut ke Bagian 4 (Penilaian Karya Format Excel .xlsx).

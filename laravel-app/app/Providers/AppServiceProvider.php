@@ -2,7 +2,31 @@
 
 namespace App\Providers;
 
+use App\Contracts\KipRecipientProvider;
+use App\Contracts\UnusaAcademicProvider;
+use App\Contracts\UnusaFacilityProvider;
+use App\Events\KegiatanUpdatedEvent;
+use App\Listeners\SendKegiatanUpdatedNotification;
+use App\Models\CustomFormSubmission;
+use App\Models\Kegiatan;
+use App\Models\KegiatanPresensi;
+use App\Models\KipkDocument;
+use App\Models\User;
+use App\Policies\CustomFormSubmissionPolicy;
+use App\Policies\KegiatanPolicy;
+use App\Policies\KegiatanPresensiPolicy;
+use App\Policies\KipkDocumentPolicy;
+use App\Policies\UserPolicy;
+use App\Services\Academic\ApiUnusaAcademicProvider;
+use App\Services\Academic\DatabaseUnusaAcademicProvider;
+use App\Services\Facilities\ConfigUnusaFacilityProvider;
+use App\Services\Kip\ApiKipRecipientProvider;
+use App\Services\Kip\DatabaseKipRecipientProvider;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Inertia\ResponseFactory;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -11,26 +35,26 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(\Inertia\ResponseFactory::class, function () {
-            return new \Inertia\ResponseFactory();
+        $this->app->singleton(ResponseFactory::class, function () {
+            return new ResponseFactory;
         });
 
         $this->app->bind(
-            \App\Contracts\UnusaFacilityProvider::class,
-            \App\Services\Facilities\ConfigUnusaFacilityProvider::class
+            UnusaFacilityProvider::class,
+            ConfigUnusaFacilityProvider::class
         );
 
         // Sumber data dipilih lewat config/unusa.php ("database" = tabel lokal hasil impor, "api" = kerangka API).
-        $this->app->bind(\App\Contracts\UnusaAcademicProvider::class, fn ($app) => $app->make(
+        $this->app->bind(UnusaAcademicProvider::class, fn ($app) => $app->make(
             config('unusa.academic_provider') === 'api'
-                ? \App\Services\Academic\ApiUnusaAcademicProvider::class
-                : \App\Services\Academic\DatabaseUnusaAcademicProvider::class
+                ? ApiUnusaAcademicProvider::class
+                : DatabaseUnusaAcademicProvider::class
         ));
 
-        $this->app->bind(\App\Contracts\KipRecipientProvider::class, fn ($app) => $app->make(
+        $this->app->bind(KipRecipientProvider::class, fn ($app) => $app->make(
             config('unusa.kip_recipient_provider') === 'api'
-                ? \App\Services\Kip\ApiKipRecipientProvider::class
-                : \App\Services\Kip\DatabaseKipRecipientProvider::class
+                ? ApiKipRecipientProvider::class
+                : DatabaseKipRecipientProvider::class
         ));
     }
 
@@ -39,28 +63,29 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        \Illuminate\Support\Facades\Blade::anonymousComponentPath(resource_path('views/layouts'), 'layouts');
+        Blade::anonymousComponentPath(resource_path('views/layouts'), 'layouts');
 
         // Client @inertiajs/react v3 membaca halaman awal HANYA dari
         // <script data-page="app" type="application/json">, bukan dari atribut data-page pada div root.
         // JSON_HEX_TAG mencegah "</script>" di dalam props menutup elemen script lebih awal.
-        \Illuminate\Support\Facades\Blade::directive('inertia', function () {
+        Blade::directive('inertia', function () {
             return '<script data-page="app" type="application/json"><?php echo json_encode($page, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG); ?></script>'
                 .'<div id="app"></div>';
         });
 
-        \Illuminate\Support\Facades\Blade::directive('inertiaHead', function () {
+        Blade::directive('inertiaHead', function () {
             return '';
         });
 
-        \Illuminate\Support\Facades\Event::listen(
-            \App\Events\KegiatanUpdatedEvent::class,
-            \App\Listeners\SendKegiatanUpdatedNotification::class
+        Event::listen(
+            KegiatanUpdatedEvent::class,
+            SendKegiatanUpdatedNotification::class
         );
 
-        \Illuminate\Support\Facades\Gate::policy(\App\Models\Kegiatan::class, \App\Policies\KegiatanPolicy::class);
-        \Illuminate\Support\Facades\Gate::policy(\App\Models\User::class, \App\Policies\UserPolicy::class);
-        \Illuminate\Support\Facades\Gate::policy(\App\Models\KipkDocument::class, \App\Policies\KipkDocumentPolicy::class);
-        \Illuminate\Support\Facades\Gate::policy(\App\Models\CustomFormSubmission::class, \App\Policies\CustomFormSubmissionPolicy::class);
+        Gate::policy(Kegiatan::class, KegiatanPolicy::class);
+        Gate::policy(User::class, UserPolicy::class);
+        Gate::policy(KipkDocument::class, KipkDocumentPolicy::class);
+        Gate::policy(CustomFormSubmission::class, CustomFormSubmissionPolicy::class);
+        Gate::policy(KegiatanPresensi::class, KegiatanPresensiPolicy::class);
     }
 }

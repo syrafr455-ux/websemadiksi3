@@ -15,12 +15,18 @@ use App\Models\KegiatanRegistration;
 use App\Models\KipkDocument;
 use App\Models\Sertifikat;
 use App\Models\User;
+use App\Services\CertificateGeneratorService;
+use App\Support\Wib;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DashboardController extends Controller
 {
@@ -31,11 +37,11 @@ class DashboardController extends Controller
     {
         $user = auth()->user();
 
-        if ($user && $user->role === \App\Enums\UserRole::PenilaiKarya) {
+        if ($user && $user->role === UserRole::PenilaiKarya) {
             return redirect()->route('admin.penilaian');
         }
 
-        if ($user && $user->role === \App\Enums\UserRole::VerifikatorBerkas) {
+        if ($user && $user->role === UserRole::VerifikatorBerkas) {
             return redirect()->route('admin.berkas');
         }
 
@@ -137,9 +143,9 @@ class DashboardController extends Controller
             $q = trim($request->input('q'));
             $query->where(function ($w) use ($q) {
                 $w->where('name', 'ilike', "%{$q}%")
-                  ->orWhere('email', 'ilike', "%{$q}%")
-                  ->orWhere('nim', 'ilike', "%{$q}%")
-                  ->orWhere('prodi', 'ilike', "%{$q}%");
+                    ->orWhere('email', 'ilike', "%{$q}%")
+                    ->orWhere('nim', 'ilike', "%{$q}%")
+                    ->orWhere('prodi', 'ilike', "%{$q}%");
             });
         }
 
@@ -152,8 +158,8 @@ class DashboardController extends Controller
         $users = $query->orderBy('id', 'desc')->paginate(15)->withQueryString();
 
         // If Inertia is installed/used, render Inertia component
-        if (class_exists(\Inertia\Inertia::class)) {
-            return \Inertia\Inertia::render('Admin/Pengguna', [
+        if (class_exists(Inertia::class)) {
+            return Inertia::render('Admin/Pengguna', [
                 'title' => 'Data Pengguna',
                 'users' => $users,
                 'filters' => $request->only(['q', 'role']),
@@ -174,6 +180,7 @@ class DashboardController extends Controller
         $user->save();
 
         $status = $user->is_blocked ? 'dinonaktifkan' : 'diaktifkan kembali';
+
         return back()->with('success', "Akun {$user->name} berhasil {$status}.");
     }
 
@@ -192,6 +199,7 @@ class DashboardController extends Controller
     public function kegiatan(): View
     {
         $activities = Activity::withCount('registrations')->latest('id')->paginate(10);
+
         return view('admin.kegiatan.index', compact('activities'));
     }
 
@@ -264,12 +272,12 @@ class DashboardController extends Controller
         return view('admin.certificates.index', compact('sertifikats', 'kegiatans', 'students'));
     }
 
-    public function storeCertificate(Request $request, \App\Services\CertificateGeneratorService $generatorService): RedirectResponse
+    public function storeCertificate(Request $request, CertificateGeneratorService $generatorService): RedirectResponse
     {
         $validated = $request->validate([
             'kegiatan_id' => ['required', 'exists:kegiatan,id'],
             'nama_lengkap' => ['required', 'string', 'max:255'],
-            'user_id' => ['nullable', \Illuminate\Validation\Rule::exists('users', 'id')->whereIn('role', UserRole::participantValues())],
+            'user_id' => ['nullable', Rule::exists('users', 'id')->whereIn('role', UserRole::participantValues())],
             'code' => ['nullable', 'string', 'max:100'],
             'nomor_sertifikat' => ['nullable', 'string', 'max:100'],
             'certificate_file' => ['required', 'file', 'mimes:pdf', 'max:10240'],
@@ -313,6 +321,7 @@ class DashboardController extends Controller
                 Storage::disk('public')->delete($sertifikat->file_pdf_path);
             }
             $sertifikat->delete();
+
             return back()->with('success', 'Sertifikat resmi berhasil dihapus.');
         }
 
@@ -320,6 +329,7 @@ class DashboardController extends Controller
         $legacy = Certificate::find($id);
         if ($legacy) {
             $legacy->delete();
+
             return back()->with('success', 'Sertifikat berhasil dihapus.');
         }
 
@@ -327,12 +337,307 @@ class DashboardController extends Controller
     }
 
     /**
-     * Manage Attendances.
+     * Presensi & Kehadiran Akhir Kegiatan (Super Admin Only).
+     * Menampilkan rekap check-in fase 1, presensi akhir fase 2, tanda tangan digital, dan sertifikat dalam WIB.
      */
-    public function attendances(): View
+    public function attendances(Request $request): View
     {
-        $attendances = Attendance::with(['user', 'activity'])->latest('id')->paginate(20);
-        return view('admin.attendances.index', compact('attendances'));
+        Gate::authorize('viewAny', KegiatanPresensi::class);
+
+        $kegiatanList = Kegiatan::latest('tanggal_mulai')->get(['id', 'nama_kegiatan', 'tanggal_mulai', 'status']);
+
+        $selectedKegiatanId = $request->input('kegiatan_id');
+        $selectedKegiatan = null;
+
+        if ($selectedKegiatanId) {
+            $selectedKegiatan = Kegiatan::find($selectedKegiatanId);
+        } elseif ($kegiatanList->isNotEmpty()) {
+            $selectedKegiatan = $kegiatanList->first();
+            $selectedKegiatanId = $selectedKegiatan->id;
+        }
+
+        $participants = collect();
+        $stats = [
+            'total_registered' => 0,
+            'phase1_checked_in' => 0,
+            'phase2_present' => 0,
+            'certificates_issued' => 0,
+        ];
+
+        if ($selectedKegiatan) {
+            $allParticipants = $this->getAttendanceParticipants($selectedKegiatan, new Request);
+            $stats['total_registered'] = $allParticipants->count();
+            $stats['phase1_checked_in'] = $allParticipants->where('is_phase1', true)->count();
+            $stats['phase2_present'] = $allParticipants->where('is_phase2', true)->count();
+            $stats['certificates_issued'] = $allParticipants->where('is_certificate', true)->count();
+
+            $participants = $this->getAttendanceParticipants($selectedKegiatan, $request);
+        }
+
+        return view('admin.attendances.index', [
+            'kegiatanList' => $kegiatanList,
+            'selectedKegiatan' => $selectedKegiatan,
+            'participants' => $participants,
+            'stats' => $stats,
+        ]);
+    }
+
+    /**
+     * Ekspor Rekapitulasi Presensi Kegiatan ke CSV / Excel.
+     */
+    public function exportAttendances(Request $request): StreamedResponse|RedirectResponse
+    {
+        Gate::authorize('export', KegiatanPresensi::class);
+
+        $selectedKegiatanId = $request->input('kegiatan_id');
+        $selectedKegiatan = $selectedKegiatanId ? Kegiatan::find($selectedKegiatanId) : Kegiatan::latest('tanggal_mulai')->first();
+
+        if (! $selectedKegiatan) {
+            return back()->with('error', 'Pilih kegiatan terlebih dahulu untuk mengekspor data.');
+        }
+
+        $participants = $this->getAttendanceParticipants($selectedKegiatan, $request);
+        $filename = 'rekap_presensi_'.Str::slug($selectedKegiatan->nama_kegiatan).'_'.date('Ymd_His').'.csv';
+
+        return response()->streamDownload(function () use ($participants) {
+            $handle = fopen('php://output', 'w');
+            // BOM UTF-8 agar Excel membuka dengan encoding yang benar
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            fputcsv($handle, [
+                'No',
+                'Nama Peserta',
+                'NIM / Identitas',
+                'Email',
+                'Program Studi / Institusi',
+                'Nomor Tiket',
+                'Kursi',
+                'Status Check-In Fase 1',
+                'Waktu Check-In (WIB)',
+                'Status Presensi Akhir Fase 2',
+                'Waktu Presensi Akhir (WIB)',
+                'Status Tanda Tangan Digital',
+                'Status Sertifikat',
+                'Nomor Sertifikat',
+            ]);
+
+            $no = 1;
+            foreach ($participants as $p) {
+                fputcsv($handle, [
+                    $no++,
+                    $p->name,
+                    $p->nim,
+                    $p->email,
+                    $p->prodi,
+                    $p->ticket_number,
+                    $p->seat_code,
+                    $p->phase1_status,
+                    $p->phase1_time ?? '-',
+                    $p->phase2_status,
+                    $p->phase2_time ?? '-',
+                    $p->presensi ? 'Tersedia (Terverifikasi)' : 'Belum Ada',
+                    $p->certificate_status,
+                    $p->certificate_number ?? '-',
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
+    }
+
+    /**
+     * Pratinjau tanda tangan digital aman (Hanya Super Admin via Policy).
+     */
+    public function signaturePreview(int $id)
+    {
+        $presensi = KegiatanPresensi::findOrFail($id);
+        Gate::authorize('viewSignature', $presensi);
+
+        $path = $presensi->signature_path;
+        if (empty($path)) {
+            abort(404, 'Tanda tangan tidak ditemukan.');
+        }
+
+        if (Storage::disk('public')->exists($path)) {
+            return Storage::disk('public')->response($path);
+        }
+
+        if (file_exists($path)) {
+            return response()->file($path);
+        }
+
+        abort(404, 'Berkas tanda tangan tidak ditemukan di penyimpanan.');
+    }
+
+    /**
+     * Helper koleksi peserta kegiatan beserta status fase 1, fase 2, tanda tangan, dan sertifikat (WIB).
+     */
+    protected function getAttendanceParticipants(Kegiatan $selectedKegiatan, Request $request)
+    {
+        $registrations = KegiatanRegistration::with(['participantUser', 'bookerUser', 'seat'])
+            ->where('kegiatan_id', $selectedKegiatan->id)
+            ->get();
+
+        $presensis = KegiatanPresensi::with('sertifikat')
+            ->where('kegiatan_id', $selectedKegiatan->id)
+            ->get();
+
+        $sertifikats = Sertifikat::where('kegiatan_id', $selectedKegiatan->id)->get();
+
+        $presensiByRegId = $presensis->whereNotNull('registration_id')->keyBy('registration_id');
+        $presensiByNim = $presensis->filter(fn ($p) => ! empty($p->nim))->keyBy('nim');
+        $presensiByEmail = $presensis->filter(fn ($p) => ! empty($p->email))->keyBy('email');
+
+        $sertifikatByPresensiId = $sertifikats->whereNotNull('presensi_id')->keyBy('presensi_id');
+        $sertifikatByUserId = $sertifikats->whereNotNull('user_id')->keyBy('user_id');
+        $sertifikatByEmail = $sertifikats->filter(fn ($s) => ! empty($s->email_penerima))->keyBy('email_penerima');
+
+        $handledPresensiIds = collect();
+        $participants = collect();
+
+        foreach ($registrations as $reg) {
+            $user = $reg->participantUser ?: $reg->bookerUser;
+            $nim = $reg->participant_identity ?: ($user?->nim ?? '-');
+            $email = $reg->participant_email ?: ($user?->email ?? '-');
+            $name = $reg->participant_name ?: ($user?->name ?? 'Peserta');
+
+            $presensi = $presensiByRegId->get($reg->id)
+                ?? ($nim !== '-' ? $presensiByNim->get($nim) : null)
+                ?? ($email !== '-' ? $presensiByEmail->get($email) : null);
+
+            if ($presensi) {
+                $handledPresensiIds->push($presensi->id);
+            }
+
+            $sertifikat = null;
+            if ($presensi && $sertifikatByPresensiId->has($presensi->id)) {
+                $sertifikat = $sertifikatByPresensiId->get($presensi->id);
+            } elseif ($user && $sertifikatByUserId->has($user->id)) {
+                $sertifikat = $sertifikatByUserId->get($user->id);
+            } elseif ($email !== '-' && $sertifikatByEmail->has($email)) {
+                $sertifikat = $sertifikatByEmail->get($email);
+            }
+
+            $isPhase1CheckedIn = ($reg->status_kehadiran === AttendanceStatus::CheckedIn || $reg->status_kehadiran?->value === 'checked_in');
+            $isPhase2Present = $presensi !== null;
+            $isCertificateIssued = $sertifikat !== null;
+
+            $phase1Time = ($isPhase1CheckedIn && $reg->checked_in_at)
+                ? Wib::dari($reg->checked_in_at)->translatedFormat('d M Y, H:i').' WIB'
+                : null;
+
+            $phase2Time = ($presensi && $presensi->check_in_at)
+                ? Wib::dari($presensi->check_in_at)->translatedFormat('d M Y, H:i').' WIB'
+                : null;
+
+            $participants->push((object) [
+                'id' => 'reg-'.$reg->id,
+                'registration_id' => $reg->id,
+                'presensi_id' => $presensi?->id,
+                'name' => $name,
+                'nim' => $nim,
+                'email' => $email,
+                'prodi' => $presensi?->prodi ?? ($user?->programStudi?->nama ?? ($user?->university ?? 'UNUSA')),
+                'ticket_number' => $reg->nomor_tiket ?: ($reg->ticket_code ?: '-'),
+                'seat_code' => $reg->seat?->seat_code ?? 'Tanpa Kursi',
+                'phase1_status' => $isPhase1CheckedIn ? 'Sudah Check-In' : 'Belum Check-In',
+                'is_phase1' => $isPhase1CheckedIn,
+                'phase1_time' => $phase1Time,
+                'phase2_status' => $isPhase2Present ? 'Sudah Presensi Akhir' : 'Belum Presensi',
+                'is_phase2' => $isPhase2Present,
+                'phase2_time' => $phase2Time,
+                'presensi' => $presensi,
+                'signature_url' => $presensi ? route('admin.attendances.signature', $presensi->id) : null,
+                'certificate_status' => $isCertificateIssued ? 'Sudah Terbit' : 'Belum Terbit',
+                'is_certificate' => $isCertificateIssued,
+                'certificate_number' => $sertifikat?->nomor_sertifikat,
+                'certificate_download_url' => $sertifikat ? route('sertifikat.download', $sertifikat->id) : null,
+            ]);
+        }
+
+        foreach ($presensis as $p) {
+            if ($handledPresensiIds->contains($p->id)) {
+                continue;
+            }
+
+            $sertifikat = $sertifikatByPresensiId->get($p->id)
+                ?? ($p->user_id ? $sertifikatByUserId->get($p->user_id) : null);
+
+            $phase2Time = $p->check_in_at
+                ? Wib::dari($p->check_in_at)->translatedFormat('d M Y, H:i').' WIB'
+                : null;
+
+            $participants->push((object) [
+                'id' => 'pres-'.$p->id,
+                'registration_id' => null,
+                'presensi_id' => $p->id,
+                'name' => $p->nama_lengkap,
+                'nim' => $p->nim,
+                'email' => $p->email,
+                'prodi' => $p->prodi,
+                'ticket_number' => '-',
+                'seat_code' => 'Tanpa Kursi',
+                'phase1_status' => 'Presensi Mandiri Langsung',
+                'is_phase1' => false,
+                'phase1_time' => null,
+                'phase2_status' => 'Sudah Presensi Akhir',
+                'is_phase2' => true,
+                'phase2_time' => $phase2Time,
+                'presensi' => $p,
+                'signature_url' => route('admin.attendances.signature', $p->id),
+                'certificate_status' => $sertifikat ? 'Sudah Terbit' : 'Belum Terbit',
+                'is_certificate' => $sertifikat !== null,
+                'certificate_number' => $sertifikat?->nomor_sertifikat,
+                'certificate_download_url' => $sertifikat ? route('sertifikat.download', $sertifikat->id) : null,
+            ]);
+        }
+
+        // Pencarian
+        if ($request->filled('q')) {
+            $q = strtolower(trim($request->input('q')));
+            $participants = $participants->filter(function ($item) use ($q) {
+                return str_contains(strtolower($item->name), $q)
+                    || str_contains(strtolower($item->nim), $q)
+                    || str_contains(strtolower($item->email), $q)
+                    || str_contains(strtolower($item->ticket_number), $q)
+                    || str_contains(strtolower($item->seat_code), $q);
+            });
+        }
+
+        // Filter Fase 1
+        if ($request->filled('fase1') && $request->input('fase1') !== 'all') {
+            $fase1 = $request->input('fase1');
+            if ($fase1 === 'checked_in') {
+                $participants = $participants->where('is_phase1', true);
+            } elseif ($fase1 === 'not_checked_in') {
+                $participants = $participants->where('is_phase1', false);
+            }
+        }
+
+        // Filter Fase 2
+        if ($request->filled('fase2') && $request->input('fase2') !== 'all') {
+            $fase2 = $request->input('fase2');
+            if ($fase2 === 'present') {
+                $participants = $participants->where('is_phase2', true);
+            } elseif ($fase2 === 'not_present') {
+                $participants = $participants->where('is_phase2', false);
+            }
+        }
+
+        // Filter Sertifikat
+        if ($request->filled('sertifikat') && $request->input('sertifikat') !== 'all') {
+            $sert = $request->input('sertifikat');
+            if ($sert === 'issued') {
+                $participants = $participants->where('is_certificate', true);
+            } elseif ($sert === 'not_issued') {
+                $participants = $participants->where('is_certificate', false);
+            }
+        }
+
+        return $participants;
     }
 
     public function updateAttendanceStatus(int $id, Request $request): RedirectResponse
@@ -350,19 +655,20 @@ class DashboardController extends Controller
      */
     public function berkas(): View
     {
-        \Illuminate\Support\Facades\Gate::authorize('viewAny', KipkDocument::class);
+        Gate::authorize('viewAny', KipkDocument::class);
         // Cakupan ditegakkan di query: verifikator hanya melihat berkas mahasiswa fakultas/prodinya.
         $documents = KipkDocument::terlihatOleh(auth()->user())
             ->with('user.programStudi')
             ->latest('id')
             ->paginate(15);
+
         return view('admin.berkas.index', compact('documents'));
     }
 
     public function downloadDoc(int $id)
     {
         $doc = KipkDocument::findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('download', $doc);
+        Gate::authorize('download', $doc);
 
         $relativePath = $doc->file_url ? str_replace('/storage/', '', parse_url($doc->file_url, PHP_URL_PATH)) : null;
         if ($relativePath && Storage::disk('public')->exists($relativePath)) {
@@ -379,7 +685,7 @@ class DashboardController extends Controller
     public function updateDocStatus(int $id, Request $request): RedirectResponse
     {
         $doc = KipkDocument::findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('verify', $doc);
+        Gate::authorize('verify', $doc);
 
         $doc->status = $request->input('status', 'Disetujui');
         $doc->score = (int) $request->input('score', 100);
@@ -396,19 +702,20 @@ class DashboardController extends Controller
      */
     public function submissions(): View
     {
-        \Illuminate\Support\Facades\Gate::authorize('viewAny', CustomFormSubmission::class);
+        Gate::authorize('viewAny', CustomFormSubmission::class);
         // Verifikator: hanya formulir monev & pelaporan (config unusa.verifikator_form_keys) dari mahasiswa dalam cakupannya.
         $submissions = CustomFormSubmission::terlihatOleh(auth()->user())
             ->with(['form', 'user.programStudi'])
             ->latest('id')
             ->paginate(15);
+
         return view('admin.submissions.index', compact('submissions'));
     }
 
     public function updateSubmissionStatus(int $id, Request $request): RedirectResponse
     {
         $sub = CustomFormSubmission::findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('review', $sub);
+        Gate::authorize('review', $sub);
         $sub->status = $request->input('status', 'Disetujui');
         $sub->admin_notes = $request->input('admin_notes');
         $sub->save();

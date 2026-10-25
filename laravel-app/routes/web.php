@@ -198,6 +198,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
         // Admin Attendances
         Route::get('/absensi', [App\Http\Controllers\Admin\DashboardController::class, 'attendances'])->name('attendances');
+        Route::get('/absensi/export', [App\Http\Controllers\Admin\DashboardController::class, 'exportAttendances'])->name('attendances.export');
+        Route::get('/presensi/{id}/signature', [App\Http\Controllers\Admin\DashboardController::class, 'signaturePreview'])->name('attendances.signature');
         Route::match(['post', 'patch'], '/absensi/{id}', [App\Http\Controllers\Admin\DashboardController::class, 'updateAttendanceStatus'])->name('attendances.update');
         Route::match(['post', 'patch'], '/absensi/{id}/status', [App\Http\Controllers\Admin\DashboardController::class, 'updateAttendanceStatus'])->name('attendances.status');
     });
