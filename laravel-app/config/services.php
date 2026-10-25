@@ -52,6 +52,7 @@ return [
         'redirect' => env('KEYCLOAK_REDIRECT_URI'),
         'logout_enabled' => filter_var(env('KEYCLOAK_LOGOUT_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'post_logout_redirect_uri' => env('KEYCLOAK_POST_LOGOUT_REDIRECT_URI'),
+        'force_login_prompt' => filter_var(env('KEYCLOAK_FORCE_LOGIN_PROMPT', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
 ];

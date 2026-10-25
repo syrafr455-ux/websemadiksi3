@@ -9,6 +9,7 @@ use Exception;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class KeycloakController extends Controller
@@ -55,6 +56,7 @@ class KeycloakController extends Controller
         $state = (string) $request->query('state', '');
 
         if ($storedState === null || $storedState === '' || ! hash_equals($storedState, $state)) {
+            Log::warning('Keycloak SSO gagal: state tidak cocok');
             abort(403, 'Sesi autentikasi tidak valid atau telah kedaluwarsa.');
         }
 
@@ -68,6 +70,7 @@ class KeycloakController extends Controller
 
         $code = (string) $request->query('code', '');
         if ($code === '' || empty($codeVerifier)) {
+            Log::warning('Keycloak SSO gagal: kode penukaran gagal');
             $request->session()->forget('_old_input');
 
             return redirect()->route('login')->withErrors([
@@ -77,6 +80,7 @@ class KeycloakController extends Controller
 
         $tokenData = $this->keycloak->exchangeCode($code, $codeVerifier);
         if (! $tokenData || empty($tokenData['access_token'])) {
+            Log::warning('Keycloak SSO gagal: kode penukaran gagal');
             $request->session()->forget('_old_input');
 
             return redirect()->route('login')->withErrors([
@@ -86,6 +90,7 @@ class KeycloakController extends Controller
 
         $userInfo = $this->keycloak->getUserInfo($tokenData['access_token']);
         if (! $userInfo || empty($userInfo['sub'])) {
+            Log::warning('Keycloak SSO gagal: klaim wajib hilang');
             $request->session()->forget('_old_input');
 
             return redirect()->route('login')->withErrors([

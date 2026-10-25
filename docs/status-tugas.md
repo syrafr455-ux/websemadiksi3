@@ -67,6 +67,23 @@ Status pelacakan pengerjaan bertahap:
     - `Tests\Feature\KeycloakSsoAndSecurityTest` (18 tes, 99 assertions) diperbarui agar galat SSO dipetakan ke key `sso`.
     - Seluruh rangkaian uji `php artisan test` (348 tes, 2961 assertions) lulus 100%.
 
+- [x] **Bagian 8: Perilaku Tombol SSO Setelah Logout & Logging Kegagalan SSO**
+  - Masalah: Sesi Keycloak di browser tetap hidup setelah logout dari aplikasi SEMADIKSI, sehingga klik "Masuk dengan akun UNUSA" tidak menampilkan form login UNUSA dan otomatis masuk menggunakan sesi sebelumnya.
+  - Penambahan konfigurasi `KEYCLOAK_FORCE_LOGIN_PROMPT` (bawaan `true`) di `config/services.php` dan `.env.example`.
+  - Pada `KeycloakService::getAuthorizationUrl`, jika flag aktif, URL otorisasi menyertakan parameter `prompt=login` sehingga form login UNUSA selalu dimunculkan oleh IdP Keycloak tanpa merusak alur PKCE dan state yang ada.
+  - Logging kegagalan SSO: Pada setiap cabang kegagalan callback di `KeycloakController` dan `KeycloakService`, sistem mencatat satu baris log `warning` dengan kode alasan spesifik tanpa menyertakan NIM, email, token, atau data pribadi:
+    1. `state tidak cocok`
+    2. `kode penukaran gagal`
+    3. `klaim wajib hilang`
+    4. `NIM tidak ada di data master`
+    5. `pengguna belum teraktivasi`
+    6. `akun diblokir`
+    7. `role tidak diizinkan SSO`
+  - Pesan galat ke pengguna tetap netral dan aman tanpa membocorkan rincian internal akun.
+  - Pengujian Fitur:
+    - Tes `Tests\Feature\KeycloakSsoAndSecurityTest` (26 tes, 126 assertions) memvalidasi `prompt=login` ada saat flag aktif dan hilang saat nonaktif, serta memvalidasi setiap 7 kode alasan tercatat di log tanpa data pribadi.
+    - Seluruh rangkaian uji `php artisan test` (356 tes, 2988 assertions) dan build aset `npm run build` lulus sempurna 100%.
+
 ## Temuan Belum Ditangani / Catatan
 - Pemasangan paket `phpoffice/phpspreadsheet` dan `openspout/openspout` via Composer dist zipball mengalami kegagalan izin penulisan file sementara pada Windows (`vendor/composer/tmp-*.zip: Permission denied`). Sesuai aturan tugas, berkas composer di-revert bersih dan sistem menggunakan cadangan OpenXML .xlsx engine bawaan PHP (`ZipArchive` + XML) dengan CSV cadangan yang tetap aktif.
-- Seluruh tugas perbaikan halaman login, jalur staf, logout tiap role, SSO RP-initiated logout, dan perbaikan halaman admin login mengecil telah selesai dikerjakan, diuji, dan diverifikasi end-to-end.
+- Seluruh tugas perbaikan alur login, logout, SSO prompt login, serta logging kegagalan SSO telah selesai dikerjakan, diuji, dan diverifikasi end-to-end.

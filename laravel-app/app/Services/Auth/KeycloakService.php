@@ -11,6 +11,7 @@ use Exception;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class KeycloakService
@@ -80,7 +81,7 @@ class KeycloakService
         $clientId = (string) config('services.keycloak.client_id', 'simadiksi');
         $redirectUri = (string) (config('services.keycloak.redirect') ?: route('auth.login.callback'));
 
-        $query = http_build_query([
+        $params = [
             'client_id' => $clientId,
             'redirect_uri' => $redirectUri,
             'response_type' => 'code',
@@ -88,7 +89,13 @@ class KeycloakService
             'state' => $state,
             'code_challenge' => $codeChallenge,
             'code_challenge_method' => 'S256',
-        ]);
+        ];
+
+        if ((bool) config('services.keycloak.force_login_prompt', true)) {
+            $params['prompt'] = 'login';
+        }
+
+        $query = http_build_query($params);
 
         return $endpoints['authorization_endpoint'].'?'.$query;
     }
@@ -191,7 +198,7 @@ class KeycloakService
      * - Jangan mencocokkan lewat email.
      * - Role TIDAK PERNAH diambil dari klaim SSO.
      * - Staf (super_admin, verifikator_berkas, penilai_karya) tidak bisa tertaut lewat SSO untuk pertama kali.
-     * - Tolak akun diblokir.
+     * - Tolak akun diblokir atau belum teraktivasi.
      *
      * @param  array<string, mixed>  $claims
      *
@@ -201,6 +208,7 @@ class KeycloakService
     {
         $sub = trim((string) ($claims['sub'] ?? ''));
         if ($sub === '') {
+            Log::warning('Keycloak SSO gagal: klaim wajib hilang');
             throw new Exception('Klaim subjek IdP tidak valid.');
         }
 
@@ -208,7 +216,13 @@ class KeycloakService
         $user = User::where('keycloak_sub', $sub)->first();
         if ($user) {
             if ($user->is_blocked) {
+                Log::warning('Keycloak SSO gagal: akun diblokir');
                 throw new Exception('Akun Anda dinonaktifkan oleh administrator. Hubungi admin SEMADIKSI.');
+            }
+
+            if ($user->email_verified_at === null) {
+                Log::warning('Keycloak SSO gagal: pengguna belum teraktivasi');
+                throw new Exception('Akun belum teraktivasi. Hubungi admin SEMADIKSI.');
             }
 
             return $user;
@@ -219,12 +233,14 @@ class KeycloakService
         $nim = trim((string) ($claims[$nimClaimKey] ?? ''));
 
         if ($nim === '') {
+            Log::warning('Keycloak SSO gagal: klaim wajib hilang');
             throw new Exception('Akun belum terdaftar. Hubungi admin.');
         }
 
         // 3. Cocokkan NIM dengan master data mahasiswa UNUSA
         $mahasiswa = $this->academicProvider->cariMahasiswaByNim($nim);
         if (! $mahasiswa || empty($mahasiswa['nim'])) {
+            Log::warning('Keycloak SSO gagal: NIM tidak ada di data master');
             throw new Exception('Akun belum terdaftar. Hubungi admin.');
         }
 
@@ -234,11 +250,18 @@ class KeycloakService
         if ($existing) {
             // Staf tidak boleh tertaut otomatis lewat SSO untuk pertama kalinya
             if ($existing->isStaff() || in_array($existing->role, [UserRole::SuperAdmin, UserRole::VerifikatorBerkas, UserRole::PenilaiKarya], true)) {
+                Log::warning('Keycloak SSO gagal: role tidak diizinkan SSO');
                 throw new Exception('Staf wajib masuk menggunakan kata sandi.');
             }
 
             if ($existing->is_blocked) {
+                Log::warning('Keycloak SSO gagal: akun diblokir');
                 throw new Exception('Akun Anda dinonaktifkan oleh administrator. Hubungi admin SEMADIKSI.');
+            }
+
+            if ($existing->email_verified_at === null) {
+                Log::warning('Keycloak SSO gagal: pengguna belum teraktivasi');
+                throw new Exception('Akun belum teraktivasi. Hubungi admin SEMADIKSI.');
             }
 
             // Tautkan keycloak_sub ke akun mahasiswa yang sudah ada

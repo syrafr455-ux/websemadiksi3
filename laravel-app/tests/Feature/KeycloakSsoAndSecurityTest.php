@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class KeycloakSsoAndSecurityTest extends TestCase
@@ -24,7 +25,7 @@ class KeycloakSsoAndSecurityTest extends TestCase
         Cache::flush();
     }
 
-    private function setKeycloakConfig(bool $enabled = true): void
+    private function setKeycloakConfig(bool $enabled = true, bool $forceLoginPrompt = true): void
     {
         Config::set('services.keycloak.enabled', $enabled);
         Config::set('services.keycloak.base_url', 'https://sso.unusa.ac.id');
@@ -34,6 +35,7 @@ class KeycloakSsoAndSecurityTest extends TestCase
         Config::set('services.keycloak.redirect', 'http://localhost:8000/auth/login/callback');
         Config::set('services.keycloak.logout_enabled', false);
         Config::set('services.keycloak.post_logout_redirect_uri', 'http://localhost:8000/masuk');
+        Config::set('services.keycloak.force_login_prompt', $forceLoginPrompt);
     }
 
     public function test_fitur_nonaktif_mengembalikan_404_tanpa_error(): void
@@ -500,5 +502,302 @@ class KeycloakSsoAndSecurityTest extends TestCase
             $this->assertStringContainsString($expectedText, $html);
             $this->assertStringNotContainsString('Stack trace', $html);
         }
+    }
+
+    public function test_url_otorisasi_memuat_prompt_login_saat_flag_aktif_dan_tidak_memuat_saat_nonaktif(): void
+    {
+        $this->setKeycloakConfig(true, forceLoginPrompt: true);
+        $resAktif = $this->get('/auth/login');
+        $resAktif->assertRedirect();
+        $this->assertStringContainsString('prompt=login', (string) $resAktif->headers->get('Location'));
+
+        $this->setKeycloakConfig(true, forceLoginPrompt: false);
+        $resNonaktif = $this->get('/auth/login');
+        $resNonaktif->assertRedirect();
+        $this->assertStringNotContainsString('prompt=login', (string) $resNonaktif->headers->get('Location'));
+    }
+
+    public function test_logging_alasan_kegagalan_sso_state_tidak_cocok_tanpa_data_pribadi(): void
+    {
+        Log::spy();
+        $this->setKeycloakConfig(true);
+
+        $this->withSession(['keycloak_oauth_state' => 'state_benar'])
+            ->get('/auth/login/callback?state=state_palsu&code=auth_code_rahasia_123');
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(function (string $message) {
+                return str_contains($message, 'state tidak cocok')
+                    && ! str_contains($message, 'auth_code_rahasia_123')
+                    && ! str_contains($message, 'state_palsu');
+            });
+    }
+
+    public function test_logging_alasan_kegagalan_sso_kode_penukaran_gagal_tanpa_data_pribadi(): void
+    {
+        Log::spy();
+        $this->setKeycloakConfig(true);
+
+        // Kasus A: code kosong
+        $this->withSession([
+            'keycloak_oauth_state' => 'valid_state',
+            'keycloak_code_verifier' => 'dummy_verifier_secret',
+        ])->get('/auth/login/callback?state=valid_state');
+
+        // Kasus B: token exchange HTTP gagal
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([], 400),
+        ]);
+
+        $this->withSession([
+            'keycloak_oauth_state' => 'valid_state_2',
+            'keycloak_code_verifier' => 'dummy_verifier_secret_2',
+        ])->get('/auth/login/callback?state=valid_state_2&code=code_rahasia_999');
+
+        Log::shouldHaveReceived('warning')
+            ->withArgs(function (string $message) {
+                return str_contains($message, 'kode penukaran gagal')
+                    && ! str_contains($message, 'dummy_verifier_secret')
+                    && ! str_contains($message, 'code_rahasia_999');
+            });
+    }
+
+    public function test_logging_alasan_kegagalan_sso_klaim_wajib_hilang_tanpa_data_pribadi(): void
+    {
+        Log::spy();
+        $this->setKeycloakConfig(true);
+
+        // Sub hilang
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'secret_access_token_1',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'name' => 'Tanpa Sub',
+            ], 200),
+        ]);
+
+        $this->withSession([
+            'keycloak_oauth_state' => 'valid_state',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state&code=test_code');
+
+        // NIM / preferred_username hilang
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'secret_access_token_2',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => 'sub-unusa-valid',
+                'name' => 'Fulan',
+                'email' => 'fulan@student.unusa.ac.id',
+            ], 200),
+        ]);
+
+        $this->withSession([
+            'keycloak_oauth_state' => 'valid_state_2',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state_2&code=test_code');
+
+        Log::shouldHaveReceived('warning')
+            ->withArgs(function (string $message) {
+                return str_contains($message, 'klaim wajib hilang')
+                    && ! str_contains($message, 'secret_access_token')
+                    && ! str_contains($message, 'fulan@student.unusa.ac.id');
+            });
+    }
+
+    public function test_logging_alasan_kegagalan_sso_nim_tidak_ada_di_data_master_tanpa_data_pribadi(): void
+    {
+        Log::spy();
+        $this->setKeycloakConfig(true);
+
+        $nimRahasia = '9998887776';
+        $emailRahasia = 'rahasia999@student.unusa.ac.id';
+
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'secret_token_master',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => 'sub-unusa-asing',
+                'preferred_username' => $nimRahasia,
+                'email' => $emailRahasia,
+            ], 200),
+        ]);
+
+        $response = $this->withSession([
+            'keycloak_oauth_state' => 'valid_state',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state&code=test_code');
+
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors(['sso' => 'Akun belum terdaftar. Hubungi admin.']);
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(function (string $message) use ($nimRahasia, $emailRahasia) {
+                return str_contains($message, 'NIM tidak ada di data master')
+                    && ! str_contains($message, $nimRahasia)
+                    && ! str_contains($message, $emailRahasia)
+                    && ! str_contains($message, 'secret_token_master');
+            });
+    }
+
+    public function test_logging_alasan_kegagalan_sso_pengguna_belum_teraktivasi_tanpa_data_pribadi(): void
+    {
+        Log::spy();
+        $this->setKeycloakConfig(true);
+
+        $nim = '2241010077';
+        $email = '2241010077@student.unusa.ac.id';
+
+        // Akun ada di master mahasiswa
+        MasterMahasiswaUnusa::create([
+            'nim' => $nim,
+            'nama_lengkap' => 'Mahasiswa Belum Aktivasi',
+            'email_kampus' => $email,
+            'status_aktif' => 'AKTIF',
+        ]);
+
+        // Akun ada di tabel users tetapi belum teraktivasi (email_verified_at null)
+        User::factory()->create([
+            'nim' => $nim,
+            'email' => $email,
+            'is_unusa' => true,
+            'email_verified_at' => null,
+            'keycloak_sub' => null,
+        ]);
+
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'secret_token_unverified',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => 'sub-unverified-1',
+                'preferred_username' => $nim,
+                'email' => $email,
+            ], 200),
+        ]);
+
+        $response = $this->withSession([
+            'keycloak_oauth_state' => 'valid_state',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state&code=test_code');
+
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors('sso');
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(function (string $message) use ($nim, $email) {
+                return str_contains($message, 'pengguna belum teraktivasi')
+                    && ! str_contains($message, $nim)
+                    && ! str_contains($message, $email)
+                    && ! str_contains($message, 'secret_token_unverified');
+            });
+    }
+
+    public function test_logging_alasan_kegagalan_sso_akun_diblokir_tanpa_data_pribadi(): void
+    {
+        Log::spy();
+        $this->setKeycloakConfig(true);
+
+        $nim = '2241010088';
+        $email = 'terblokir@student.unusa.ac.id';
+
+        User::factory()->create([
+            'nim' => $nim,
+            'email' => $email,
+            'is_unusa' => true,
+            'keycloak_sub' => 'keycloak-sub-terblokir',
+            'is_blocked' => true,
+        ]);
+
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'secret_token_blocked',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => 'keycloak-sub-terblokir',
+                'email' => $email,
+            ], 200),
+        ]);
+
+        $response = $this->withSession([
+            'keycloak_oauth_state' => 'valid_state',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state&code=test_code');
+
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors('sso');
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(function (string $message) use ($nim, $email) {
+                return str_contains($message, 'akun diblokir')
+                    && ! str_contains($message, $nim)
+                    && ! str_contains($message, $email)
+                    && ! str_contains($message, 'secret_token_blocked');
+            });
+    }
+
+    public function test_logging_alasan_kegagalan_sso_role_tidak_diizinkan_sso_tanpa_data_pribadi(): void
+    {
+        Log::spy();
+        $this->setKeycloakConfig(true);
+
+        $nim = '2241010099';
+        $email = 'superadmin.sso@semadiksi.ac.id';
+
+        $admin = User::factory()->create([
+            'nim' => $nim,
+            'email' => $email,
+            'is_unusa' => true,
+            'role' => UserRole::SuperAdmin,
+            'keycloak_sub' => null,
+        ]);
+
+        MasterMahasiswaUnusa::create([
+            'nim' => $nim,
+            'nama_lengkap' => $admin->name,
+            'email_kampus' => $email,
+            'status_aktif' => 'AKTIF',
+        ]);
+
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'secret_token_staf_role',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => 'sub-staf-keycloak-role',
+                'preferred_username' => $nim,
+                'email' => $email,
+            ], 200),
+        ]);
+
+        $response = $this->withSession([
+            'keycloak_oauth_state' => 'valid_state',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state&code=test_code');
+
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors('sso');
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(function (string $message) use ($nim, $email) {
+                return str_contains($message, 'role tidak diizinkan SSO')
+                    && ! str_contains($message, $nim)
+                    && ! str_contains($message, $email)
+                    && ! str_contains($message, 'secret_token_staf_role');
+            });
     }
 }
