@@ -84,7 +84,7 @@ export function kegiatanKosong() {
         is_seat_booking_active: true,
         is_submission_active: false,
         submission_instructions: '',
-        status: 'published',
+        status: 'draft',
         seat_layout_config: { ...DEFAULT_SEAT_LAYOUT },
         panduan_file: null,
     };

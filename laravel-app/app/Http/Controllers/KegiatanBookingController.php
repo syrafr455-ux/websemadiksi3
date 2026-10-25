@@ -49,7 +49,7 @@ class KegiatanBookingController extends Controller
             abort(404);
         }
 
-        if ($kegiatan->status === KegiatanStatus::Draft) {
+        if ($kegiatan->status === KegiatanStatus::Draft || $kegiatan->status === KegiatanStatus::Diajukan) {
             abort_unless($isSuperAdmin, 404);
         }
 

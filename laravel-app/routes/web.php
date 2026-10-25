@@ -167,6 +167,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/kegiatan/{id}', [KegiatanController::class, 'show'])->name('kegiatan.show');
         Route::match(['put', 'patch'], '/kegiatan/{id}', [KegiatanController::class, 'update'])->name('kegiatan.update');
         Route::delete('/kegiatan/{id}', [KegiatanController::class, 'destroy'])->name('kegiatan.delete');
+        Route::post('/kegiatan/{id}/ajukan', [KegiatanController::class, 'ajukan'])->name('kegiatan.ajukan');
+        Route::post('/kegiatan/{id}/setujui', [KegiatanController::class, 'setujui'])->name('kegiatan.setujui');
+        Route::post('/kegiatan/{id}/tolak', [KegiatanController::class, 'tolak'])->name('kegiatan.tolak');
 
         // Dynamic Venue Layout & Booking Lifecycle Config (Super Admin Only)
         Route::match(['put', 'patch'], '/kegiatan/{id}/venue-config', [KegiatanSeatController::class, 'updateVenueConfig'])->name('kegiatan.venue-config');

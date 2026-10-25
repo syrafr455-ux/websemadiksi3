@@ -354,9 +354,30 @@ Status pelacakan pengerjaan bertahap:
    - Menulis ke sesi browser: `presensi_akhir_unlocked_{kegiatan_id}` selama 15 menit.
    - **TIDAK** memicu pembuatan sertifikat secara langsung.
 
-## Temuan Belum Ditangani / Catatan
-- Pemasangan paket `phpoffice/phpspreadsheet` dan `openspout/openspout` via Composer dist zipball mengalami kegagalan izin penulisan file sementara pada Windows (`vendor/composer/tmp-*.zip: Permission denied`). Sesuai aturan tugas, berkas composer di-revert bersih dan sistem menggunakan cadangan OpenXML .xlsx engine bawaan PHP (`ZipArchive` + XML) dengan CSV cadangan yang tetap aktif.
-- Catatan tugas: Pembuatan sertifikat masih terpicu otomatis oleh rute presensi akhir `PresensiController@submitSelfAttendance` (akan ditangani pada tahap berikutnya).
+- [x] **Bagian 17: Alur Persetujuan Kegiatan oleh Seluruh Super Admin (Bagian 2)**
+  - **Siklus Status & Aturan Penerbitan**:
+    - Status alur: `draft` &rarr; `diajukan` &rarr; `published` (`terbit`); penolakan dengan catatan wajib mengembalikan status ke `draft` dan menghapus seluruh persetujuan yang ada.
+    - Setiap kegiatan menyimpan pembuatnya di kolom `created_by` (migrasi `2026_10_25_000003_add_created_by_and_approvals_to_kegiatan_table.php`). Pembuat otomatis dianggap setuju dan tidak dapat menyetujui kegiatannya sendiri.
+    - Penyetuju wajib didefinisikan sebagai **SEMUA** pengguna ber-role `super_admin` yang aktif (`is_blocked = false`) selain pembuat, dihitung ulang secara dinamis saat pengecekan.
+    - Kegiatan otomatis menjadi terbit (`published`) segera setelah seluruh penyetuju wajib memberikan suara setuju. Bila tidak ada Super Admin lain yang aktif di sistem, kegiatan tidak dapat diterbitkan dan UI memberikan penjelasan yang ramah dan jelas.
+    - Mengedit kegiatan yang sedang berstatus `diajukan` otomatis membatalkan dan menghapus seluruh persetujuan yang telah masuk.
+  - **Penguncian Field Kritis pada Kegiatan Terbit**:
+    - Pada kegiatan yang berstatus terbit (`published` / `ongoing`), field-field kritis (jadwal waktu mulai & selesai, batas pendaftaran, batas karya, metode pelaksanaan, biaya, sasaran peserta, kuota, konfigurasi sertifikat, dan instruksi karya) dikunci rapat dan tidak dapat diubah secara langsung baik di form UI (`disabled`) maupun di validasi server dengan pesan galat jelas: *"Field kritis (jadwal, metode, biaya, kuota, atau aturan kehadiran & sertifikat) pada kegiatan yang sudah terbit telah dikunci dan tidak dapat diubah secara langsung."*.
+    - Field non-kritis (deskripsi, daftar narasumber) tetap dapat diperbarui secara langsung.
+    - Perubahan denah dan kapasitas venue tetap dilayani secara aman lewat alur `venue-config` yang sudah ada (dengan mekanisme reset kursi dan notifikasi pilih ulang).
+    - **Catatan**: Fitur "ajukan perubahan" untuk kegiatan terbit belum ada.
+  - **Penyimpanan Suara Persetujuan & Audit Log**:
+    - Tabel `kegiatan_persetujuan` menyimpan keputusan (`setuju` / `tolak`), catatan penolakan/persetujuan, waktu keputusan, dan sidik jari versi data kegiatan yang disetujui (`data_version`).
+    - Aturan satu suara per pengguna ditegakkan dengan indeks unik `['kegiatan_id', 'user_id']`.
+    - Setiap pengajuan, persetujuan, dan penolakan tercatat lengkap di `audit_logs` bersama alamat IP pengguna (`request()->ip()`).
+  - **Antarmuka Pengguna (UI)**:
+    - Di halaman detail kegiatan admin (`resources/js/Pages/Admin/Kegiatan/Show.jsx`): disematkan panel *"Alur Persetujuan Kegiatan"* yang menampilkan pembuat, daftar seluruh penyetuju wajib beserta badge status keputusannya (Menunggu, Disetujui, Ditolak), tombol "Ajukan Persetujuan" untuk pembuat, serta tombol "Setujui Kegiatan" dan "Tolak Kegiatan" (dengan modal input catatan penolakan wajib) untuk penyetuju wajib lain.
+    - Di halaman kelola kegiatan (`resources/js/Pages/Admin/Kegiatan/Index.jsx`): banner peringatan interaktif *"Terdapat X kegiatan yang sedang menunggu persetujuan Anda sebagai Super Admin"* ditampilkan di atas tabel dengan tautan filter langsung.
+  - **Email Notifikasi Antrean**:
+    - Mailable `App\Mail\KegiatanDiajukanMail` mengimplementasikan `Illuminate\Contracts\Queue\ShouldQueue` untuk mengirimkan pemberitahuan ke seluruh penyetuju wajib segera setelah kegiatan diajukan, menggunakan Blade template bahasa Indonesia `resources/views/emails/kegiatan_diajukan.blade.php`.
+  - **Pengujian & Integritas**:
+    - Suite pengujian baru `Tests\Feature\KegiatanApprovalTest` (10 tes, 57 assertions) lulus 100% mencakup: skenario 1, 2, dan 3 super admin, pencegahan self-approval oleh pembuat, penolakan dengan catatan wajib, reset persetujuan saat edit, penyisihan akun diblokir, proteksi draft/diajukan dari publik, serta penguncian field kritis pada kegiatan terbit.
+    - Seluruh pengujian sistem Feature suite (**411 tes, 3334 assertions**) lulus tanpa ada kegagalan.
 
 
 

@@ -20,7 +20,8 @@ export default function KegiatanIndex({
     kegiatans = {},
     filters = {},
     unusaFacilities = [],
-    statusOptions = []
+    statusOptions = [],
+    menungguPersetujuanAnda = 0,
 }) {
     const [search, setSearch] = useState(filters.q || '');
     const [filterCategory, setFilterCategory] = useState(filters.kategori || '');
@@ -28,6 +29,7 @@ export default function KegiatanIndex({
     const [modalOpen, setModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [currentStep, setCurrentStep] = useState(1);
+    const isFieldKritisTerkunci = Boolean(editingItem && (editingItem.status === 'published' || editingItem.status === 'ongoing'));
 
     // Form State (nama field = nama kolom model Kegiatan, lihat resources/js/lib/kegiatanForm.js)
     const { data, setData, post, processing, errors, reset, clearErrors, setError, transform } = useForm(kegiatanKosong());
@@ -176,6 +178,26 @@ export default function KegiatanIndex({
                         Tambah Kegiatan Baru
                     </button>
                 </div>
+
+                {/* Banner Peringatan Kegiatan Menunggu Persetujuan */}
+                {menungguPersetujuanAnda > 0 && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-300">
+                        <div className="flex items-center gap-2.5">
+                            <span className="material-symbols-outlined text-amber-400 text-xl">pending_actions</span>
+                            <div>
+                                <span className="font-bold text-amber-200">Perhatian:</span> Terdapat{' '}
+                                <strong className="text-white underline">{menungguPersetujuanAnda} kegiatan</strong> yang sedang menunggu persetujuan Anda sebagai Super Admin.
+                            </div>
+                        </div>
+                        <a
+                            href="/admin/kegiatan?status=diajukan"
+                            className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-bold border border-amber-500/40 text-[11px] flex items-center gap-1 transition-all"
+                        >
+                            <span>Lihat Daftar</span>
+                            <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                        </a>
+                    </div>
+                )}
 
                 {/* Filter & Search Bar */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
@@ -390,6 +412,14 @@ export default function KegiatanIndex({
 
                             {/* Modal Form Body */}
                             <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-6">
+                                {isFieldKritisTerkunci && (
+                                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-amber-300">
+                                        <span className="material-symbols-outlined text-base text-amber-400 shrink-0 mt-0.5">lock</span>
+                                        <div>
+                                            <span className="font-bold text-amber-200">Field Kritis Dikunci:</span> Jadwal, metode, sasaran, biaya, kuota, serta aturan submission pada kegiatan yang telah terbit telah dikunci demi integritas pendaftaran. Field non-kritis (deskripsi, narasumber) tetap dapat diperbarui.
+                                        </div>
+                                    </div>
+                                )}
                                 {currentStep === 1 && (
                                     <div className="space-y-4">
                                         <div>
@@ -409,7 +439,8 @@ export default function KegiatanIndex({
                                                 <select
                                                     value={data.kategori}
                                                     onChange={(e) => setData('kategori', e.target.value)}
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                                    disabled={isFieldKritisTerkunci}
+                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                                                     required
                                                 >
                                                     {KATEGORI_OPTIONS.map((o) => (
@@ -423,7 +454,8 @@ export default function KegiatanIndex({
                                                 <select
                                                     value={data.sasaran_peserta}
                                                     onChange={(e) => setData('sasaran_peserta', e.target.value)}
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                                    disabled={isFieldKritisTerkunci}
+                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     {SASARAN_OPTIONS.map((o) => (
                                                         <option key={o.value} value={o.value}>{o.label}</option>
@@ -435,7 +467,8 @@ export default function KegiatanIndex({
                                                 <select
                                                     value={data.metode_pelaksanaan}
                                                     onChange={(e) => setData('metode_pelaksanaan', e.target.value)}
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                                    disabled={isFieldKritisTerkunci}
+                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     {METODE_OPTIONS.map((o) => (
                                                         <option key={o.value} value={o.value}>{o.label}</option>
@@ -451,6 +484,7 @@ export default function KegiatanIndex({
                                                     type="datetime-local"
                                                     step="1"
                                                     value={data.tanggal_mulai}
+                                                    disabled={isFieldKritisTerkunci}
                                                     onChange={(e) => {
                                                         const val = e.target.value;
                                                         setData((prev) => ({
@@ -459,7 +493,7 @@ export default function KegiatanIndex({
                                                             tanggal_selesai: !prev.tanggal_selesai && val ? tambahDuaJamWib(val) : prev.tanggal_selesai,
                                                         }));
                                                     }}
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                                                     required
                                                 />
                                                 {errors.tanggal_mulai && <span className="text-[10px] text-rose-400">{errors.tanggal_mulai}</span>}
@@ -470,8 +504,9 @@ export default function KegiatanIndex({
                                                     type="datetime-local"
                                                     step="1"
                                                     value={data.tanggal_selesai}
+                                                    disabled={isFieldKritisTerkunci}
                                                     onChange={(e) => setData('tanggal_selesai', e.target.value)}
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                                                 />
                                                 {errors.tanggal_selesai && <span className="text-[10px] text-rose-400">{errors.tanggal_selesai}</span>}
                                                 {!errors.tanggal_selesai && data.tanggal_mulai && data.tanggal_selesai && data.tanggal_selesai <= data.tanggal_mulai && (
@@ -484,8 +519,9 @@ export default function KegiatanIndex({
                                                     type="datetime-local"
                                                     step="1"
                                                     value={data.registration_deadline}
+                                                    disabled={isFieldKritisTerkunci}
                                                     onChange={(e) => setData('registration_deadline', e.target.value)}
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                                                 />
                                                 {errors.registration_deadline && <span className="text-[10px] text-rose-400">{errors.registration_deadline}</span>}
                                                 {!errors.registration_deadline && data.tanggal_mulai && data.registration_deadline && data.registration_deadline > data.tanggal_mulai && (
@@ -502,8 +538,9 @@ export default function KegiatanIndex({
                                                     type="number"
                                                     min="0"
                                                     value={data.biaya}
+                                                    disabled={isFieldKritisTerkunci}
                                                     onChange={(e) => setData('biaya', e.target.value)}
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                                                     required
                                                 />
                                                 <span className="text-[10px] text-slate-500">0 = Gratis</span>
@@ -514,8 +551,9 @@ export default function KegiatanIndex({
                                                     type="number"
                                                     min="1"
                                                     value={data.kuota}
+                                                    disabled={isFieldKritisTerkunci}
                                                     onChange={(e) => setData('kuota', e.target.value)}
-                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                                                     required
                                                 />
                                                 {errors.kuota && <span className="text-[10px] text-rose-400">{errors.kuota}</span>}

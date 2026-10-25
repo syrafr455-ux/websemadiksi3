@@ -5,8 +5,10 @@ namespace App\Models;
 use App\Enums\KegiatanStatus;
 use App\Enums\UserRole;
 use App\Support\Wib;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -70,6 +72,7 @@ class Kegiatan extends Model
         'presensi_akhir_mulai',
         'presensi_akhir_selesai',
         'legacy_activity_id',
+        'created_by',
     ];
 
     protected $appends = ['file_panduan_url', 'certificate_template_url'];
@@ -182,6 +185,84 @@ class Kegiatan extends Model
     public function sertifikats(): HasMany
     {
         return $this->hasMany(Sertifikat::class);
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function persetujuan(): HasMany
+    {
+        return $this->hasMany(KegiatanPersetujuan::class, 'kegiatan_id');
+    }
+
+    /**
+     * Penyetuju wajib: SEMUA super admin aktif (tidak diblokir) selain pembuat,
+     * dihitung ulang saat pengecekan. Pembuat otomatis dianggap setuju.
+     *
+     * @return Collection<int, User>
+     */
+    public function penyetujuWajib()
+    {
+        $query = User::where('role', UserRole::SuperAdmin)->where('is_blocked', false);
+        if ($this->created_by) {
+            $query->where('id', '!=', $this->created_by);
+        }
+
+        return $query->get();
+    }
+
+    /**
+     * Sidik jari data versi saat ini yang disetujui.
+     */
+    public function sidikJariData(): string
+    {
+        return hash('sha256', json_encode([
+            'nama_kegiatan' => $this->nama_kegiatan,
+            'tanggal_mulai' => $this->tanggal_mulai?->toISOString(),
+            'tanggal_selesai' => $this->tanggal_selesai?->toISOString(),
+            'registration_deadline' => $this->registration_deadline?->toISOString(),
+            'biaya' => (float) $this->biaya,
+            'kuota' => (int) $this->kuota,
+            'metode_pelaksanaan' => $this->metode_pelaksanaan,
+            'sasaran_peserta' => $this->sasaran_peserta,
+            'lokasi_nama' => $this->lokasi_nama,
+        ]));
+    }
+
+    /**
+     * Periksa apakah seluruh penyetuju wajib telah menyetujui kegiatan ini.
+     * Kegiatan otomatis menjadi terbit ketika semua penyetuju wajib sudah setuju.
+     * Bila tidak ada super admin lain yang aktif, kegiatan tidak bisa terbit.
+     */
+    public function cekDanPerbaruiStatusPersetujuan(): bool
+    {
+        $penyetujuWajib = $this->penyetujuWajib();
+        if ($penyetujuWajib->isEmpty()) {
+            return false;
+        }
+
+        $setujuCount = $this->persetujuan()
+            ->whereIn('user_id', $penyetujuWajib->pluck('id'))
+            ->where('keputusan', 'setuju')
+            ->count();
+
+        if ($setujuCount === $penyetujuWajib->count()) {
+            $this->status = KegiatanStatus::Published;
+            $this->save();
+
+            AuditLog::record(
+                null,
+                'publish_kegiatan_otomatis',
+                "Kegiatan '{$this->nama_kegiatan}' (ID: {$this->id}) otomatis terbit setelah disetujui oleh seluruh super admin aktif",
+                $this
+            );
+
+            return true;
+        }
+
+        return false;
     }
 
     /**

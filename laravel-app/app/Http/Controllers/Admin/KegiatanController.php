@@ -7,8 +7,10 @@ use App\Enums\RegistrationPaymentStatus;
 use App\Enums\SeatStatus;
 use App\Events\KegiatanUpdatedEvent;
 use App\Http\Controllers\Controller;
+use App\Mail\KegiatanDiajukanMail;
 use App\Models\AuditLog;
 use App\Models\Kegiatan;
+use App\Models\KegiatanPersetujuan;
 use App\Models\KegiatanRegistration;
 use App\Services\Kegiatan\DenahKursiService;
 use App\Services\Kegiatan\PetaKursiService;
@@ -19,6 +21,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -63,12 +66,27 @@ class KegiatanController extends Controller
         $kegiatans = $query->paginate(12)->withQueryString();
         $unusaFacilities = $this->facilityService->listCampuses();
 
+        $menungguPersetujuanAnda = 0;
+        if (auth()->user()?->isSuperAdmin()) {
+            $currentUserId = auth()->id();
+            $menungguPersetujuanAnda = Kegiatan::query()
+                ->where('status', KegiatanStatus::Diajukan)
+                ->where(function ($q) use ($currentUserId) {
+                    $q->whereNull('created_by')->orWhere('created_by', '!=', $currentUserId);
+                })
+                ->whereDoesntHave('persetujuan', function ($q) use ($currentUserId) {
+                    $q->where('user_id', $currentUserId);
+                })
+                ->count();
+        }
+
         return Inertia::render('Admin/Kegiatan/Index', [
             'title' => 'Manajemen Kegiatan Enterprise',
             'kegiatans' => $kegiatans,
             'filters' => $request->only(['q', 'status', 'kategori']),
             'unusaFacilities' => $unusaFacilities,
             'statusOptions' => KegiatanStatus::cases(),
+            'menungguPersetujuanAnda' => $menungguPersetujuanAnda,
         ]);
     }
 
@@ -113,6 +131,7 @@ class KegiatanController extends Controller
             $seatLayout = $this->denah->normalisasi($validated['seat_layout_config'] ?? null);
 
             $kegiatan = Kegiatan::create([
+                'created_by' => auth()->id(),
                 'nama_kegiatan' => trim($validated['nama_kegiatan']),
                 'deskripsi' => $validated['deskripsi'] ?? null,
                 'kategori' => $validated['kategori'],
@@ -155,7 +174,7 @@ class KegiatanController extends Controller
 
             DB::commit();
 
-            return redirect()->route('admin.kegiatan')->with('success', 'Kegiatan enterprise berhasil diterbitkan.');
+            return redirect()->route('admin.kegiatan')->with('success', 'Kegiatan enterprise berhasil disimpan.');
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -197,6 +216,25 @@ class KegiatanController extends Controller
 
         $aktif = $kegiatan->registrations()->active()->count();
 
+        $penyetujuWajib = $kegiatan->penyetujuWajib();
+        $persetujuan = $kegiatan->persetujuan()->with('user:id,name,email')->get();
+        $currentUserId = auth()->id();
+
+        $daftarPenyetuju = $penyetujuWajib->map(function ($admin) use ($persetujuan) {
+            $suara = $persetujuan->firstWhere('user_id', $admin->id);
+
+            return [
+                'id' => $admin->id,
+                'name' => $admin->name,
+                'email' => $admin->email,
+                'status' => $suara ? $suara->keputusan : 'menunggu',
+                'catatan' => $suara?->catatan,
+                'waktu' => $suara?->created_at?->toISOString(),
+            ];
+        });
+
+        $sudahMemberiSuara = (bool) $persetujuan->firstWhere('user_id', $currentUserId);
+
         return Inertia::render('Admin/Kegiatan/Show', [
             'title' => 'Detail Kegiatan',
             'kegiatan' => [
@@ -211,6 +249,18 @@ class KegiatanController extends Controller
                 'seat_booking_open' => $kegiatan->isSeatBookingOpen(),
                 'status_booking' => $kegiatan->statusBookingKursi(),
                 'registration_open' => $kegiatan->isRegistrationOpen(),
+            ],
+            'approval' => [
+                'status' => $kegiatan->status?->value,
+                'created_by' => $kegiatan->created_by,
+                'creator_name' => $kegiatan->createdBy?->name,
+                'is_creator' => $currentUserId === $kegiatan->created_by,
+                'can_submit' => ($currentUserId === $kegiatan->created_by || ! $kegiatan->created_by) && $kegiatan->status === KegiatanStatus::Draft,
+                'can_approve' => $currentUserId !== $kegiatan->created_by && $kegiatan->status === KegiatanStatus::Diajukan && ! $sudahMemberiSuara,
+                'can_reject' => $currentUserId !== $kegiatan->created_by && $kegiatan->status === KegiatanStatus::Diajukan,
+                'bisa_terbit' => $penyetujuWajib->isNotEmpty(),
+                'penyetuju_wajib' => $daftarPenyetuju,
+                'semua_setuju' => $penyetujuWajib->isNotEmpty() && $daftarPenyetuju->every(fn ($p) => $p['status'] === 'setuju'),
             ],
             // Tab "Denah & Booking": peta kursi beserta pemegangnya, denah tersimpan, dan pilihan fasilitas untuk pindah venue.
             'kursi' => app(PetaKursiService::class)->untukAdmin($kegiatan),
@@ -264,7 +314,54 @@ class KegiatanController extends Controller
             unset($payload['narasumber']);
         }
 
+        // Pada kegiatan terbit, field kritis dikunci dengan pesan jelas
+        if (($kegiatan->status === KegiatanStatus::Published || $kegiatan->status === KegiatanStatus::Ongoing) && $kegiatan->persetujuan()->exists()) {
+            $criticalFields = [
+                'tanggal_mulai',
+                'tanggal_selesai',
+                'registration_deadline',
+                'submission_deadline',
+                'metode_pelaksanaan',
+                'biaya',
+                'sasaran_peserta',
+                'kuota',
+                'certificate_schema_config',
+                'is_submission_active',
+                'submission_instructions',
+            ];
+
+            foreach ($criticalFields as $field) {
+                if (array_key_exists($field, $payload)) {
+                    $oldVal = $kegiatan->{$field};
+                    $newVal = $payload[$field];
+                    $berubah = false;
+
+                    if ($oldVal instanceof CarbonInterface && $newVal instanceof CarbonInterface) {
+                        $berubah = ! $oldVal->equalTo($newVal);
+                    } elseif (is_numeric($oldVal) && is_numeric($newVal)) {
+                        $berubah = (float) $oldVal != (float) $newVal;
+                    } elseif (is_bool($oldVal) || is_bool($newVal)) {
+                        $berubah = (bool) $oldVal !== (bool) $newVal;
+                    } else {
+                        $berubah = $oldVal != $newVal;
+                    }
+
+                    if ($berubah) {
+                        throw ValidationException::withMessages([
+                            $field => 'Field kritis (jadwal, metode, biaya, kuota, atau aturan kehadiran & sertifikat) pada kegiatan yang sudah terbit telah dikunci dan tidak dapat diubah secara langsung.',
+                        ]);
+                    }
+                }
+            }
+        }
+
         $mulai = $payload['tanggal_mulai'] ?? $kegiatan->tanggal_mulai;
+        if (! array_key_exists('tanggal_selesai', $payload) && isset($payload['tanggal_mulai'])) {
+            if ($kegiatan->tanggal_selesai && $kegiatan->tanggal_selesai->lte($mulai)) {
+                $durasi = max(7200, $kegiatan->tanggal_mulai ? $kegiatan->tanggal_mulai->diffInSeconds($kegiatan->tanggal_selesai) : 7200);
+                $payload['tanggal_selesai'] = $mulai->copy()->addSeconds($durasi);
+            }
+        }
         $selesai = array_key_exists('tanggal_selesai', $payload) ? $payload['tanggal_selesai'] : $kegiatan->tanggal_selesai;
         if ($mulai && $selesai && $selesai->lte($mulai)) {
             throw ValidationException::withMessages(['tanggal_selesai' => 'Waktu selesai harus setelah waktu mulai.']);
@@ -273,6 +370,11 @@ class KegiatanController extends Controller
         $regDeadline = array_key_exists('registration_deadline', $payload) ? $payload['registration_deadline'] : $kegiatan->registration_deadline;
         if ($mulai && $regDeadline && $regDeadline->gt($mulai)) {
             throw ValidationException::withMessages(['registration_deadline' => 'Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.']);
+        }
+
+        // Mengedit kegiatan berstatus diajukan juga menghapus persetujuan
+        if ($kegiatan->status === KegiatanStatus::Diajukan) {
+            $kegiatan->persetujuan()->delete();
         }
 
         DB::beginTransaction();
@@ -375,6 +477,127 @@ class KegiatanController extends Controller
 
             return back()->with('error', 'Gagal menghapus kegiatan: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Ajukan kegiatan untuk persetujuan seluruh super admin.
+     */
+    public function ajukan(Request $request, int $id): RedirectResponse
+    {
+        $kegiatan = Kegiatan::findOrFail($id);
+        Gate::authorize('update', $kegiatan);
+
+        if ($kegiatan->created_by && $kegiatan->created_by !== auth()->id()) {
+            abort(403, 'Hanya pembuat kegiatan yang dapat mengajukan persetujuan.');
+        }
+
+        if ($kegiatan->status !== KegiatanStatus::Draft) {
+            return back()->with('error', 'Hanya kegiatan berstatus draft yang dapat diajukan.');
+        }
+
+        $kegiatan->status = KegiatanStatus::Diajukan;
+        $kegiatan->save();
+
+        // Hapus persetujuan lama bila ada bekas penolakan sebelumnya
+        $kegiatan->persetujuan()->delete();
+
+        // Kirim email notifikasi ke semua penyetuju wajib lewat antrean
+        $penyetujuWajib = $kegiatan->penyetujuWajib();
+        foreach ($penyetujuWajib as $penyetuju) {
+            Mail::to($penyetuju->email)->queue(new KegiatanDiajukanMail($kegiatan, $penyetuju));
+        }
+
+        AuditLog::record(
+            auth()->id(),
+            'submit_kegiatan',
+            "Mengajukan kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id}) untuk persetujuan seluruh super admin",
+            $kegiatan
+        );
+
+        return back()->with('success', 'Kegiatan berhasil diajukan untuk persetujuan seluruh Super Admin.');
+    }
+
+    /**
+     * Berikan persetujuan untuk kegiatan berstatus diajukan.
+     */
+    public function setujui(Request $request, int $id): RedirectResponse
+    {
+        $kegiatan = Kegiatan::findOrFail($id);
+        Gate::authorize('update', $kegiatan);
+
+        if ($kegiatan->created_by && $kegiatan->created_by === auth()->id()) {
+            abort(403, 'Pembuat kegiatan tidak dapat menyetujui kegiatannya sendiri.');
+        }
+
+        if ($kegiatan->status !== KegiatanStatus::Diajukan) {
+            return back()->with('error', 'Hanya kegiatan berstatus diajukan yang dapat disetujui.');
+        }
+
+        KegiatanPersetujuan::updateOrCreate(
+            ['kegiatan_id' => $kegiatan->id, 'user_id' => auth()->id()],
+            [
+                'keputusan' => 'setuju',
+                'catatan' => null,
+                'data_version' => $kegiatan->sidikJariData(),
+                'ip_address' => $request->ip(),
+            ]
+        );
+
+        AuditLog::record(
+            auth()->id(),
+            'approve_kegiatan',
+            "Menyetujui permohonan penerbitan kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id})",
+            $kegiatan
+        );
+
+        $terbit = $kegiatan->cekDanPerbaruiStatusPersetujuan();
+
+        return back()->with(
+            'success',
+            $terbit
+                ? 'Seluruh Super Admin telah menyetujui. Kegiatan resmi diterbitkan.'
+                : 'Persetujuan Anda telah dicatat. Menunggu persetujuan Super Admin lainnya.'
+        );
+    }
+
+    /**
+     * Tolak pengajuan kegiatan (dengan catatan wajib). Mengembalikan kegiatan ke draft.
+     */
+    public function tolak(Request $request, int $id): RedirectResponse
+    {
+        $kegiatan = Kegiatan::findOrFail($id);
+        Gate::authorize('update', $kegiatan);
+
+        if ($kegiatan->created_by && $kegiatan->created_by === auth()->id()) {
+            abort(403, 'Pembuat kegiatan tidak dapat menolak kegiatannya sendiri.');
+        }
+
+        if ($kegiatan->status !== KegiatanStatus::Diajukan) {
+            return back()->with('error', 'Hanya kegiatan berstatus diajukan yang dapat ditolak.');
+        }
+
+        $validated = $request->validate([
+            'catatan' => ['required', 'string', 'min:5', 'max:1000'],
+        ], [
+            'catatan.required' => 'Catatan penolakan wajib diisi.',
+            'catatan.min' => 'Catatan penolakan minimal 5 karakter.',
+        ]);
+
+        $catatan = trim($validated['catatan']);
+
+        // Satu penolakan (catatan wajib) mengembalikan kegiatan ke draft dan menghapus semua persetujuan
+        $kegiatan->persetujuan()->delete();
+        $kegiatan->status = KegiatanStatus::Draft;
+        $kegiatan->save();
+
+        AuditLog::record(
+            auth()->id(),
+            'reject_kegiatan',
+            "Menolak pengajuan kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id}). Catatan: {$catatan}",
+            $kegiatan
+        );
+
+        return back()->with('success', 'Kegiatan ditolak dan dikembalikan ke status draft.');
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Enums;
 enum KegiatanStatus: string
 {
     case Draft = 'draft';
+    case Diajukan = 'diajukan';
     case Published = 'published';
     case Ongoing = 'ongoing';
     case Completed = 'completed';
@@ -14,6 +15,7 @@ enum KegiatanStatus: string
     {
         return match ($this) {
             self::Draft => 'Draft',
+            self::Diajukan => 'Diajukan',
             self::Published => 'Dipublikasikan',
             self::Ongoing => 'Berlangsung',
             self::Completed => 'Selesai',

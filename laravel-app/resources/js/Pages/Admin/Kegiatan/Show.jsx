@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { router } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { formatWib } from '@/lib/waktuWib';
 import { KATEGORI_OPTIONS, METODE_OPTIONS, SASARAN_OPTIONS, labelDari } from '@/lib/kegiatanForm';
@@ -53,12 +54,15 @@ export default function KegiatanShow({
     title = 'Detail Kegiatan',
     kegiatan = {},
     ringkasan = {},
+    approval = {},
     pendaftar = [],
     kursi = [],
     denah = {},
     unusaFacilities = [],
 }) {
     const [hanyaPilihUlang, setHanyaPilihUlang] = useState(false);
+    const [modalTolakOpen, setModalTolakOpen] = useState(false);
+    const [catatanTolak, setCatatanTolak] = useState('');
     // Tab aktif tersimpan di hash URL (#denah-booking) agar bertahan saat halaman dimuat ulang.
     const [tab, setTab] = useState(() => (typeof window !== 'undefined' && window.location.hash === '#denah-booking' ? 'denah-booking' : 'pendaftar'));
     const gantiTab = (id) => {
@@ -115,6 +119,89 @@ export default function KegiatanShow({
                             Halaman Publik
                         </a>
                     </div>
+                </div>
+
+                {/* Panel Persetujuan Kegiatan */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-emerald-400">verified_user</span>
+                            <div>
+                                <h3 className="text-sm font-bold text-white">Alur Persetujuan Kegiatan</h3>
+                                <p className="text-[11px] text-slate-400">
+                                    Pembuat: <span className="text-slate-200 font-medium">{approval?.created_by?.name || 'Super Admin'}</span>
+                                    {approval?.created_by?.email && ` (${approval.created_by.email})`}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {approval?.can_submit && (
+                                <button
+                                    onClick={() => router.post(`/admin/kegiatan/${kegiatan.id}/ajukan`)}
+                                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all"
+                                >
+                                    <span className="material-symbols-outlined text-sm">send</span>
+                                    Ajukan Persetujuan
+                                </button>
+                            )}
+                            {approval?.can_approve && (
+                                <button
+                                    onClick={() => router.post(`/admin/kegiatan/${kegiatan.id}/setujui`)}
+                                    className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition-all"
+                                >
+                                    <span className="material-symbols-outlined text-sm">check_circle</span>
+                                    Setujui Kegiatan
+                                </button>
+                            )}
+                            {approval?.can_reject && (
+                                <button
+                                    onClick={() => {
+                                        setCatatanTolak('');
+                                        setModalTolakOpen(true);
+                                    }}
+                                    className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-rose-600/20 transition-all"
+                                >
+                                    <span className="material-symbols-outlined text-sm">cancel</span>
+                                    Tolak Kegiatan
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {!approval?.bisa_terbit && (
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-amber-300">
+                            <span className="material-symbols-outlined text-base text-amber-400 shrink-0 mt-0.5">warning</span>
+                            <div>
+                                <span className="font-bold">Kegiatan tidak dapat diterbitkan:</span> Penerbitan kegiatan membutuhkan persetujuan seluruh Super Admin aktif selain pembuat. Saat ini tidak ada Super Admin lain yang aktif dalam sistem.
+                            </div>
+                        </div>
+                    )}
+
+                    {approval?.penyetuju_wajib && approval.penyetuju_wajib.length > 0 && (
+                        <div>
+                            <div className="text-xs font-bold text-slate-300 mb-2">Daftar Penyetuju Wajib ({approval.penyetuju_wajib.length} Super Admin):</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                                {approval.penyetuju_wajib.map((p) => (
+                                    <div key={p.id} className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-2">
+                                        <div>
+                                            <div className="text-xs font-semibold text-slate-200">{p.name}</div>
+                                            <div className="text-[11px] text-slate-500">{p.email}</div>
+                                            {p.catatan && <div className="text-[11px] text-rose-300 mt-1 italic">&ldquo;{p.catatan}&rdquo;</div>}
+                                        </div>
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+                                            p.status === 'setuju'
+                                                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                                : p.status === 'tolak'
+                                                ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                                                : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                        }`}>
+                                            {p.status === 'setuju' ? 'Disetujui' : p.status === 'tolak' ? 'Ditolak' : 'Menunggu'}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Ringkasan */}
@@ -296,6 +383,53 @@ export default function KegiatanShow({
                     </div>
                 </div>
                 </div>
+                )}
+
+                {/* Modal Konfirmasi Penolakan */}
+                {modalTolakOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
+                            <h3 className="text-base font-bold text-white flex items-center gap-2">
+                                <span className="material-symbols-outlined text-rose-400">cancel</span>
+                                Tolak Persetujuan Kegiatan
+                            </h3>
+                            <p className="text-xs text-slate-300">
+                                Penolakan akan mengembalikan status kegiatan menjadi <strong>Draft</strong> dan membatalkan seluruh persetujuan yang telah diberikan. Masukkan alasan penolakan:
+                            </p>
+                            <textarea
+                                value={catatanTolak}
+                                onChange={(e) => setCatatanTolak(e.target.value)}
+                                placeholder="Tuliskan catatan alasan penolakan kegiatan secara rinci..."
+                                rows={3}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                            />
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setModalTolakOpen(false)}
+                                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!catatanTolak.trim()}
+                                    onClick={() => {
+                                        router.post(
+                                            `/admin/kegiatan/${kegiatan.id}/tolak`,
+                                            { catatan: catatanTolak },
+                                            {
+                                                onSuccess: () => setModalTolakOpen(false),
+                                            }
+                                        );
+                                    }}
+                                    className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold transition-all"
+                                >
+                                    Konfirmasi Penolakan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
         </AdminLayout>
