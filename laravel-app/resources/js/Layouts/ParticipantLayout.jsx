@@ -8,6 +8,9 @@ export default function ParticipantLayout({ children, title = 'Portal Kemahasisw
 
     const handleLogout = (e) => {
         e.preventDefault();
+        if (typeof router.clearHistory === 'function') {
+            router.clearHistory();
+        }
         router.post('/keluar');
     };
 

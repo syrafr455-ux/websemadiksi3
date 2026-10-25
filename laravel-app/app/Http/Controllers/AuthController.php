@@ -183,6 +183,11 @@ class AuthController extends Controller
         $isSso = (bool) $request->session()->get('auth_via_sso', false);
         $idToken = $request->session()->get('keycloak_id_token');
 
+        if ($user) {
+            $user->setRememberToken(null);
+            $user->saveQuietly();
+        }
+
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

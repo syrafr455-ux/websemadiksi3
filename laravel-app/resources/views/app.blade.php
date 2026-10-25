@@ -4,6 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    @auth
+        <meta name="user-authenticated" content="1" data-role="{{ Auth::user()->isStaff() ? 'staff' : 'user' }}">
+    @endauth
 
     <title inertia>SEMADIKSI - Platform Kemahasiswaan &amp; Event Engine</title>
 

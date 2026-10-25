@@ -10,6 +10,9 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
 
     const handleLogout = (e) => {
         e.preventDefault();
+        if (typeof router.clearHistory === 'function') {
+            router.clearHistory();
+        }
         router.post('/keluar');
     };
 

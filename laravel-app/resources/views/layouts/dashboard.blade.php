@@ -4,6 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    @auth
+        <meta name="user-authenticated" content="1" data-role="{{ Auth::user()->isStaff() ? 'staff' : 'user' }}">
+    @endauth
 
     <title>{{ $title ?? 'Dashboard Mahasiswa' }} - SEMADIKSI UNUSA</title>
 
@@ -186,6 +189,24 @@
                 <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-3">
                     <span class="material-symbols-outlined text-emerald-600">check_circle</span>
                     <span class="text-sm font-medium">{{ session('success') }}</span>
+                </div>
+            </div>
+        @endif
+
+        @if(session('warning'))
+            <div class="px-4 sm:px-6 lg:px-8 mt-4">
+                <div class="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-3">
+                    <span class="material-symbols-outlined text-amber-600">warning</span>
+                    <span class="text-sm font-medium">{{ session('warning') }}</span>
+                </div>
+            </div>
+        @endif
+
+        @if(session('info'))
+            <div class="px-4 sm:px-6 lg:px-8 mt-4">
+                <div class="p-4 rounded-2xl bg-sky-50 border border-sky-200 text-sky-800 flex items-center gap-3">
+                    <span class="material-symbols-outlined text-sky-600">info</span>
+                    <span class="text-sm font-medium">{{ session('info') }}</span>
                 </div>
             </div>
         @endif
