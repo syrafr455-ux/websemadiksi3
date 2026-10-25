@@ -5,42 +5,70 @@
             <h3 class="text-base font-bold text-on-surface mb-1">Kirim Bukti Presensi Mandiri</h3>
             <p class="text-xs text-outline mb-6">Pilih kegiatan dan unggah bukti kehadiran untuk diverifikasi oleh pengurus.</p>
 
-            <form action="{{ route('dashboard.absensi.store') }}" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                @csrf
-
+            {{-- Panduan Presensi Akhir --}}
+            <div class="mb-6 p-4 rounded-2xl bg-emerald-950/40 border border-emerald-800/50 text-xs text-emerald-300 flex items-start gap-3">
+                <span class="material-symbols-outlined text-emerald-400 text-lg shrink-0 mt-0.5">qr_code_scanner</span>
                 <div>
-                    <label for="activity_id" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
-                        Pilih Kegiatan <span class="text-rose-500">*</span>
-                    </label>
-                    <select name="activity_id" id="activity_id" required class="w-full px-4 py-2.5 bg-surface-container rounded-xl border border-surface-variant/40 text-xs font-medium focus:border-primary">
-                        <option value="">-- Pilih Agenda --</option>
-                        @foreach($activities as $act)
-                            <option value="{{ $act->id }}">{{ $act->title }} ({{ $act->date_text }})</option>
-                        @endforeach
-                    </select>
+                    <div class="font-bold text-emerald-200">Presensi Akhir Acara:</div>
+                    <p class="text-emerald-400/90 mt-0.5 leading-relaxed">
+                        Pindai QR di layar acara untuk presensi akhir dan penerbitan e-sertifikat resmi. Formulir di bawah ini dikhususkan untuk unggah bukti presensi mandiri kegiatan yang Anda ikuti.
+                    </p>
                 </div>
+            </div>
 
-                <div>
-                    <label for="location_name" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
-                        Lokasi / Ruangan
-                    </label>
-                    <input type="text" name="location_name" id="location_name" value="Auditorium Kampus B UNUSA" class="w-full px-4 py-2.5 bg-surface-container rounded-xl border border-surface-variant/40 text-xs font-medium focus:border-primary">
+            @if($activities->isEmpty())
+                <div class="py-10 px-6 text-center bg-surface-container rounded-2xl border border-surface-variant/40 space-y-3">
+                    <div class="w-12 h-12 rounded-2xl bg-surface border border-surface-variant/40 flex items-center justify-center mx-auto text-outline">
+                        <span class="material-symbols-outlined text-2xl">event_busy</span>
+                    </div>
+                    <div class="text-xs font-semibold text-outline">
+                        Belum ada kegiatan yang sedang membuka presensi untuk Anda
+                    </div>
+                    <div>
+                        <a href="{{ route('dashboard.kegiatan.saya') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-container text-white text-xs font-bold shadow-sm transition-all">
+                            <span class="material-symbols-outlined text-sm">confirmation_number</span>
+                            Lihat Kegiatan Saya
+                        </a>
+                    </div>
                 </div>
+            @else
+                <form action="{{ route('dashboard.absensi.store') }}" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    @csrf
 
-                <div class="md:col-span-2">
-                    <label for="proof_image" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
-                        Swafoto / Foto Bukti Kehadiran <span class="text-rose-500">*</span>
-                    </label>
-                    <input type="file" name="proof_image" id="proof_image" accept="image/*" required class="block w-full text-xs text-outline file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary file:text-white hover:file:bg-primary-container cursor-pointer">
-                </div>
+                    <div>
+                        <label for="activity_id" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
+                            Pilih Kegiatan <span class="text-rose-500">*</span>
+                        </label>
+                        <select name="activity_id" id="activity_id" required class="w-full px-4 py-2.5 bg-surface-container rounded-xl border border-surface-variant/40 text-xs font-medium focus:border-primary">
+                            <option value="">-- Pilih Agenda --</option>
+                            @foreach($activities as $act)
+                                <option value="{{ $act->id }}">{{ $act->nama_kegiatan ?? $act->title }} ({{ $act->date_text }})</option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <div class="md:col-span-2 flex justify-end">
-                    <button type="submit" class="px-6 py-3 rounded-2xl bg-primary hover:bg-primary-container text-white font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2">
-                        <span class="material-symbols-outlined text-base">how_to_reg</span>
-                        Simpan Presensi
-                    </button>
-                </div>
-            </form>
+                    <div>
+                        <label for="location_name" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
+                            Lokasi / Ruangan
+                        </label>
+                        <input type="text" name="location_name" id="location_name" value="Auditorium Kampus B UNUSA" class="w-full px-4 py-2.5 bg-surface-container rounded-xl border border-surface-variant/40 text-xs font-medium focus:border-primary">
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label for="proof_image" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
+                            Swafoto / Foto Bukti Kehadiran <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="file" name="proof_image" id="proof_image" accept="image/*" required class="block w-full text-xs text-outline file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary file:text-white hover:file:bg-primary-container cursor-pointer">
+                    </div>
+
+                    <div class="md:col-span-2 flex justify-end">
+                        <button type="submit" class="px-6 py-3 rounded-2xl bg-primary hover:bg-primary-container text-white font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-base">how_to_reg</span>
+                            Simpan Presensi
+                        </button>
+                    </div>
+                </form>
+            @endif
         </div>
 
         {{-- Attendance History Table --}}

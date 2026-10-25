@@ -105,6 +105,10 @@ class Kegiatan extends Model
      */
     public function isPresensiAkhirOpen(): bool
     {
+        if ($this->status !== KegiatanStatus::Published && $this->status !== KegiatanStatus::Ongoing) {
+            return false;
+        }
+
         if (! $this->presensi_akhir_dibuka) {
             return false;
         }
