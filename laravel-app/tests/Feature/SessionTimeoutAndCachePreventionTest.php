@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Enums\KegiatanStatus;
+use App\Models\Kegiatan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -220,6 +222,42 @@ class SessionTimeoutAndCachePreventionTest extends TestCase
 
         $response = $this->get('/dashboard');
         $response->assertRedirect(route('login'));
+        $this->assertGuest();
+    }
+
+    public function test_halaman_pemindai_dan_proyektor_menggunakan_batas_waktu_kios_4_jam(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+        $kegiatan = Kegiatan::create([
+            'nama_kegiatan' => 'Kios Test Kegiatan',
+            'deskripsi' => 'Deskripsi kegiatan kios',
+            'kategori' => 'seminar',
+            'metode_pelaksanaan' => 'offline',
+            'sasaran_peserta' => 'umum',
+            'tanggal_mulai' => now()->addHour(),
+            'tanggal_selesai' => now()->addHours(5),
+            'lokasi_type' => 'unusa_campus',
+            'lokasi_nama' => 'Auditorium Tower',
+            'file_panduan_pdf' => 'kegiatan/panduan.pdf',
+            'biaya' => 0,
+            'kuota' => 100,
+            'status' => KegiatanStatus::Published,
+        ]);
+
+        Carbon::setTestNow('2026-10-25 08:00:00');
+
+        $this->actingAs($admin);
+        $scannerUrl = route('admin.kegiatan.scanner', $kegiatan->id);
+        $this->get($scannerUrl)->assertOk();
+
+        // Maju 60 menit (melewati 15 menit biasa) -> di mode kios/scanner tetap aktif
+        Carbon::setTestNow('2026-10-25 09:00:00');
+        $this->get($scannerUrl)->assertOk();
+
+        // Maju 241 menit dari aktivitas awal (melewati batas 240 menit / 4 jam) -> kedaluwarsa dan dialihkan
+        Carbon::setTestNow('2026-10-25 13:01:00');
+        $resExpired = $this->get($scannerUrl);
+        $resExpired->assertRedirect(route('admin.login'));
         $this->assertGuest();
     }
 }

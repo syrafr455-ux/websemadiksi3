@@ -38,6 +38,8 @@ return [
 
     'idle_timeout_minutes' => (int) env('SESSION_IDLE_TIMEOUT_MINUTES', 15),
 
+    'kiosk_idle_timeout_minutes' => (int) env('SESSION_KIOSK_IDLE_TIMEOUT_MINUTES', 240),
+
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 
     /*

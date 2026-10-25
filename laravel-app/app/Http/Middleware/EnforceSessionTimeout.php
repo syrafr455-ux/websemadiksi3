@@ -52,8 +52,11 @@ class EnforceSessionTimeout
             return redirect()->to($targetRoute);
         }
 
-        // 2. Batas waktu inaktivitas (default 15 menit)
-        $timeoutMinutes = (int) config('session.idle_timeout_minutes', 15);
+        // 2. Batas waktu inaktivitas (default 15 menit; mode kios/pemindai/proyektor maks 4 jam)
+        $isKioskPage = $request->is('admin/kegiatan/*/pindai-tiket*') || $request->is('admin/kegiatan/*/presensi-proyektor*');
+        $timeoutMinutes = $isKioskPage
+            ? (int) config('session.kiosk_idle_timeout_minutes', 240)
+            : (int) config('session.idle_timeout_minutes', 15);
         $timeoutSeconds = $timeoutMinutes * 60;
         $now = now()->timestamp;
 
@@ -83,7 +86,9 @@ class EnforceSessionTimeout
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
-            $warningMessage = 'Sesi Anda berakhir karena tidak ada aktivitas selama 15 menit. Silakan masuk kembali.';
+            $warningMessage = $isKioskPage
+                ? 'Sesi pemindai/layar proyektor berakhir setelah '.$timeoutMinutes.' menit. Silakan masuk kembali.'
+                : 'Sesi Anda berakhir karena tidak ada aktivitas selama 15 menit. Silakan masuk kembali.';
             $targetRoute = $isStaff ? route('admin.login') : route('login');
 
             if ($request->expectsJson() || $request->is('sesi/ping')) {

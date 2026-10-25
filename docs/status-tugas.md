@@ -167,6 +167,92 @@ Status pelacakan pengerjaan bertahap:
     - Seluruh test suite `php artisan test` (370 tes, 3094 assertions) lulus 100%.
     - `npm run build` dan `php vendor/bin/pint` lulus tanpa galat.
 
+- [x] **Bagian 11: Pemindai QR Tiket (Presensi Awal) & Sesi Presensi Akhir di Dasbor Admin**
+  - **Temuan Bagian 0 (Analisis Kode Eksisting)**:
+    1. **Format Kode Tiket & Tampilan QR Peserta**:
+       - Kode tiket dibuat di `App\Models\KegiatanRegistration::generateTicketNumber(int $kegiatanId, ?string $seatCode): string` dengan format `TKT-{kegiatan_id}-{random_6_karakter}-{seat_code_atau_GEN}` (contoh: `TKT-12-X7Q2M9-B4` atau `TKT-12-X7Q2M9-GEN`).
+       - Disimpan di kolom `kegiatan_registrations.nomor_tiket`.
+       - Di dashboard peserta (`KegiatanSaya.jsx`), QR code tiket sebelumnya menggunakan URL eksternal `api.qrserver.com/?size=...` yang bergantung pada koneksi internet. Kini diganti dengan rute mandiri offline `/tiket/{nomorTiket}/qr` yang merender SVG menggunakan `SimpleSoftwareIO\QrCode\Facades\QrCode`.
+    2. **Tabel & Kolom Presensi Dua Fase**:
+       - **Fase 1 (Check-In Awal)**: Tabel `kegiatan_registrations`, kolom `status_kehadiran` (`registered`, `checked_in`, `absent`), `checked_in_at` (timestamp), `nomor_tiket`, dan `status_pembayaran`.
+       - **Fase 2 (Presensi Akhir Mandiri)**: Tabel `kegiatan_presensi`, kolom `kegiatan_id`, `user_id`, `registration_id`, `nama_lengkap`, `nim`, `prodi`, `email`, `nomor_telepon`, `signature_path`, dan `check_in_at`.
+    3. **Alur Presensi Mandiri Fase 2 & Tanda Tangan Digital Saat Ini**:
+       - Peserta mengakses route `/kegiatan/{kegiatan}/presensi` atau `/presensi/{kegiatan}` (`PresensiController@showSelfAttendance`) yang merender `presensi.self-attendance`.
+       - Peserta mengisi identitas dan membubuhkan tanda tangan canvas HTML5 (dikirim sebagai base64 PNG).
+       - Controller `PresensiController@submitSelfAttendance` menyimpan tanda tangan ke storage public, memperbarui `kegiatan_registrations.status_kehadiran = 'checked_in'`, menyimpan baris `KegiatanPresensi`, dan menerbitkan sertifikat otomatis melalui `CertificateGeneratorService`.
+    4. **Controller, View, dan Policy untuk `/admin/absensi`**:
+       - Controller: `App\Http\Controllers\Admin\DashboardController::attendances()` dan `exportAttendances()`.
+       - View: `resources/views/admin/attendances/index.blade.php` (Blade admin layout gelap dengan ringkasan 4 kartu statistik, pencarian, dan tabel rekapitulasi peserta).
+       - Policy: `App\Policies\KegiatanPresensiPolicy` membatasi akses `viewAny`, `viewSignature`, `scanTicket`, `managePresensiAkhir`, dan `export` hanya untuk `super_admin` (`$user->isSuperAdmin()`).
+    5. **Enum Status Tiket dan Pembayaran**:
+       - `App\Enums\AttendanceStatus`: `Registered = 'registered'`, `CheckedIn = 'checked_in'`, `Absent = 'absent'`.
+       - `App\Enums\RegistrationPaymentStatus`: `Free = 'free'`, `Pending = 'pending'`, `Paid = 'paid'`, `Expired = 'expired'`, `Failed = 'failed'`. Status sah tiket yang diakui check-in adalah `Free` dan `Paid` (`isConfirmed()`).
+       - `App\Enums\KegiatanStatus`: `Draft`, `Published`, `Ongoing`, `Completed`, `Cancelled`. Kegiatan sah untuk check-in/presensi harus bertaraf terbit (`Published` atau `Ongoing`).
+    6. **Ketersediaan Middleware Sesi & Header Cache**:
+       - `App\Http\Middleware\PreventBackHistoryCache` aktif di grup `web` dan menyetel header `no-store, no-cache, must-revalidate, max-age=0`, `Pragma: no-cache`, dan `Expires` lampau pada seluruh halaman terautentikasi dan login.
+       - `App\Http\Middleware\EnforceSessionTimeout` aktif di grup `web` membaca batas `SESSION_IDLE_TIMEOUT_MINUTES` (bawaan 15 menit), logout otomatis saat inaktivitas tercapai, dan menolak cookie `Auth::viaRemember()`.
+  - **Implementasi Bagian 1: Pemindai QR Tiket (Presensi Awal)**:
+    - Service class `App\Services\Kegiatan\PresensiTicketScannerService`:
+      - Ekstraksi kode tiket mentah maupun dari tautan URL.
+      - Validasi dalam database transaction: tiket ada, milik kegiatan terkait, status sah (lunas/gratis), kegiatan sudah terbit, berada dalam jendela check-in (bawaan 2 jam sebelum mulai s.d. selesai, dari config `kegiatan.checkin_early_hours`), belum pernah check-in.
+      - Hasil terstruktur: `DITERIMA`, `SUDAH_CHECK_IN` (menyertakan waktu WIB dan nama petugas), atau `DITOLAK` dengan pesan jelas berbahasa Indonesia.
+      - Pembaruan atomik (`UPDATE kegiatan_registrations SET ... WHERE status_kehadiran != 'checked_in'`) untuk mencegah race condition pencatatan ganda pada pemindaian bersamaan.
+      - Pencatatan ke `audit_logs` dengan aksi `ticket_checkin`, `ticket_checkin_manual`, dan `ticket_checkin_cancelled`, memuat waktu UTC, ID petugas, metode (kamera, keyboard, manual), IP, dan alasan pembatalan/check-in manual tanpa mengekspos PII rahasia.
+    - Halaman Pemindai Blade `resources/views/admin/attendances/scanner.blade.php`:
+      - Kamera adaptif: Memanfaatkan API `BarcodeDetector` bawaan browser bila tersedia, dengan fallback otomatis ke `jsQR` (v1.4.0) via HTML5 Canvas.
+      - Pilihan kamera depan/belakang (`facingMode`).
+      - Peringatan HTTPS bila diakses dari peramban ponsel non-HTTPS dan non-localhost.
+      - Pesan informatif bila izin kamera ditolak (`NotAllowedError` / `PermissionDeniedError`).
+      - Cadangan input teks kode tiket selalu fokus (refocus otomatis) untuk pemindai barcode USB/Bluetooth.
+      - Kartu hasil visual besar dengan ikon & teks jelas, Web Audio synthesizer beep (nada tinggi untuk berhasil, nada rendah untuk galat, nada ganda untuk peringatan), haptic vibration, auto-reset 2 detik, counter live "Check-in X dari Y", 10 riwayat pindai terakhir dengan tombol batalkan check-in (alasan wajib), serta tabel cadangan check-in manual (alasan wajib).
+      - Tombol akses "Pindai Tiket" disematkan di halaman Presensi & Kehadiran (`/admin/absensi`) dan di detail kegiatan admin (`/admin/kegiatan/{id}`).
+  - **Implementasi Bagian 2: Sesi Presensi Akhir (Fase 2) di Dasbor Admin**:
+    - Kolom baru pada tabel `kegiatan`: `presensi_akhir_dibuka` (boolean), `presensi_akhir_mulai` (datetime UTC), dan `presensi_akhir_selesai` (datetime UTC).
+    - Service class `App\Services\Kegiatan\PresensiAkhirTokenService`:
+      - Token HMAC-SHA256 ditandatangani dengan kunci turunan dari `APP_KEY` (`hash_hmac('sha256', 'presensi_akhir_slot_key', config('app.key'))`), memuat ID kegiatan dan slot waktu 30 detik.
+      - Verifikasi token menerima slot saat ini dan slot sebelumnya (toleransi rotasi 30 detik).
+    - Panel "Presensi Akhir" di `/admin/absensi`:
+      - Indikator status sesi (Belum Dibuka, Sesi Dibuka, Sesi Ditutup).
+      - Tombol "Buka Presensi Akhir" dengan modal waktu mulai & selesai (bawaan: 15 menit sebelum selesai s.d. 60 menit sesudahnya dalam input `datetime-local` WIB).
+      - Tombol "Tutup Sekarang" dan "Perpanjang" durasi menit.
+      - Tombol "Tandai presensi akhir manual" per peserta di tabel kehadiran dengan modal alasan wajib yang tercatat di audit log.
+    - Halaman Layar Proyektor `resources/views/admin/attendances/proyektor.blade.php`:
+      - Tampilan layar penuh gelap elegan untuk proyektor/layar aula.
+      - QR SVG dinamis berotasi tiap 30 detik dengan progress bar dan angka hitung mundur.
+      - Counter live kehadiran akhir: "Presensi akhir masuk n dari m peserta check-in".
+      - Polling asinkron tiap 5 detik untuk memperbarui jumlah kehadiran secara langsung tanpa reload halaman.
+      - Bebas dari kode angka manual (kode akses tidak digunakan).
+    - Alur Peserta Memindai QR Proyektor:
+      - Membuka `/kegiatan/{kegiatan}/presensi-akhir?token=...`.
+      - Middleware `auth` mengalihkan ke login jika belum login dan kembali ke URL asal via redirect intended.
+      - Validasi server: token HMAC sah & segar, sesi presensi akhir sedang dibuka, tiket peserta terkonfirmasi, dan SUDAH check-in fase 1 (bila belum: *"Check-in awal belum tercatat. Hubungi panitia."*).
+      - Mengarahkan peserta ke langkah tanda tangan digital mandiri yang sudah ada.
+  - **Implementasi Bagian 3: Keamanan dan Sesi**:
+    - Mode Kios 4 Jam (`config/session.php` & `.env.example`):
+      - Variabel baru: `SESSION_KIOSK_IDLE_TIMEOUT_MINUTES=240` (bawaan: 4 jam / 240 menit).
+      - `App\Http\Middleware\EnforceSessionTimeout` mendeteksi rute pemindai (`admin/kegiatan/*/pindai-tiket*`) dan layar proyektor (`admin/kegiatan/*/presensi-proyektor*`), menerapkan batas inaktivitas 4 jam sebelum meminta login ulang; halaman lain tetap 15 menit.
+    - Header `no-store, no-cache, must-revalidate, max-age=0` tetap berlaku pada seluruh halaman baru melalui `PreventBackHistoryCache`.
+    - Token QR HMAC dan data pribadi (NIM lengkap, nomor telepon, tanda tangan) tidak dicatat ke log aplikasi.
+    - Tidak ada perubahan pada logika penerbitan sertifikat. Mesin kelayakan sertifikat membaca integritas data check-in fase 1 dan presensi fase 2 ini.
+  - **Pengujian & Verifikasi**:
+    - Dibuat suite pengujian lengkap `Tests\Feature\PresensiScannerAndSessionTest` (10 tes, 43 assertions) yang memverifikasi:
+      1. Tiket valid diterima dan pindai ulang menghasilkan `SUDAH_CHECK_IN`.
+      2. Tiket kegiatan lain ditolak dengan pesan jelas.
+      3. Tiket belum lunas / gagal ditolak.
+      4. Pindai di luar jendela waktu check-in ditolak.
+      5. URL dan kode mentah sama-sama diterima dan diekstraksi kodenya.
+      6. Bukan super_admin mendapatkan HTTP 403 Forbidden; tamu dialihkan ke login.
+      7. Check-in manual wajib alasan dan tercatat di `audit_logs`; pembatalan check-in wajib alasan dan tercatat di `audit_logs`.
+      8. Panel presensi akhir membuka dan menutup sesi, verifikasi token HMAC slot saat ini dan sebelumnya.
+      9. Peserta ditolak jika belum check-in fase 1 (*"Check-in awal belum tercatat. Hubungi panitia."*).
+      10. Presensi akhir manual oleh admin wajib alasan dan idempoten.
+    - Suite `Tests\Feature\SessionTimeoutAndCachePreventionTest` diperluas dengan pengujian mode kios 4 jam (tetap aktif pada menit ke-60, kedaluwarsa setelah menit ke-240).
+    - Seluruh rangkaian pengujian sistem `php artisan test` (**381 tes, 3168 assertions**) lulus sempurna 100%.
+    - `npm run build` berhasil tanpa galat dengan paket `jsqr@1.4.0`.
+    - Format kode rapi sesuai standar via `php vendor/bin/pint`.
+    - `git diff --stat composer.json composer.lock` kosong (tidak ada dependensi composer baru).
+
 ## Temuan Belum Ditangani / Catatan
 - Pemasangan paket `phpoffice/phpspreadsheet` dan `openspout/openspout` via Composer dist zipball mengalami kegagalan izin penulisan file sementara pada Windows (`vendor/composer/tmp-*.zip: Permission denied`). Sesuai aturan tugas, berkas composer di-revert bersih dan sistem menggunakan cadangan OpenXML .xlsx engine bawaan PHP (`ZipArchive` + XML) dengan CSV cadangan yang tetap aktif.
-- Seluruh tugas pencegahan cache tombol Back, batas inaktivitas 15 menit, penyesuaian remember-me, dan pembersihan riwayat Inertia telah selesai dikerjakan, diuji, dan diverifikasi end-to-end.
+- Seluruh tugas pemindai QR tiket fase 1, sesi presensi akhir fase 2, layar proyektor, batas waktu sesi kios 4 jam, dan verifikasi multi-role telah selesai dikerjakan, diuji, dan diverifikasi end-to-end.
+
