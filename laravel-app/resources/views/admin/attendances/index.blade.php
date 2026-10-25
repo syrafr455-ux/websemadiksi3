@@ -5,7 +5,17 @@
 @section('pageSubtitle', 'Rekapitulasi check-in tiket fase 1, presensi mandiri fase 2, tanda tangan digital, dan sertifikat kegiatan')
 
 @section('content')
-<div class="p-6 md:p-8 space-y-6" x-data="{ signatureModal: false, signatureUrl: null, signatureName: '' }">
+<div class="p-6 md:p-8 space-y-6" x-data="{ 
+    signatureModal: false, 
+    signatureUrl: null, 
+    signatureName: '',
+    bukaSesiModal: false,
+    perpanjangModal: false,
+    manualFase2Modal: false,
+    selectedFase2RegId: null,
+    selectedFase2Name: '',
+    fase2Reason: ''
+}">
     {{-- Header & Kegiatan Selector --}}
     <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-slate-950 border border-slate-800 p-6 rounded-3xl shadow-xl">
         <div class="space-y-1">
@@ -41,6 +51,13 @@
 
             @if($selectedKegiatan)
                 <a 
+                    href="{{ route('admin.kegiatan.scanner', $selectedKegiatan->id) }}"
+                    class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+                >
+                    <span class="material-symbols-outlined text-base">qr_code_scanner</span>
+                    Pindai Tiket
+                </a>
+                <a 
                     href="{{ route('admin.attendances.export', array_merge(request()->query(), ['kegiatan_id' => $selectedKegiatan->id])) }}"
                     class="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20 transition-all"
                 >
@@ -52,6 +69,90 @@
     </div>
 
     @if($selectedKegiatan)
+        {{-- Panel Presensi Akhir (Fase 2) --}}
+        <div class="bg-slate-950 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Sesi Presensi Akhir (Fase 2)</span>
+                        @php
+                            $sessionStatus = $selectedKegiatan->statusPresensiAkhir();
+                        @endphp
+                        @if($sessionStatus === 'open')
+                            <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                Sesi Dibuka
+                            </span>
+                        @elseif($sessionStatus === 'closed')
+                            <span class="px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-sm">lock</span>
+                                Sesi Ditutup
+                            </span>
+                        @else
+                            <span class="px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-sm">schedule</span>
+                                Belum Dibuka
+                            </span>
+                        @endif
+                    </div>
+                    <h3 class="text-lg font-bold text-white">Pengaturan Sesi Presensi Mandiri Akhir &amp; Tanda Tangan</h3>
+                    <p class="text-xs text-slate-400">
+                        @if($selectedKegiatan->presensi_akhir_mulai && $selectedKegiatan->presensi_akhir_selesai)
+                            Jendela aktif: 
+                            <strong class="text-slate-200">{{ \App\Support\Wib::dari($selectedKegiatan->presensi_akhir_mulai)->translatedFormat('d M Y, H:i') }} WIB</strong> 
+                            s.d. 
+                            <strong class="text-slate-200">{{ \App\Support\Wib::dari($selectedKegiatan->presensi_akhir_selesai)->translatedFormat('d M Y, H:i') }} WIB</strong>.
+                        @else
+                            Jendela waktu default: 15 menit sebelum acara selesai s.d. 60 menit setelah acara selesai.
+                        @endif
+                    </p>
+                </div>
+
+                {{-- Tombol Aksi Sesi Presensi Akhir --}}
+                <div class="flex flex-wrap items-center gap-2">
+                    @if($sessionStatus !== 'open')
+                        <button 
+                            type="button" 
+                            @click="bukaSesiModal = true"
+                            class="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-600/20 transition-all"
+                        >
+                            <span class="material-symbols-outlined text-base">lock_open</span>
+                            Buka Presensi Akhir
+                        </button>
+                    @else
+                        <form action="{{ route('admin.kegiatan.presensi-akhir.tutup', $selectedKegiatan->id) }}" method="POST" class="inline">
+                            @csrf
+                            <button 
+                                type="submit" 
+                                class="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-rose-600/20 transition-all"
+                            >
+                                <span class="material-symbols-outlined text-base">lock</span>
+                                Tutup Sekarang
+                            </button>
+                        </form>
+
+                        <button 
+                            type="button" 
+                            @click="perpanjangModal = true"
+                            class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-2 border border-slate-700 transition-all"
+                        >
+                            <span class="material-symbols-outlined text-base">more_time</span>
+                            Perpanjang
+                        </button>
+                    @endif
+
+                    <a 
+                        href="{{ route('admin.kegiatan.presensi-proyektor', $selectedKegiatan->id) }}" 
+                        target="_blank"
+                        class="px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-600/20 transition-all"
+                    >
+                        <span class="material-symbols-outlined text-base">tv</span>
+                        Buka Layar Proyektor
+                    </a>
+                </div>
+            </div>
+        </div>
+
         {{-- Stats Cards --}}
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
@@ -156,6 +257,7 @@
                             <th class="px-5 py-3.5">Presensi Fase 2</th>
                             <th class="px-5 py-3.5">Tanda Tangan</th>
                             <th class="px-5 py-3.5">Status Sertifikat</th>
+                            <th class="px-5 py-3.5 text-right">Tindakan</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800 text-slate-300">
@@ -239,10 +341,29 @@
                                         <span class="text-slate-500 text-[11px]">Belum Diterbitkan</span>
                                     @endif
                                 </td>
+                                <td class="px-5 py-4 text-right">
+                                    @if(!$p->is_phase2 && $p->registration_id)
+                                        <button 
+                                            type="button" 
+                                            @click="
+                                                manualFase2Modal = true;
+                                                selectedFase2RegId = {{ $p->registration_id }};
+                                                selectedFase2Name = '{{ addslashes($p->name) }}';
+                                                fase2Reason = '';
+                                            "
+                                            class="px-2.5 py-1 rounded-lg bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 font-bold text-[11px] inline-flex items-center gap-1 transition-colors"
+                                        >
+                                            <span class="material-symbols-outlined text-xs">edit_calendar</span>
+                                            Tandai manual
+                                        </button>
+                                    @else
+                                        <span class="text-slate-600 text-xs">-</span>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-6 py-12 text-center text-slate-500">
+                                <td colspan="8" class="px-6 py-12 text-center text-slate-500">
                                     Tidak ada data peserta yang cocok dengan filter pencarian.
                                 </td>
                             </tr>
@@ -298,5 +419,196 @@
             </div>
         </div>
     </div>
+
+    @if($selectedKegiatan)
+        {{-- Modal Buka Presensi Akhir --}}
+        <div 
+            x-show="bukaSesiModal" 
+            x-transition:enter="transition ease-out duration-200" 
+            x-transition:enter-start="opacity-0" 
+            x-transition:enter-end="opacity-100" 
+            x-transition:leave="transition ease-in duration-150" 
+            x-transition:leave-start="opacity-100" 
+            x-transition:leave-end="opacity-0"
+            class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            style="display: none;"
+        >
+            <div @click.away="bukaSesiModal = false" class="bg-slate-950 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-amber-500">lock_open</span>
+                        <h3 class="text-sm font-bold text-white">Buka Sesi Presensi Akhir (Fase 2)</h3>
+                    </div>
+                    <button type="button" @click="bukaSesiModal = false" class="p-1 rounded-lg text-slate-400 hover:bg-slate-900">
+                        <span class="material-symbols-outlined text-lg">close</span>
+                    </button>
+                </div>
+
+                <form action="{{ route('admin.kegiatan.presensi-akhir.buka', $selectedKegiatan->id) }}" method="POST" class="space-y-4">
+                    @csrf
+                    @php
+                        $selesaiWib = $selectedKegiatan->tanggal_selesai ? \App\Support\Wib::dari($selectedKegiatan->tanggal_selesai) : now('Asia/Jakarta');
+                        $defaultMulai = $selesaiWib->copy()->subMinutes(15)->format('Y-m-d\TH:i');
+                        $defaultSelesai = $selesaiWib->copy()->addMinutes(60)->format('Y-m-d\TH:i');
+                    @endphp
+
+                    <div class="space-y-1.5">
+                        <label for="presensi_akhir_mulai" class="block text-xs font-bold text-slate-300">
+                            Waktu Mulai Presensi Akhir (WIB)
+                        </label>
+                        <input 
+                            type="datetime-local" 
+                            id="presensi_akhir_mulai"
+                            name="presensi_akhir_mulai" 
+                            value="{{ $defaultMulai }}"
+                            class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500"
+                        >
+                        <p class="text-[10px] text-slate-500">Bawaan: 15 menit sebelum kegiatan selesai.</p>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label for="presensi_akhir_selesai" class="block text-xs font-bold text-slate-300">
+                            Waktu Selesai Presensi Akhir (WIB)
+                        </label>
+                        <input 
+                            type="datetime-local" 
+                            id="presensi_akhir_selesai"
+                            name="presensi_akhir_selesai" 
+                            value="{{ $defaultSelesai }}"
+                            class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500"
+                        >
+                        <p class="text-[10px] text-slate-500">Bawaan: 60 menit setelah kegiatan selesai.</p>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                        <button type="button" @click="bukaSesiModal = false" class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs">
+                            Batal
+                        </button>
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-colors shadow-lg shadow-amber-600/20">
+                            Buka Sekarang
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {{-- Modal Perpanjang Presensi Akhir --}}
+        <div 
+            x-show="perpanjangModal" 
+            x-transition:enter="transition ease-out duration-200" 
+            x-transition:enter-start="opacity-0" 
+            x-transition:enter-end="opacity-100" 
+            x-transition:leave="transition ease-in duration-150" 
+            x-transition:leave-start="opacity-100" 
+            x-transition:leave-end="opacity-0"
+            class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            style="display: none;"
+        >
+            <div @click.away="perpanjangModal = false" class="bg-slate-950 border border-slate-800 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-amber-500">more_time</span>
+                        <h3 class="text-sm font-bold text-white">Perpanjang Waktu Presensi</h3>
+                    </div>
+                    <button type="button" @click="perpanjangModal = false" class="p-1 rounded-lg text-slate-400 hover:bg-slate-900">
+                        <span class="material-symbols-outlined text-lg">close</span>
+                    </button>
+                </div>
+
+                <form action="{{ route('admin.kegiatan.presensi-akhir.perpanjang', $selectedKegiatan->id) }}" method="POST" class="space-y-4">
+                    @csrf
+                    <div class="space-y-1.5">
+                        <label for="durasi_menit" class="block text-xs font-bold text-slate-300">
+                            Tambahan Durasi (Menit)
+                        </label>
+                        <input 
+                            type="number" 
+                            id="durasi_menit"
+                            name="durasi_menit" 
+                            value="30"
+                            min="5"
+                            max="240"
+                            class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500 font-mono"
+                        >
+                        <p class="text-[10px] text-slate-500">Waktu selesai sesi akan ditambah secara otomatis.</p>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                        <button type="button" @click="perpanjangModal = false" class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs">
+                            Batal
+                        </button>
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-colors shadow-lg shadow-amber-600/20">
+                            Simpan Perpanjangan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {{-- Modal Presensi Akhir Manual per Peserta --}}
+        <div 
+            x-show="manualFase2Modal" 
+            x-transition:enter="transition ease-out duration-200" 
+            x-transition:enter-start="opacity-0" 
+            x-transition:enter-end="opacity-100" 
+            x-transition:leave="transition ease-in duration-150" 
+            x-transition:leave-start="opacity-100" 
+            x-transition:leave-end="opacity-0"
+            class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            style="display: none;"
+        >
+            <div @click.away="manualFase2Modal = false" class="bg-slate-950 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-cyan-500">edit_calendar</span>
+                        <h3 class="text-sm font-bold text-white">Tandai Presensi Akhir Manual</h3>
+                    </div>
+                    <button type="button" @click="manualFase2Modal = false" class="p-1 rounded-lg text-slate-400 hover:bg-slate-900">
+                        <span class="material-symbols-outlined text-lg">close</span>
+                    </button>
+                </div>
+
+                <form action="{{ route('admin.kegiatan.presensi-akhir.manual', $selectedKegiatan->id) }}" method="POST" class="space-y-4">
+                    @csrf
+                    <input type="hidden" name="registration_id" :value="selectedFase2RegId">
+
+                    <div class="text-xs text-slate-300 space-y-1">
+                        <p>Peserta: <strong class="text-white" x-text="selectedFase2Name"></strong></p>
+                        <p class="text-slate-400 text-[11px]">
+                            Presensi akhir manual akan mencatat kehadiran fase 2 peserta. Sesuai kebijakan audit, Anda wajib menyertakan alasan.
+                        </p>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label for="fase2ReasonInput" class="block text-xs font-bold text-slate-300">
+                            Alasan Presensi Akhir Manual <span class="text-rose-400">*</span>
+                        </label>
+                        <textarea 
+                            id="fase2ReasonInput"
+                            name="alasan"
+                            x-model="fase2Reason" 
+                            rows="3" 
+                            required
+                            placeholder="Contoh: Peserta hadir penuh hingga penutupan, gawai kehabisan daya saat pemindaian QR proyektor."
+                            class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-cyan-500 font-medium"
+                        ></textarea>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                        <button type="button" @click="manualFase2Modal = false" class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs">
+                            Batal
+                        </button>
+                        <button 
+                            type="submit" 
+                            :disabled="!fase2Reason.trim()"
+                            class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs transition-colors shadow-lg shadow-cyan-600/20"
+                        >
+                            Simpan Presensi Akhir
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
 </div>
 @endsection

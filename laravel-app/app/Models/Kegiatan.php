@@ -66,6 +66,9 @@ class Kegiatan extends Model
         'is_submission_active',
         'submission_instructions',
         'status',
+        'presensi_akhir_dibuka',
+        'presensi_akhir_mulai',
+        'presensi_akhir_selesai',
         'legacy_activity_id',
     ];
 
@@ -80,6 +83,9 @@ class Kegiatan extends Model
             'submission_deadline' => 'datetime',
             'booking_opens_at' => 'datetime',
             'booking_closes_at' => 'datetime',
+            'presensi_akhir_dibuka' => 'boolean',
+            'presensi_akhir_mulai' => 'datetime',
+            'presensi_akhir_selesai' => 'datetime',
             'narasumber' => 'array',
             'seat_layout_config' => 'array',
             'certificate_schema_config' => 'array',
@@ -92,6 +98,48 @@ class Kegiatan extends Model
             'is_submission_active' => 'boolean',
             'status' => KegiatanStatus::class,
         ];
+    }
+
+    /**
+     * Cek apakah sesi presensi akhir sedang dibuka dan dalam jendela waktu.
+     */
+    public function isPresensiAkhirOpen(): bool
+    {
+        if (! $this->presensi_akhir_dibuka) {
+            return false;
+        }
+
+        $now = now();
+
+        if ($this->presensi_akhir_mulai && $now->lt($this->presensi_akhir_mulai)) {
+            return false;
+        }
+
+        if ($this->presensi_akhir_selesai && $now->gt($this->presensi_akhir_selesai)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Status pembacaan sesi presensi akhir: 'belum_dibuka', 'dibuka', 'ditutup'.
+     */
+    public function statusPresensiAkhir(): string
+    {
+        if ($this->isPresensiAkhirOpen()) {
+            return 'dibuka';
+        }
+
+        if ($this->presensi_akhir_selesai && now()->gt($this->presensi_akhir_selesai)) {
+            return 'ditutup';
+        }
+
+        if (! $this->presensi_akhir_dibuka && ($this->presensi_akhir_mulai || $this->presensi_akhir_selesai)) {
+            return 'ditutup';
+        }
+
+        return 'belum_dibuka';
     }
 
     /**

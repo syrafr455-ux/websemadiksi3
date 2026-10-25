@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\KegiatanController;
 use App\Http\Controllers\Admin\KegiatanSeatController;
 use App\Http\Controllers\Admin\MasterMahasiswaController;
 use App\Http\Controllers\Admin\PenerimaKipkController;
+use App\Http\Controllers\Admin\PresensiScannerController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Auth\KeycloakController;
 use App\Http\Controllers\Auth\TwoFactorController;
@@ -42,6 +43,8 @@ Route::get('/kegiatan/{kegiatan}/presensi', [PresensiController::class, 'showSel
 Route::post('/kegiatan/{kegiatan}/presensi', [PresensiController::class, 'submitSelfAttendance'])->name('kegiatan.presensi.submit');
 Route::get('/presensi/{kegiatan}', [PresensiController::class, 'showSelfAttendance'])->name('presensi.self');
 Route::post('/presensi/{kegiatan}', [PresensiController::class, 'submitSelfAttendance'])->name('presensi.self.submit');
+Route::get('/kegiatan/{kegiatan}/presensi-akhir', [PresensiScannerController::class, 'scanPresensiAkhir'])->name('kegiatan.presensi-akhir.scan')->middleware('auth');
+Route::get('/tiket/{nomorTiket}/qr', [PresensiScannerController::class, 'renderTicketQr'])->name('tiket.qr');
 
 Route::get('/absensi', [HomeController::class, 'absensiPublic'])->name('absensi.public');
 Route::post('/absensi', [HomeController::class, 'storeAbsensiPublic'])->name('absensi.public.store');
@@ -214,7 +217,21 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/presensi/{id}/signature', [App\Http\Controllers\Admin\DashboardController::class, 'signaturePreview'])->name('attendances.signature');
         Route::match(['post', 'patch'], '/absensi/{id}', [App\Http\Controllers\Admin\DashboardController::class, 'updateAttendanceStatus'])->name('attendances.update');
         Route::match(['post', 'patch'], '/absensi/{id}/status', [App\Http\Controllers\Admin\DashboardController::class, 'updateAttendanceStatus'])->name('attendances.status');
+
     });
+
+    // 1b. Pemindai Tiket Presensi Awal & Sesi Presensi Akhir (Otorisasi via KegiatanPresensiPolicy: hanya super_admin)
+    Route::get('/kegiatan/{kegiatan}/pindai-tiket', [PresensiScannerController::class, 'scanner'])->name('kegiatan.scanner');
+    Route::post('/kegiatan/{kegiatan}/pindai-tiket', [PresensiScannerController::class, 'scan'])->name('kegiatan.scanner.scan')->middleware('throttle:120,1');
+    Route::post('/kegiatan/{kegiatan}/pindai-tiket/manual', [PresensiScannerController::class, 'manualCheckIn'])->name('kegiatan.scanner.manual');
+    Route::post('/kegiatan/{kegiatan}/pindai-tiket/cancel', [PresensiScannerController::class, 'cancelCheckIn'])->name('kegiatan.scanner.cancel');
+
+    Route::post('/kegiatan/{kegiatan}/presensi-akhir/buka', [PresensiScannerController::class, 'bukaPresensiAkhir'])->name('kegiatan.presensi-akhir.buka');
+    Route::post('/kegiatan/{kegiatan}/presensi-akhir/tutup', [PresensiScannerController::class, 'tutupPresensiAkhir'])->name('kegiatan.presensi-akhir.tutup');
+    Route::post('/kegiatan/{kegiatan}/presensi-akhir/perpanjang', [PresensiScannerController::class, 'perpanjangPresensiAkhir'])->name('kegiatan.presensi-akhir.perpanjang');
+    Route::post('/kegiatan/{kegiatan}/presensi-akhir/manual', [PresensiScannerController::class, 'manualPresensiAkhir'])->name('kegiatan.presensi-akhir.manual');
+    Route::get('/kegiatan/{kegiatan}/presensi-proyektor', [PresensiScannerController::class, 'proyektor'])->name('kegiatan.presensi-proyektor');
+    Route::get('/kegiatan/{kegiatan}/presensi-proyektor/token', [PresensiScannerController::class, 'proyektorToken'])->name('kegiatan.presensi-proyektor.token');
 
     // 2. Verifikasi Berkas KIP-K & Monev Submissions (Role super_admin & verifikator_berkas)
     Route::middleware(['role:super_admin,verifikator_berkas'])->group(function () {
