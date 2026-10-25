@@ -457,8 +457,51 @@ class DashboardController extends Controller
     public function absensi(): View
     {
         $user = Auth::user();
-        $attendances = Attendance::where('user_id', $user->id)->latest()->get();
-        $activities = Activity::where('is_closed', false)->latest()->get();
+        $activities = Kegiatan::whereIn('status', [
+            KegiatanStatus::Published,
+            KegiatanStatus::Ongoing,
+        ])
+            ->latest('tanggal_mulai')
+            ->get();
+
+        $newPresensis = KegiatanPresensi::with('kegiatan')
+            ->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                    ->orWhere('email', $user->email);
+                if ($user->nim) {
+                    $q->orWhere('nim', $user->nim);
+                }
+            })
+            ->latest('check_in_at')
+            ->get()
+            ->map(function ($kp) {
+                return (object) [
+                    'id' => $kp->id,
+                    'activity_title' => $kp->kegiatan?->nama_kegiatan ?? 'Kegiatan',
+                    'submitted_at' => $kp->check_in_at,
+                    'location_name' => $kp->kegiatan?->lokasi_nama ?? 'Kampus B UNUSA',
+                    'proof_image_url' => $kp->signature_url,
+                    'status' => 'Hadir',
+                    'is_legacy' => false,
+                ];
+            });
+
+        $legacyAttendances = Attendance::where('user_id', $user->id)
+            ->latest('submitted_at')
+            ->get()
+            ->map(function ($att) {
+                return (object) [
+                    'id' => $att->id,
+                    'activity_title' => $att->activity_title,
+                    'submitted_at' => $att->submitted_at,
+                    'location_name' => $att->location_name ?? 'Kampus B UNUSA',
+                    'proof_image_url' => $att->proof_image_url,
+                    'status' => $att->status,
+                    'is_legacy' => true,
+                ];
+            });
+
+        $attendances = $newPresensis->concat($legacyAttendances);
 
         return view('dashboard.absensi', compact('attendances', 'activities', 'user'));
     }
@@ -469,36 +512,51 @@ class DashboardController extends Controller
     public function storeAbsensi(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'activity_id' => ['required', 'exists:activities,id'],
+            'activity_id' => ['required'],
             'proof_image' => ['required', 'image', 'max:5120'],
             'location_name' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $activity = Activity::findOrFail($validated['activity_id']);
+        $kegiatan = Kegiatan::find($validated['activity_id']);
+        if (! $kegiatan) {
+            $activity = Activity::find($validated['activity_id']);
+            if ($activity) {
+                $kegiatan = Kegiatan::where('legacy_activity_id', $activity->id)->first();
+            }
+        }
+
+        if (! $kegiatan) {
+            return back()->withInput()->withErrors(['activity_id' => 'Kegiatan tidak valid atau tidak ditemukan.']);
+        }
+
         $user = Auth::user();
-
         $path = $request->file('proof_image')->store('attendances', 'public');
-        $imageUrl = Storage::url($path);
 
-        Attendance::create([
+        $registration = KegiatanRegistration::where('kegiatan_id', $kegiatan->id)
+            ->where(function ($q) use ($user) {
+                $q->where('participant_user_id', $user->id)
+                    ->orWhere('booker_user_id', $user->id);
+            })
+            ->first();
+
+        if ($registration && $registration->status_kehadiran !== AttendanceStatus::CheckedIn) {
+            $registration->status_kehadiran = AttendanceStatus::CheckedIn;
+            $registration->checked_in_at = now();
+            $registration->save();
+        }
+
+        KegiatanPresensi::create([
+            'kegiatan_id' => $kegiatan->id,
             'user_id' => $user->id,
-            'activity_id' => $activity->id,
-            'activity_title' => $activity->title,
-            'activity_category' => $activity->category,
-            'activity_date' => $activity->date_text,
-            'student_name' => $user->name,
-            'student_nim' => $user->nim ?? '-',
-            'university' => $user->university,
-            'student_email' => $user->email,
-            'student_phone' => $user->phone,
-            'proof_image_url' => $imageUrl,
-            'proof_file_name' => $request->file('proof_image')->getClientOriginalName(),
-            'status' => 'Hadir',
-            'notes' => $validated['notes'] ?? 'Presensi divalidasi via Portal Dashboard Mahasiswa.',
-            'location_name' => $validated['location_name'] ?? 'Kampus B UNUSA',
-            'device_info' => $request->userAgent(),
-            'submitted_at' => now(),
+            'registration_id' => $registration?->id,
+            'nama_lengkap' => $user->name,
+            'nim' => $user->nim ?? '-',
+            'prodi' => $user->programStudi?->nama ?? ($user->university ?? 'Umum'),
+            'email' => $user->email,
+            'nomor_telepon' => $user->phone ?? '-',
+            'signature_path' => $path,
+            'check_in_at' => now(),
         ]);
 
         return back()->with('success', 'Presensi berhasil dicatat.');

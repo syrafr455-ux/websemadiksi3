@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AttendanceStatus;
+use App\Enums\KegiatanStatus;
 use App\Models\Activity;
 use App\Models\Attendance;
 use App\Models\BeritaAcara;
-use App\Models\Certificate;
-use App\Models\User;
+use App\Models\Kegiatan;
+use App\Models\KegiatanPresensi;
+use App\Models\KegiatanRegistration;
+use App\Support\Wib;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class HomeController extends Controller
@@ -19,29 +23,29 @@ class HomeController extends Controller
      */
     public function index(): View
     {
-        if (\App\Models\Kegiatan::whereIn('status', [
-            \App\Enums\KegiatanStatus::Published,
-            \App\Enums\KegiatanStatus::Ongoing,
-            \App\Enums\KegiatanStatus::Completed,
+        if (Kegiatan::whereIn('status', [
+            KegiatanStatus::Published,
+            KegiatanStatus::Ongoing,
+            KegiatanStatus::Completed,
         ])->exists()) {
-            $kegiatanList = \App\Models\Kegiatan::whereIn('status', [
-                \App\Enums\KegiatanStatus::Published,
-                \App\Enums\KegiatanStatus::Ongoing,
-                \App\Enums\KegiatanStatus::Completed,
+            $kegiatanList = Kegiatan::whereIn('status', [
+                KegiatanStatus::Published,
+                KegiatanStatus::Ongoing,
+                KegiatanStatus::Completed,
             ])
-            ->latest('id')
-            ->take(3)
-            ->get();
+                ->latest('id')
+                ->take(3)
+                ->get();
 
-            $activities = $kegiatanList->map(function (\App\Models\Kegiatan $k) {
+            $activities = $kegiatanList->map(function (Kegiatan $k) {
                 return (object) [
                     'id' => $k->id,
                     'title' => $k->nama_kegiatan,
                     'category' => ucfirst($k->kategori),
-                    'date_text' => $k->tanggal_mulai ? \App\Support\Wib::dari($k->tanggal_mulai)->translatedFormat('d F Y') : '-',
+                    'date_text' => $k->tanggal_mulai ? Wib::dari($k->tanggal_mulai)->translatedFormat('d F Y') : '-',
                     'description' => $k->deskripsi,
                     'location' => $k->lokasi_nama ?: 'Kampus UNUSA',
-                    'price' => (float) $k->biaya > 0 ? 'Rp ' . number_format($k->biaya, 0, ',', '.') : 'Gratis',
+                    'price' => (float) $k->biaya > 0 ? 'Rp '.number_format($k->biaya, 0, ',', '.') : 'Gratis',
                     'image_url' => 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
                     'is_kegiatan' => true,
                 ];
@@ -50,7 +54,7 @@ class HomeController extends Controller
             $activities = Activity::where('is_closed', false)
                 ->where(function ($q) {
                     $q->whereNull('status')
-                      ->orWhereNotIn(\Illuminate\Support\Facades\DB::raw('LOWER(status)'), ['draft', 'cancelled', 'dibatalkan']);
+                        ->orWhereNotIn(DB::raw('LOWER(status)'), ['draft', 'cancelled', 'dibatalkan']);
                 })
                 ->latest()
                 ->take(3)
@@ -83,8 +87,8 @@ class HomeController extends Controller
             $q = trim($request->input('q'));
             $query->where(function ($w) use ($q) {
                 $w->where('title', 'ilike', "%{$q}%")
-                  ->orWhere('summary', 'ilike', "%{$q}%")
-                  ->orWhere('location', 'ilike', "%{$q}%");
+                    ->orWhere('summary', 'ilike', "%{$q}%")
+                    ->orWhere('location', 'ilike', "%{$q}%");
             });
         }
 
@@ -113,29 +117,15 @@ class HomeController extends Controller
     }
 
     /**
-     * Public Certificate Verification.
-     */
-    public function verifikasiSertifikat(Request $request): View
-    {
-        $code = trim($request->input('code', ''));
-        $certificate = null;
-
-        if ($code) {
-            $certificate = Certificate::where('code', $code)
-                ->orWhere('code', 'ilike', $code)
-                ->first();
-        }
-
-        return view('verifikasi-sertifikat', compact('code', 'certificate'));
-    }
-
-    /**
      * Public quick attendance page.
      */
     public function absensiPublic(): View
     {
-        $activities = Activity::where('is_closed', false)
-            ->latest()
+        $activities = Kegiatan::whereIn('status', [
+            KegiatanStatus::Published,
+            KegiatanStatus::Ongoing,
+        ])
+            ->latest('tanggal_mulai')
             ->get();
 
         return view('absensi-public', compact('activities'));
@@ -147,7 +137,7 @@ class HomeController extends Controller
     public function storeAbsensiPublic(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'activity_id' => ['required', 'exists:activities,id'],
+            'activity_id' => ['required'],
             'student_name' => ['required', 'string', 'max:255'],
             'student_nim' => ['required', 'string', 'max:50'],
             'university' => ['required', 'string', 'max:255'],
@@ -165,30 +155,50 @@ class HomeController extends Controller
             'proof_image.max' => 'Ukuran file gambar maksimal 5MB.',
         ]);
 
-        $activity = Activity::findOrFail($validated['activity_id']);
+        $kegiatan = Kegiatan::find($validated['activity_id']);
+        if (! $kegiatan) {
+            $activity = Activity::find($validated['activity_id']);
+            if ($activity) {
+                $kegiatan = Kegiatan::where('legacy_activity_id', $activity->id)->first();
+            }
+        }
+
+        if (! $kegiatan) {
+            return back()->withInput()->withErrors(['activity_id' => 'Kegiatan tidak valid atau tidak ditemukan.']);
+        }
 
         // Upload proof image securely
         $path = $request->file('proof_image')->store('attendances', 'public');
-        $imageUrl = Storage::url($path);
+        $user = auth()->user();
 
-        Attendance::create([
-            'user_id' => auth()->id(),
-            'activity_id' => $activity->id,
-            'activity_title' => $activity->title,
-            'activity_category' => $activity->category,
-            'activity_date' => $activity->date_text,
-            'student_name' => trim($validated['student_name']),
-            'student_nim' => trim($validated['student_nim']),
-            'university' => trim($validated['university']),
-            'student_email' => $validated['student_email'] ? trim($validated['student_email']) : null,
-            'student_phone' => $validated['student_phone'] ? trim($validated['student_phone']) : null,
-            'proof_image_url' => $imageUrl,
-            'proof_file_name' => $request->file('proof_image')->getClientOriginalName(),
-            'status' => 'Hadir',
-            'notes' => $validated['notes'] ? trim($validated['notes']) : 'Presensi mandiri tersimpan di PostgreSQL.',
-            'location_name' => $validated['location_name'] ?? 'Kampus B UNUSA (Web Presensi)',
-            'device_info' => $request->userAgent(),
-            'submitted_at' => now(),
+        // Cari registrasi bila ada untuk mengupdate status_kehadiran
+        $registration = null;
+        if ($user) {
+            $registration = KegiatanRegistration::where('kegiatan_id', $kegiatan->id)
+                ->where(function ($q) use ($user) {
+                    $q->where('participant_user_id', $user->id)
+                        ->orWhere('booker_user_id', $user->id);
+                })
+                ->first();
+
+            if ($registration && $registration->status_kehadiran !== AttendanceStatus::CheckedIn) {
+                $registration->status_kehadiran = AttendanceStatus::CheckedIn;
+                $registration->checked_in_at = now();
+                $registration->save();
+            }
+        }
+
+        KegiatanPresensi::create([
+            'kegiatan_id' => $kegiatan->id,
+            'user_id' => $user?->id,
+            'registration_id' => $registration?->id,
+            'nama_lengkap' => trim($validated['student_name']),
+            'nim' => trim($validated['student_nim']),
+            'prodi' => trim($validated['university']),
+            'email' => $validated['student_email'] ? trim($validated['student_email']) : ($user?->email ?? 'peserta@semadiksi.id'),
+            'nomor_telepon' => $validated['student_phone'] ? trim($validated['student_phone']) : '-',
+            'signature_path' => $path,
+            'check_in_at' => now(),
         ]);
 
         return back()->with('success', 'Presensi Anda berhasil dicatat dan diverifikasi di database sistem!');

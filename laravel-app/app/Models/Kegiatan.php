@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\KegiatanStatus;
 use App\Enums\UserRole;
+use App\Support\Wib;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -149,6 +150,16 @@ class Kegiatan extends Model
         return $this->certificate_template_path
             ? Storage::disk('public')->url($this->certificate_template_path)
             : null;
+    }
+
+    public function getTitleAttribute(): string
+    {
+        return $this->nama_kegiatan;
+    }
+
+    public function getDateTextAttribute(): string
+    {
+        return $this->tanggal_mulai ? Wib::dari($this->tanggal_mulai)->translatedFormat('d F Y') : '-';
     }
 
     public function isFree(): bool

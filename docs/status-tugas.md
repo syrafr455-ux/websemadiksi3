@@ -6,11 +6,13 @@ Status pelacakan pengerjaan bertahap:
   - Bug (a) diselesaikan: Alur pendaftaran diarahkan ke kegiatan kanonikal dan pendaftaran tersimpan di `kegiatan_registrations` sehingga langsung muncul di "Kegiatan Saya & E-Tiket" beserta tiket dan nomor kursi.
   - Bug (b) diselesaikan: `DashboardController@kegiatan` dan `@index` kini membaca tabel `kegiatan` dengan filter status, sasaran peserta (role KIP-K verified, UNUSA internal, umum), dan pencarian.
   - E2E Test berhasil: `Tests\Feature\AlurKegiatanPesertaTest` memvalidasi pembuatan kegiatan oleh super admin, visibilitas di landing page dan dashboard peserta login sesuai sasaran, pendaftaran gratis berkursi, penampilan di Kegiatan Saya, check-in tiket fase 1, presensi akhir tanda tangan fase 2, penerbitan sertifikat, dan proteksi draft.
-- [ ] **Bagian 2: Penyatuan Alur Lama**
-  - Pemetaan tabel lama di `docs/penyatuan-alur-lama.md`.
-  - Route `/absensi` dan `/verifikasi` dialihkan ke model/layanan baru.
-  - Perintah `php artisan semadiksi:migrasi-alur-lama` (idempoten, dry-run bawaan, `--eksekusi`).
-  - Pembersihan controller/view/route mati yang terbukti tidak terpakai.
+- [x] **Bagian 2: Penyatuan Alur Lama**
+  - Pemetaan tabel lama di `docs/penyatuan-alur-lama.md` mencakup `activities -> kegiatan`, `attendances -> kegiatan_presensi`, dan `certificates -> sertifikat`. Data ambigu (tanpa activity_id yang valid) dibiarkan sebagai arsip baca-saja.
+  - Route `/absensi` publik dan dashboard dialihkan ke `Kegiatan` dan `KegiatanPresensi`.
+  - Route `/verifikasi` memprioritaskan tabel `sertifikat` alur baru dan mempertahankan fallback aman ke tabel legacy `certificates`.
+  - Dibuat perintah `php artisan semadiksi:migrasi-alur-lama` dengan dry-run bawaan (tanpa ubah data) dan opsi `--eksekusi` yang idempoten tanpa menimpa data baru.
+  - Kode mati `HomeController@verifikasiSertifikat` yang tidak dirujuk telah dibersihkan.
+  - Tes fitur `Tests\Feature\PenyatuanAlurLamaTest` (4 tes, 37 assertions) lulus.
 - [ ] **Bagian 3: Halaman Admin Presensi Akhir**
   - Menu "Presensi & Kehadiran" di Admin untuk super_admin.
   - Tabel peserta: fase 1 check-in, fase 2 presensi akhir (WIB, pratinjau tanda tangan via policy khusus super_admin, status sertifikat).
@@ -33,4 +35,4 @@ Status pelacakan pengerjaan bertahap:
   - Pembersihan route/halaman/kode mati.
 
 ## Temuan Belum Ditangani / Catatan
-- Bagian 1 selesai dan seluruh tes AlurKegiatanPesertaTest lulus. Lanjut ke Bagian 2 (Penyatuan Alur Lama).
+- Bagian 1 & 2 selesai. Lanjut ke Bagian 3 (Halaman Admin Presensi Akhir).
