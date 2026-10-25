@@ -220,7 +220,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::middleware(['role:super_admin,penilai_karya'])->group(function () {
         Route::get('/penilaian', [PenilaianKaryaController::class, 'index'])->name('penilaian');
         Route::post('/penilaian/{id}/score', [PenilaianKaryaController::class, 'updateScore'])->name('penilaian.score');
-        Route::get('/penilaian/{kegiatanId}/export', [PenilaianKaryaController::class, 'exportCsv'])->name('penilaian.export');
-        Route::post('/penilaian/{kegiatanId}/import', [PenilaianKaryaController::class, 'importCsv'])->name('penilaian.import');
+        Route::get('/penilaian/{kegiatanId}/export', [PenilaianKaryaController::class, 'export'])->name('penilaian.export');
+        Route::get('/penilaian/{kegiatanId}/export/xlsx', [PenilaianKaryaController::class, 'exportXlsx'])->name('penilaian.export.xlsx');
+        Route::get('/penilaian/{kegiatanId}/export/csv', [PenilaianKaryaController::class, 'exportCsv'])->name('penilaian.export.csv');
+        Route::post('/penilaian/{kegiatanId}/import', [PenilaianKaryaController::class, 'import'])->name('penilaian.import');
+        Route::post('/penilaian/{kegiatanId}/import/xlsx', [PenilaianKaryaController::class, 'importXlsx'])->name('penilaian.import.xlsx');
+        Route::post('/penilaian/{kegiatanId}/import/csv', [PenilaianKaryaController::class, 'importCsv'])->name('penilaian.import.csv');
     });
 });

@@ -19,11 +19,14 @@ Status pelacakan pengerjaan bertahap:
   - Tanda tangan digital dilindungi ketat lewat `KegiatanPresensiPolicy@viewSignature` dan endpoint khusus `/admin/presensi/{id}/signature` (hanya dapat diakses oleh super admin, tidak pernah terekspos ke publik atau staf lain).
   - Filter (status check-in, presensi akhir, sertifikat), pencarian multifield, dan ekspor CSV/Excel (`admin.attendances.export`) selesai.
   - Tes fitur `Tests\Feature\AdminPresensiAkhirTest` (5 tes, 63 assertions) lulus mencakup pengujian otorisasi per role, validasi policy, dan format WIB.
-- [ ] **Bagian 4: Penilaian Karya Format Excel (.xlsx)**
-  - Ekspor/impor .xlsx (CSV sebagai cadangan).
-  - Kolom: id karya, judul, nama peserta, nilai, catatan.
-  - Validasi: ukuran 2 MB, max 2000 baris, rentang nilai numerik, cegah formula injection (`=`, `+`, `-`, `@`).
-  - Otorisasi juri vs super admin.
+- [x] **Bagian 4: Penilaian Karya Format Excel (.xlsx)**
+  - Implementasi ekspor dan impor spreadsheet OpenXML (.xlsx) native via `SimpleXlsxService` menggunakan `ZipArchive` dan XML standard tanpa dependensi eksternal yang rentan permission lock pada Windows.
+  - CSV dipertahankan sepenuhnya sebagai format cadangan dan kompatibilitas mundur.
+  - Kolom ekspor/impor: `id karya`, `judul`, `nama peserta`, `nilai`, `catatan`. Hanya kolom nilai dan catatan yang diubah saat impor; kolom lain diabaikan atau diverifikasi.
+  - Validasi lengkap: batas ukuran berkas 2 MB, batas maksimal 2000 baris data, nilai numerik valid dalam rentang 0 - 100, penolakan transaksi jika ID karya bukan milik kegiatan tersebut.
+  - Pencegahan formula injection: sel teks berawalan `=`, `+`, `-`, atau `@` dinetralkan dengan awalan petik tunggal saat ekspor, dan dibersihkan dari karakter trigger formula saat impor.
+  - Otorisasi ketat: Juri (`penilai_karya`) hanya dapat mengekspor dan mengimpor kegiatan lomba yang ditugaskan padanya (pivot `kegiatan_penilai`), sedangkan `super_admin` dapat mengakses semua lomba.
+  - Tes fitur `Tests\Feature\PenilaianKaryaExcelTest` (8 tes, 21 assertions) dan seluruh tes CSV lama `Tests\Feature\PenilaianAndWebhookTest` & `Tests\Feature\CakupanVerifikatorDanJuriTest` lulus 100%.
 - [ ] **Bagian 5: 2FA untuk Peserta Umum dan Juri**
   - Wajib untuk `user_umum` dan `penilai_karya` saat login password. SSO & role lain dilewati.
   - TOTP 6 digit, 30 detik, ±1 jendela. Migrasi kolom `users`.
@@ -36,4 +39,5 @@ Status pelacakan pengerjaan bertahap:
   - Pembersihan route/halaman/kode mati.
 
 ## Temuan Belum Ditangani / Catatan
-- Bagian 1, 2, 3 selesai. Lanjut ke Bagian 4 (Penilaian Karya Format Excel .xlsx).
+- Pemasangan paket `phpoffice/phpspreadsheet` dan `openspout/openspout` via Composer dist zipball mengalami kegagalan izin penulisan file sementara pada Windows (`vendor/composer/tmp-*.zip: Permission denied`). Sesuai aturan tugas, berkas composer di-revert bersih dan sistem menggunakan cadangan OpenXML .xlsx engine bawaan PHP (`ZipArchive` + XML) dengan CSV cadangan yang tetap aktif.
+- Bagian 1, 2, 3, 4 selesai. Lanjut ke Bagian 5 (2FA untuk Peserta Umum dan Juri).

@@ -77,26 +77,33 @@ export default function PenilaianIndex({
                             Penjurian &amp; Penilaian Karya Peserta
                         </h2>
                         <p className="text-xs text-slate-400 mt-1">
-                            Evaluasi karya kompetisi mahasiswa, input skor rubrik juri, dan ekspor/impor massal via format CSV.
+                            Evaluasi karya kompetisi mahasiswa, input skor rubrik juri, dan ekspor/impor massal format Excel (.xlsx) atau CSV.
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {selectedKegiatanId && (
                             <>
                                 <a
-                                    href={`/admin/penilaian/${selectedKegiatanId}/export`}
-                                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-2 border border-slate-700 transition-all"
+                                    href={`/admin/penilaian/${selectedKegiatanId}/export?format=xlsx`}
+                                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
                                 >
                                     <span className="material-symbols-outlined text-sm">download</span>
-                                    Ekspor CSV Nilai
+                                    Ekspor Excel (.xlsx)
+                                </a>
+                                <a
+                                    href={`/admin/penilaian/${selectedKegiatanId}/export?format=csv`}
+                                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-2 border border-slate-700 transition-all"
+                                >
+                                    <span className="material-symbols-outlined text-sm">description</span>
+                                    Ekspor CSV
                                 </a>
                                 <button
                                     onClick={() => setImportModalOpen(true)}
-                                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+                                    className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-amber-600/20 transition-all"
                                 >
                                     <span className="material-symbols-outlined text-sm">upload_file</span>
-                                    Impor CSV Nilai
+                                    Impor Nilai (.xlsx / .csv)
                                 </button>
                             </>
                         )}
@@ -319,8 +326,8 @@ export default function PenilaianIndex({
                         <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-4">
                             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                                 <div>
-                                    <h3 className="text-base font-black text-white">Impor Nilai via CSV</h3>
-                                    <p className="text-xs text-slate-400">Mass-update nilai dari berkas CSV Excel.</p>
+                                    <h3 className="text-base font-black text-white">Impor Nilai (.xlsx / .csv)</h3>
+                                    <p className="text-xs text-slate-400">Mass-update nilai peserta dari berkas Excel atau CSV.</p>
                                 </div>
                                 <button
                                     onClick={() => setImportModalOpen(false)}
@@ -332,16 +339,16 @@ export default function PenilaianIndex({
 
                             <form onSubmit={handleImportCsv} className="space-y-4">
                                 <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-                                    <label className="block text-xs font-bold text-slate-300">Pilih Berkas CSV Nilai *</label>
+                                    <label className="block text-xs font-bold text-slate-300">Pilih Berkas Nilai (.xlsx atau .csv) *</label>
                                     <input
                                         type="file"
-                                        accept=".csv,text/csv,text/plain"
+                                        accept=".xlsx,.csv,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                         onChange={(e) => setCsvFile(e.target.files[0])}
                                         className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500"
                                         required
                                     />
-                                    <p className="text-[10px] text-slate-500">
-                                        Pastikan kolom ID_SUBMISSION dan NILAI_AKHIR tersedia persis seperti hasil ekspor.
+                                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                                        Maksimal 2 MB, 2000 baris. Kolom ID_KARYA dan NILAI wajib tersedia. Hanya kolom nilai dan catatan yang akan diperbarui.
                                     </p>
                                 </div>
 

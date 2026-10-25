@@ -5,12 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\Kegiatan;
 use App\Models\KegiatanSubmission;
+use App\Services\SimpleXlsxService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PenilaianKaryaController extends Controller
@@ -49,10 +52,10 @@ class PenilaianKaryaController extends Controller
             $q = trim($request->input('q'));
             $submissionsQuery->where(function ($w) use ($q) {
                 $w->where('nama_kelompok_peserta', 'ilike', "%{$q}%")
-                  ->orWhereHas('registration', function ($r) use ($q) {
-                      $r->where('participant_name', 'ilike', "%{$q}%")
-                        ->orWhere('nomor_tiket', 'ilike', "%{$q}%");
-                  });
+                    ->orWhereHas('registration', function ($r) use ($q) {
+                        $r->where('participant_name', 'ilike', "%{$q}%")
+                            ->orWhere('nomor_tiket', 'ilike', "%{$q}%");
+                    });
             });
         }
 
@@ -109,6 +112,59 @@ class PenilaianKaryaController extends Controller
     }
 
     /**
+     * Ekspor daftar nilai karya (mendukung format .xlsx sebagai utama dan .csv sebagai cadangan).
+     */
+    public function export(Request $request, int $kegiatanId): SymfonyResponse
+    {
+        if ($request->query('format') === 'xlsx') {
+            return $this->exportXlsx($kegiatanId);
+        }
+
+        return $this->exportCsv($kegiatanId);
+    }
+
+    /**
+     * Ekspor daftar nilai karya ke format OpenXML Spreadsheet (.xlsx).
+     */
+    public function exportXlsx(int $kegiatanId): SymfonyResponse
+    {
+        $kegiatan = Kegiatan::findOrFail($kegiatanId);
+        Gate::authorize('nilaiKarya', $kegiatan);
+
+        $submissions = KegiatanSubmission::with('registration')
+            ->where('kegiatan_id', $kegiatanId)
+            ->orderBy('id', 'asc')
+            ->get();
+
+        $filename = 'nilai_karya_'.Str::slug($kegiatan->nama_kegiatan).'_'.date('Ymd_His').'.xlsx';
+
+        $headers = ['ID_KARYA', 'JUDUL_KARYA', 'NAMA_PESERTA', 'NILAI', 'CATATAN'];
+        $rows = [];
+
+        foreach ($submissions as $sub) {
+            $rows[] = [
+                $sub->id,
+                $sub->title ?? $sub->nama_kelompok_peserta ?? '',
+                $sub->registration?->participant_name ?? '',
+                $sub->final_score !== null ? (float) $sub->final_score : '',
+                $sub->judge_notes ?? '',
+            ];
+        }
+
+        $xlsxService = new SimpleXlsxService;
+        $tempPath = tempnam(sys_get_temp_dir(), 'xlsx_exp_').'.xlsx';
+        $xlsxService->createXlsxFile($headers, $rows, $tempPath);
+
+        return response()->streamDownload(function () use ($tempPath) {
+            readfile($tempPath);
+            @unlink($tempPath);
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
+    }
+
+    /**
      * Ekspor daftar nilai karya ke file CSV (UTF-8 BOM RFC-4180 untuk Excel).
      */
     public function exportCsv(int $kegiatanId): StreamedResponse
@@ -121,7 +177,7 @@ class PenilaianKaryaController extends Controller
             ->orderBy('id', 'asc')
             ->get();
 
-        $filename = 'nilai_karya_'.\Illuminate\Support\Str::slug($kegiatan->nama_kegiatan).'_'.date('Ymd_His').'.csv';
+        $filename = 'nilai_karya_'.Str::slug($kegiatan->nama_kegiatan).'_'.date('Ymd_His').'.csv';
 
         $headers = [
             'Content-Type' => 'text/csv; charset=UTF-8',
@@ -134,7 +190,7 @@ class PenilaianKaryaController extends Controller
         return response()->stream(function () use ($submissions) {
             $handle = fopen('php://output', 'w');
 
-            // Tulis BOM UTF-8 (\xEF\xBB\xBF) agar Microsoft Excel membaca karakter Indonesia & aksen tanpa corrupt
+            // Tulis BOM UTF-8 (\xEF\xBB\xBF)
             fwrite($handle, "\xEF\xBB\xBF");
 
             // Tulis Header CSV
@@ -157,10 +213,10 @@ class PenilaianKaryaController extends Controller
                     $sub->registration?->nomor_tiket ?? '',
                     $sub->registration?->participant_name ?? '',
                     $sub->registration?->participant_identity ?? '',
-                    $sub->title ?? '',
+                    SimpleXlsxService::neutralizeFormula($sub->title ?? ''),
                     $sub->file_url ?? '',
                     $sub->final_score ?? '',
-                    $sub->judge_notes ?? '',
+                    SimpleXlsxService::neutralizeFormula($sub->judge_notes ?? ''),
                     $sub->status ?? 'submitted',
                     $sub->graded_by ?? '',
                 ]);
@@ -171,49 +227,83 @@ class PenilaianKaryaController extends Controller
     }
 
     /**
-     * Impor file CSV nilai yang diunggah juri untuk mass-update nilai peserta.
+     * Impor file Excel (.xlsx) atau CSV nilai peserta secara massal.
      */
-    public function importCsv(Request $request, int $kegiatanId): RedirectResponse
+    public function import(Request $request, int $kegiatanId): RedirectResponse
     {
         $kegiatan = Kegiatan::findOrFail($kegiatanId);
         Gate::authorize('nilaiKarya', $kegiatan);
 
+        // Cari input file dari parameter yang mungkin dikirimkan
+        $fileKey = $request->hasFile('file') ? 'file' : ($request->hasFile('excel_file') ? 'excel_file' : 'csv_file');
+
         $request->validate([
-            'csv_file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'],
+            $fileKey => ['required', 'file', 'max:2048'],
         ]);
 
-        $file = $request->file('csv_file');
-        $handle = fopen($file->getRealPath(), 'r');
+        $uploadedFile = $request->file($fileKey);
+        $originalExt = strtolower($uploadedFile->getClientOriginalExtension());
+        $mimeType = $uploadedFile->getMimeType();
 
-        if (! $handle) {
-            return back()->with('error', 'Gagal membaca berkas CSV.');
-        }
+        $isXlsx = ($originalExt === 'xlsx' || in_array($mimeType, [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel',
+            'application/zip',
+            'application/octet-stream',
+        ], true));
 
-        // Baca header
-        $header = fgetcsv($handle);
-        if (! $header) {
+        $allRows = [];
+
+        if ($isXlsx && $originalExt !== 'csv' && $originalExt !== 'txt') {
+            try {
+                $xlsxService = new SimpleXlsxService;
+                $allRows = $xlsxService->readXlsxFile($uploadedFile->getRealPath());
+            } catch (\Throwable $e) {
+                return back()->with('error', 'Gagal membaca berkas Excel: '.$e->getMessage());
+            }
+        } else {
+            // Baca format CSV
+            $handle = fopen($uploadedFile->getRealPath(), 'r');
+            if (! $handle) {
+                return back()->with('error', 'Gagal membaca berkas data penilaian.');
+            }
+
+            while (($data = fgetcsv($handle)) !== false) {
+                $allRows[] = $data;
+            }
             fclose($handle);
-            return back()->with('error', 'Format berkas CSV tidak valid atau kosong.');
         }
 
+        if (empty($allRows)) {
+            return back()->with('error', 'Berkas penilaian kosong atau format tidak valid.');
+        }
+
+        // Baca dan periksa header (baris pertama)
+        $headerRow = $allRows[0];
         $idIndex = false;
         $scoreIndex = false;
         $notesIndex = false;
 
-        foreach ($header as $i => $colName) {
-            $cleanName = strtoupper(trim(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $colName)));
-            if ($cleanName === 'ID_SUBMISSION' || $cleanName === 'ID') {
+        foreach ($headerRow as $i => $colName) {
+            $cleanName = strtoupper(trim(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', (string) $colName)));
+            if (in_array($cleanName, ['ID_KARYA', 'ID_SUBMISSION', 'ID'], true)) {
                 $idIndex = $i;
-            } elseif ($cleanName === 'NILAI_AKHIR' || $cleanName === 'NILAI' || $cleanName === 'FINAL_SCORE') {
+            } elseif (in_array($cleanName, ['NILAI', 'NILAI_AKHIR', 'FINAL_SCORE', 'SKOR', 'SCORE'], true)) {
                 $scoreIndex = $i;
-            } elseif ($cleanName === 'CATATAN_JURI' || $cleanName === 'CATATAN' || $cleanName === 'NOTES') {
+            } elseif (in_array($cleanName, ['CATATAN', 'CATATAN_JURI', 'NOTES', 'FEEDBACK'], true)) {
                 $notesIndex = $i;
             }
         }
 
         if ($idIndex === false || $scoreIndex === false) {
-            fclose($handle);
-            return back()->with('error', 'Header CSV harus memiliki kolom ID_SUBMISSION dan NILAI_AKHIR.');
+            return back()->with('error', 'Header berkas harus memiliki kolom ID_KARYA dan NILAI.');
+        }
+
+        $dataRows = array_slice($allRows, 1);
+
+        // Validasi: maksimal 2000 baris data
+        if (count($dataRows) > 2000) {
+            return back()->with('error', 'Jumlah baris data melebihi batas maksimal 2000 baris.');
         }
 
         $updatedCount = 0;
@@ -222,53 +312,102 @@ class PenilaianKaryaController extends Controller
 
         DB::beginTransaction();
         try {
-            while (($row = fgetcsv($handle)) !== false) {
+            foreach ($dataRows as $row) {
                 if (empty($row) || ! isset($row[$idIndex])) {
                     continue;
                 }
 
-                $subId = (int) trim($row[$idIndex]);
-                $scoreRaw = isset($row[$scoreIndex]) ? trim($row[$scoreIndex]) : '';
-
-                if ($subId <= 0 || $scoreRaw === '') {
+                $rawId = trim((string) $row[$idIndex]);
+                if ($rawId === '' || ! is_numeric($rawId)) {
                     continue;
                 }
 
-                $score = (float) str_replace(',', '.', $scoreRaw);
-                $notes = ($notesIndex !== false && isset($row[$notesIndex])) ? trim($row[$notesIndex]) : null;
+                $subId = (int) $rawId;
+                $rawScore = isset($row[$scoreIndex]) ? trim((string) $row[$scoreIndex]) : '';
 
+                if ($rawScore === '') {
+                    continue;
+                }
+
+                $cleanScoreStr = str_replace(',', '.', $rawScore);
+
+                // Tolak formula injection pada nilai
+                if (SimpleXlsxService::startsWithFormula($rawScore) && ! is_numeric($cleanScoreStr)) {
+                    DB::rollBack();
+
+                    return back()->with('error', "Nilai untuk ID karya {$subId} tidak valid (terdeteksi formula atau format tidak didukung).");
+                }
+
+                if (! is_numeric($cleanScoreStr)) {
+                    DB::rollBack();
+
+                    return back()->with('error', "Nilai untuk ID karya {$subId} harus berupa angka numerik.");
+                }
+
+                $score = (float) $cleanScoreStr;
+                if ($score < 0 || $score > 100) {
+                    DB::rollBack();
+
+                    return back()->with('error', "Nilai untuk ID karya {$subId} di luar rentang yang berlaku (harus 0 - 100).");
+                }
+
+                // Tolak ID yang bukan milik kegiatan ini
                 $submission = KegiatanSubmission::where('id', $subId)
                     ->where('kegiatan_id', $kegiatan->id)
                     ->first();
 
-                if ($submission) {
-                    $submission->update([
-                        'final_score' => $score,
-                        'judge_notes' => $notes ?: $submission->judge_notes,
-                        'status' => 'graded',
-                        'graded_by' => $judgeName,
-                        'graded_at' => $now,
-                    ]);
-                    $updatedCount++;
-                }
-            }
+                if (! $submission) {
+                    DB::rollBack();
 
-            fclose($handle);
+                    return back()->with('error', "ID karya {$subId} bukan bagian dari kegiatan ini atau tidak ditemukan.");
+                }
+
+                // Bersihkan catatan juri dari formula injection
+                $rawNotes = ($notesIndex !== false && isset($row[$notesIndex])) ? trim((string) $row[$notesIndex]) : null;
+                $cleanNotes = $rawNotes !== null ? SimpleXlsxService::sanitizeFormulaOnImport($rawNotes) : null;
+
+                // Hanya nilai dan catatan yang diubah saat impor
+                $submission->update([
+                    'final_score' => $score,
+                    'judge_notes' => $cleanNotes ?: $submission->judge_notes,
+                    'status' => 'graded',
+                    'graded_by' => $judgeName,
+                    'graded_at' => $now,
+                ]);
+
+                $updatedCount++;
+            }
 
             AuditLog::record(
                 auth()->id(),
                 'import_grades',
-                "Impor massal {$updatedCount} nilai karya kegiatan '{$kegiatan->nama_kegiatan}' via CSV",
+                "Impor massal {$updatedCount} nilai karya kegiatan '{$kegiatan->nama_kegiatan}'",
                 $kegiatan
             );
 
             DB::commit();
 
-            return back()->with('success', "Berhasil memperbarui {$updatedCount} nilai karya dari berkas CSV.");
+            return back()->with('success', "Berhasil memperbarui {$updatedCount} nilai karya dari berkas.");
         } catch (\Throwable $e) {
             DB::rollBack();
-            fclose($handle);
-            return back()->with('error', 'Terjadi kesalahan saat mengimpor CSV: '.$e->getMessage());
+
+            return back()->with('error', 'Terjadi kesalahan saat mengimpor nilai: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Impor file CSV nilai yang diunggah juri (backward compatibility).
+     */
+    public function importCsv(Request $request, int $kegiatanId): RedirectResponse
+    {
+        return $this->import($request, $kegiatanId);
+    }
+
+    /**
+     * Impor file XLSX nilai yang diunggah juri.
+     */
+    public function importXlsx(Request $request, int $kegiatanId): RedirectResponse
+    {
+        return $this->import($request, $kegiatanId);
     }
 }
