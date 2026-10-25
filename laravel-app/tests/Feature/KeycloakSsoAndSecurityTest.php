@@ -3,14 +3,18 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Models\AktivasiMahasiswa;
+use App\Models\AuditLog;
 use App\Models\Fakultas;
 use App\Models\MasterMahasiswaUnusa;
 use App\Models\PenerimaKipk;
 use App\Models\ProgramStudi;
 use App\Models\User;
+use App\Services\AktivasiMahasiswaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
@@ -798,6 +802,421 @@ class KeycloakSsoAndSecurityTest extends TestCase
                     && ! str_contains($message, $nim)
                     && ! str_contains($message, $email)
                     && ! str_contains($message, 'secret_token_staf_role');
+            });
+    }
+
+    public function test_akun_mahasiswa_kipk_tertunda_teraktivasi_lewat_sso(): void
+    {
+        Log::spy();
+        $this->setKeycloakConfig(true);
+
+        $nim = '2241010071';
+        $email = '2241010071@student.unusa.ac.id';
+        $sub = 'sub-kipk-unverified-71';
+
+        MasterMahasiswaUnusa::create([
+            'nim' => $nim,
+            'nama_lengkap' => 'Ahmad Dani',
+            'email_kampus' => $email,
+            'status_aktif' => 'AKTIF',
+        ]);
+
+        $penerima = new PenerimaKipk([
+            'nim' => $nim,
+            'nama_lengkap' => 'Ahmad Dani',
+            'status_penetapan' => 'ditetapkan',
+            'sumber' => 'impor_unusa',
+            'diimpor_pada' => now(),
+            'status_tinjau' => PenerimaKipk::TINJAU_NORMAL,
+        ]);
+        $penerima->aturNomor('KIPK-2241010071-TEST');
+        $penerima->save();
+
+        $user = User::factory()->create([
+            'nim' => $nim,
+            'email' => $email,
+            'role' => UserRole::MahasiswaKipk,
+            'is_unusa' => true,
+            'email_verified_at' => null,
+            'verification_status' => 'Pending',
+            'password' => Hash::make('KataSandiLama#123'),
+            'keycloak_sub' => null,
+        ]);
+
+        $tokenAktivasi = app(AktivasiMahasiswaService::class)->buatLink($nim);
+
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'access_token_71',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => $sub,
+                'preferred_username' => $nim,
+                'name' => 'Ahmad Dani',
+                'email' => $email,
+            ], 200),
+        ]);
+
+        $response = $this->withSession([
+            'keycloak_oauth_state' => 'valid_state',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state&code=test_code');
+
+        $response->assertRedirect(route('dashboard.index'));
+        $this->assertAuthenticatedAs($user);
+
+        $user->refresh();
+        $this->assertNotNull($user->email_verified_at);
+        $this->assertSame('Verified', $user->verification_status);
+        $this->assertSame($sub, $user->keycloak_sub);
+
+        $pendingTokens = AktivasiMahasiswa::where('nim', $nim)->whereNull('dipakai_pada')->count();
+        $this->assertSame(0, $pendingTokens);
+
+        $penerima->refresh();
+        $this->assertSame($user->id, $penerima->user_id);
+
+        $auditLog = AuditLog::where('user_id', $user->id)
+            ->where('action', 'sso_activation')
+            ->first();
+        $this->assertNotNull($auditLog);
+        $this->assertSame('Aktivasi akun mahasiswa KIP-K via SSO', $auditLog->description);
+        $this->assertStringNotContainsString($nim, $auditLog->description);
+        $this->assertStringNotContainsString($email, $auditLog->description);
+
+        Log::shouldHaveReceived('info')
+            ->withArgs(function (string $message) use ($nim, $email) {
+                return str_contains($message, 'aktivasi via SSO')
+                    && ! str_contains($message, $nim)
+                    && ! str_contains($message, $email);
+            });
+    }
+
+    public function test_kata_sandi_lama_tidak_bisa_dipakai_lagi_setelah_aktivasi_sso(): void
+    {
+        $this->setKeycloakConfig(true);
+
+        $nim = '2241010072';
+        $email = '2241010072@student.unusa.ac.id';
+        $kataSandiLama = 'KataSandiLama#123';
+
+        MasterMahasiswaUnusa::create([
+            'nim' => $nim,
+            'nama_lengkap' => 'Bambang Supriyadi',
+            'email_kampus' => $email,
+            'status_aktif' => 'AKTIF',
+        ]);
+
+        $user = User::factory()->create([
+            'nim' => $nim,
+            'email' => $email,
+            'role' => UserRole::MahasiswaKipk,
+            'is_unusa' => true,
+            'email_verified_at' => null,
+            'password' => Hash::make($kataSandiLama),
+            'keycloak_sub' => null,
+        ]);
+
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'access_token_72',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => 'sub-kipk-72',
+                'preferred_username' => $nim,
+                'email' => $email,
+            ], 200),
+        ]);
+
+        $this->withSession([
+            'keycloak_oauth_state' => 'valid_state',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state&code=test_code');
+
+        $user->refresh();
+        $this->assertFalse(Hash::check($kataSandiLama, $user->password));
+
+        // Logout dan coba login dengan kata sandi lama
+        auth()->logout();
+
+        $loginResponse = $this->from(route('login'))->post('/masuk', [
+            'identity' => $nim,
+            'password' => $kataSandiLama,
+        ]);
+
+        $loginResponse->assertRedirect(route('login'));
+        $loginResponse->assertSessionHasErrors('identity');
+        $this->assertGuest();
+    }
+
+    public function test_token_aktivasi_lama_tidak_berlaku_setelah_aktivasi_sso(): void
+    {
+        $this->setKeycloakConfig(true);
+
+        $nim = '2241010073';
+        $email = '2241010073@student.unusa.ac.id';
+
+        MasterMahasiswaUnusa::create([
+            'nim' => $nim,
+            'nama_lengkap' => 'Citra Lestari',
+            'email_kampus' => $email,
+            'status_aktif' => 'AKTIF',
+        ]);
+
+        $user = User::factory()->create([
+            'nim' => $nim,
+            'email' => $email,
+            'role' => UserRole::MahasiswaKipk,
+            'is_unusa' => true,
+            'email_verified_at' => null,
+            'keycloak_sub' => null,
+        ]);
+
+        // Buat token aktivasi mandiri sebelum login SSO
+        $signedUrl = app(AktivasiMahasiswaService::class)->buatLink($nim);
+
+        // Sebelum login SSO, token masih aktif (dipakai_pada null)
+        $this->assertNull(AktivasiMahasiswa::where('nim', $nim)->first()->dipakai_pada);
+
+        // Mahasiswa masuk lewat SSO
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'access_token_73',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => 'sub-kipk-73',
+                'preferred_username' => $nim,
+                'email' => $email,
+            ], 200),
+        ]);
+
+        $this->withSession([
+            'keycloak_oauth_state' => 'valid_state',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state&code=test_code');
+
+        auth()->logout();
+
+        // Token aktivasi sekarang sudah hangus (dipakai_pada terisi)
+        $this->assertNotNull(AktivasiMahasiswa::where('nim', $nim)->first()->dipakai_pada);
+
+        // Kunjungi link aktivasi lama -> ditolak 403 (link tidak valid / sudah dipakai)
+        $resSesudah = $this->get($signedUrl);
+        $resSesudah->assertStatus(403);
+
+        // Coba kirim data aktivasi lama -> juga ditolak 403
+        $postSesudah = $this->post($signedUrl, [
+            'password' => 'PasswordBaru123!',
+            'password_confirmation' => 'PasswordBaru123!',
+        ]);
+        $postSesudah->assertStatus(403);
+    }
+
+    public function test_akun_mahasiswa_kipk_tertunda_yang_diblokir_tetap_ditolak_sso(): void
+    {
+        Log::spy();
+        $this->setKeycloakConfig(true);
+
+        $nim = '2241010074';
+        $email = '2241010074@student.unusa.ac.id';
+
+        MasterMahasiswaUnusa::create([
+            'nim' => $nim,
+            'nama_lengkap' => 'Dedi Terblokir',
+            'email_kampus' => $email,
+            'status_aktif' => 'AKTIF',
+        ]);
+
+        $user = User::factory()->create([
+            'nim' => $nim,
+            'email' => $email,
+            'role' => UserRole::MahasiswaKipk,
+            'is_unusa' => true,
+            'email_verified_at' => null,
+            'is_blocked' => true,
+            'keycloak_sub' => null,
+        ]);
+
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'access_token_74',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => 'sub-kipk-74',
+                'preferred_username' => $nim,
+                'email' => $email,
+            ], 200),
+        ]);
+
+        $response = $this->withSession([
+            'keycloak_oauth_state' => 'valid_state',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state&code=test_code');
+
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors('sso');
+        $this->assertGuest();
+
+        $user->refresh();
+        $this->assertNull($user->email_verified_at);
+        $this->assertNull($user->keycloak_sub);
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(function (string $message) use ($nim, $email) {
+                return str_contains($message, 'akun diblokir')
+                    && ! str_contains($message, $nim)
+                    && ! str_contains($message, $email);
+            });
+    }
+
+    public function test_akun_tertunda_user_umum_dan_staf_tidak_terpengaruh_oleh_sso(): void
+    {
+        Log::spy();
+        $this->setKeycloakConfig(true);
+
+        // Kasus 1: User umum tertunda tetap ditolak
+        $nimUmum = '2241010075';
+        $emailUmum = '2241010075@student.unusa.ac.id';
+
+        MasterMahasiswaUnusa::create([
+            'nim' => $nimUmum,
+            'nama_lengkap' => 'Eko Umum',
+            'email_kampus' => $emailUmum,
+            'status_aktif' => 'AKTIF',
+        ]);
+
+        $userUmum = User::factory()->create([
+            'nim' => $nimUmum,
+            'email' => $emailUmum,
+            'role' => UserRole::UserUmum,
+            'is_unusa' => true,
+            'email_verified_at' => null,
+            'keycloak_sub' => null,
+        ]);
+
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'access_token_75',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => 'sub-umum-75',
+                'preferred_username' => $nimUmum,
+                'email' => $emailUmum,
+            ], 200),
+        ]);
+
+        $resUmum = $this->withSession([
+            'keycloak_oauth_state' => 'valid_state_1',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state_1&code=test_code');
+
+        $resUmum->assertRedirect(route('login'));
+        $resUmum->assertSessionHasErrors('sso');
+        $this->assertGuest();
+        $userUmum->refresh();
+        $this->assertNull($userUmum->email_verified_at);
+
+        // Kasus 2: Staf tetap ditolak
+        $nimStaf = '2241010076';
+        $emailStaf = '2241010076@student.unusa.ac.id';
+
+        MasterMahasiswaUnusa::create([
+            'nim' => $nimStaf,
+            'nama_lengkap' => 'Fajar Admin',
+            'email_kampus' => $emailStaf,
+            'status_aktif' => 'AKTIF',
+        ]);
+
+        $staf = User::factory()->create([
+            'nim' => $nimStaf,
+            'email' => $emailStaf,
+            'role' => UserRole::SuperAdmin,
+            'is_unusa' => true,
+            'email_verified_at' => null,
+            'keycloak_sub' => null,
+        ]);
+
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'access_token_76',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => 'sub-staf-76',
+                'preferred_username' => $nimStaf,
+                'email' => $emailStaf,
+            ], 200),
+        ]);
+
+        $resStaf = $this->withSession([
+            'keycloak_oauth_state' => 'valid_state_2',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state_2&code=test_code');
+
+        $resStaf->assertRedirect(route('login'));
+        $resStaf->assertSessionHasErrors('sso');
+        $this->assertGuest();
+        $staf->refresh();
+        $this->assertNull($staf->email_verified_at);
+    }
+
+    public function test_akun_tertunda_nim_tidak_ada_di_master_tetap_ditolak_sso(): void
+    {
+        Log::spy();
+        $this->setKeycloakConfig(true);
+
+        $nim = '2241010077';
+        $email = '2241010077@student.unusa.ac.id';
+
+        // Akun ada di tabel users sebagai mahasiswa_kipk tertunda
+        $user = User::factory()->create([
+            'nim' => $nim,
+            'email' => $email,
+            'role' => UserRole::MahasiswaKipk,
+            'is_unusa' => true,
+            'email_verified_at' => null,
+            'keycloak_sub' => null,
+        ]);
+
+        // NIM sengaja TIDAK dimasukkan ke MasterMahasiswaUnusa
+
+        Http::fake([
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
+                'access_token' => 'access_token_77',
+                'token_type' => 'Bearer',
+            ], 200),
+            'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/userinfo' => Http::response([
+                'sub' => 'sub-unverified-77',
+                'preferred_username' => $nim,
+                'email' => $email,
+            ], 200),
+        ]);
+
+        $response = $this->withSession([
+            'keycloak_oauth_state' => 'valid_state',
+            'keycloak_code_verifier' => 'dummy_verifier',
+        ])->get('/auth/login/callback?state=valid_state&code=test_code');
+
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors(['sso' => 'Akun belum terdaftar. Hubungi admin.']);
+        $this->assertGuest();
+
+        $user->refresh();
+        $this->assertNull($user->email_verified_at);
+        $this->assertNull($user->keycloak_sub);
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(function (string $message) use ($nim, $email) {
+                return str_contains($message, 'NIM tidak ada di data master')
+                    && ! str_contains($message, $nim)
+                    && ! str_contains($message, $email);
             });
     }
 }

@@ -84,6 +84,34 @@ Status pelacakan pengerjaan bertahap:
     - Tes `Tests\Feature\KeycloakSsoAndSecurityTest` (26 tes, 126 assertions) memvalidasi `prompt=login` ada saat flag aktif dan hilang saat nonaktif, serta memvalidasi setiap 7 kode alasan tercatat di log tanpa data pribadi.
     - Seluruh rangkaian uji `php artisan test` (356 tes, 2988 assertions) dan build aset `npm run build` lulus sempurna 100%.
 
+- [x] **Bagian 9: Aktivasi Akun Mahasiswa KIP-K Tertunda Lewat Login SSO**
+  - Latar Belakang & Analisis Kode:
+    - (a) Kapan baris pengguna dibuat: Pada pendaftaran mandiri UNUSA (`PendaftaranController::selesaikanAktivasi`), baris `User` baru dibuat *sesudah* aktivasi email/token divalidasi dan kata sandi diisi (`email_verified_at = now()`). Sebaliknya, pada pendaftaran umum (`PendaftaranController::daftarUmum`), `User` dibuat *sebelum* verifikasi email (`email_verified_at = null`). Pada pembuatan pengguna oleh Admin di `UserManagementController::store`, akun `mahasiswa_kipk` langsung dibuat dengan `verification_status = 'Verified'`, namun `email_verified_at` bernilai `null` (tertunda).
+    - (b) Kolom kata sandi sebelum aktivasi: *Bisa sudah terisi*. Khususnya akun yang dibuat Admin (`UserManagementController::store` + `MahasiswaKipkRequest`) di mana kata sandi wajib diisi saat pembuatan akun, akun dari pendaftaran umum, seeder demo (`DatabaseSeeder`), dan testing factory (`UserFactory::unverified()`).
+    - (c) Jalur lain yang membuat akun tertunda: Pembuatan akun oleh Super Admin (`UserManagementController::store`), seeder demo (`DatabaseSeeder::seedDemoAccount`), dan factory testing (`UserFactory::unverified()`).
+  - Aturan Baru di `KeycloakService::matchOrCreateUser`:
+    - Bila Keycloak berhasil mengautentikasi dan NIM dari klaim ada di data master serta cocok dengan akun `mahasiswa_kipk` yang belum teraktivasi (`email_verified_at === null`):
+      - SSO menyelesaikan aktivasi akun tersebut: mengisi `email_verified_at = now()`, `verification_status = 'Verified'`, dan menautkan `keycloak_sub = $sub`.
+      - Mengganti kata sandi lama yang terpasang sebelum aktivasi dengan hash acak yang tidak diketahui siapa pun (`Hash::make(Str::random(40))`) sehingga kata sandi lama tidak dapat digunakan kembali.
+      - Membatalkan token aktivasi yang masih tertunda di `AktivasiMahasiswa` (`dipakai_pada = now()`).
+      - Menghubungkan penerima KIP jika ada data bebas yang belum terhubung (`PenerimaKipk`).
+      - Mencatat peristiwa aktivasi ke `AuditLog` dengan aksi `sso_activation` tanpa data pribadi (tanpa NIM, email, atau nama).
+      - Mencatat log aplikasi info dengan kode alasan `aktivasi via SSO` tanpa data pribadi.
+    - Perlindungan Keamanan:
+      - Pencocokan hanya melalui `sub` dan `nim`, tidak pernah melalui email.
+      - Akun diblokir (`is_blocked = true`) tetap ditolak (`akun diblokir`).
+      - Peran selain `mahasiswa_kipk` tetap ditolak untuk penautan pertama via SSO (staf ditolak `role tidak diizinkan SSO`; `user_umum` tertunda ditolak `pengguna belum teraktivasi`).
+      - NIM yang tidak ada di master tetap ditolak (`NIM tidak ada di data master`).
+  - Pengujian Fitur:
+    - 6 tes baru ditambahkan ke `Tests\Feature\KeycloakSsoAndSecurityTest`:
+      1. `test_akun_mahasiswa_kipk_tertunda_teraktivasi_lewat_sso`
+      2. `test_kata_sandi_lama_tidak_bisa_dipakai_lagi_setelah_aktivasi_sso`
+      3. `test_token_aktivasi_lama_tidak_berlaku_setelah_aktivasi_sso`
+      4. `test_akun_mahasiswa_kipk_tertunda_yang_diblokir_tetap_ditolak_sso`
+      5. `test_akun_tertunda_user_umum_dan_staf_tidak_terpengaruh_oleh_sso`
+      6. `test_akun_tertunda_nim_tidak_ada_di_master_tetap_ditolak_sso`
+    - Seluruh pengujian (32 tes, 179 assertions pada berkas pengujian Keycloak; 362 tes, 3041 assertions pada seluruh test suite `php artisan test`) serta build frontend `npm run build` lulus sempurna 100%.
+
 ## Temuan Belum Ditangani / Catatan
 - Pemasangan paket `phpoffice/phpspreadsheet` dan `openspout/openspout` via Composer dist zipball mengalami kegagalan izin penulisan file sementara pada Windows (`vendor/composer/tmp-*.zip: Permission denied`). Sesuai aturan tugas, berkas composer di-revert bersih dan sistem menggunakan cadangan OpenXML .xlsx engine bawaan PHP (`ZipArchive` + XML) dengan CSV cadangan yang tetap aktif.
-- Seluruh tugas perbaikan alur login, logout, SSO prompt login, serta logging kegagalan SSO telah selesai dikerjakan, diuji, dan diverifikasi end-to-end.
+- Seluruh tugas perbaikan alur login, logout, SSO prompt login, logging kegagalan SSO, dan aktivasi akun mahasiswa KIP-K tertunda via login SSO telah selesai dikerjakan, diuji, dan diverifikasi end-to-end.

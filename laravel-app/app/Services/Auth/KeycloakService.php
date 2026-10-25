@@ -5,6 +5,8 @@ namespace App\Services\Auth;
 use App\Contracts\KipRecipientProvider;
 use App\Contracts\UnusaAcademicProvider;
 use App\Enums\UserRole;
+use App\Models\AktivasiMahasiswa;
+use App\Models\AuditLog;
 use App\Models\User;
 use App\Services\Kip\StatusKipService;
 use Exception;
@@ -260,6 +262,40 @@ class KeycloakService
             }
 
             if ($existing->email_verified_at === null) {
+                if ($existing->role === UserRole::MahasiswaKipk) {
+                    $attributes = [
+                        'email_verified_at' => now(),
+                        'verification_status' => 'Verified',
+                        'keycloak_sub' => $sub,
+                    ];
+
+                    if (filled($existing->password)) {
+                        $attributes['password'] = Hash::make(Str::random(40));
+                    }
+
+                    $existing->forceFill($attributes)->save();
+
+                    AktivasiMahasiswa::where('nim', $nim)
+                        ->whereNull('dipakai_pada')
+                        ->update(['dipakai_pada' => now()]);
+
+                    $penerima = $this->kipProvider->cariByNim($nim);
+                    if ($penerima && ! $penerima->user_id) {
+                        $this->statusKip->hubungkan($penerima, $existing, StatusKipService::CARA_NIM_SAAT_DAFTAR, beriNotifikasi: false);
+                    }
+
+                    AuditLog::record(
+                        $existing->id,
+                        'sso_activation',
+                        'Aktivasi akun mahasiswa KIP-K via SSO',
+                        $existing
+                    );
+
+                    Log::info('Keycloak SSO: aktivasi via SSO');
+
+                    return $existing;
+                }
+
                 Log::warning('Keycloak SSO gagal: pengguna belum teraktivasi');
                 throw new Exception('Akun belum teraktivasi. Hubungi admin SEMADIKSI.');
             }
