@@ -68,12 +68,12 @@
                         <span class="text-xs font-black text-primary">{{ $act->price }}</span>
 
                         @if(in_array($act->id, $myRegisteredIds))
-                            <span class="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-xl">
+                            <a href="{{ route('dashboard.kegiatan.saya') }}" class="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-3 py-1.5 rounded-xl transition-all" title="Buka E-Tiket Saya">
                                 <span class="material-symbols-outlined text-sm">check_circle</span>
-                                Terdaftar
-                            </span>
+                                Terdaftar (Lihat Tiket)
+                            </a>
                         @else
-                            <a href="{{ route('dashboard.kegiatan.show', $act->id) }}" class="inline-flex items-center gap-1 text-xs font-bold text-white bg-primary hover:bg-primary-container px-4 py-2 rounded-xl transition-all">
+                            <a href="{{ route('kegiatan.detail', $act->id) }}" class="inline-flex items-center gap-1 text-xs font-bold text-white bg-primary hover:bg-primary-container px-4 py-2 rounded-xl transition-all">
                                 Pilih Kursi / Daftar
                             </a>
                         @endif

@@ -19,6 +19,13 @@ Check which app a task is about before editing.
 
 Aturan ini berlaku untuk setiap tugas di repo ini.
 
+### Aturan Kerja Khusus (Anti-Halusinasi dan Anti-Slop)
+1. Jangan membaca atau mengedit .env (root maupun laravel-app/.env). Pakai .env.example sebagai acuan variabel.
+2. Sebelum memakai kelas, method, route, kolom, view, atau API paket, buktikan keberadaannya dengan membaca kodenya (Grep/Read, php artisan route:list, migrasi, atau source di vendor). Jangan menebak nama. Jika tidak ditemukan, katakan tidak ditemukan; jangan mengarang.
+3. Setiap bug dimulai dari tes yang gagal yang mereproduksinya, baru diperbaiki sampai tes itu lulus. Jangan menyatakan "lulus" tanpa output tes yang benar-benar dijalankan. Jangan menambah fitur di luar tugas ini.
+
+### Aturan Umum
+
 - Jangan mengubah file `.env` (di root maupun `laravel-app/.env`), `database/semadiksi.db`, dan aplikasi Next.js di root. Aplikasi Next.js boleh DIBACA sebagai acuan desain. Pekerjaan dilakukan di `laravel-app/`.
 - Jangan menjalankan `migrate:fresh`, `db:wipe`, atau migrasi apa pun ke Supabase tanpa izin pemilik proyek.
 - Pengembangan saat ini memakai PostgreSQL lokal; Supabase adalah target nanti. Sebelum Laravel menyentuh Supabase, semua syarat ini harus terpenuhi:

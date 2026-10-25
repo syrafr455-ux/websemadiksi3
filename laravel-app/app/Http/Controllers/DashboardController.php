@@ -2,22 +2,35 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\KegiatanStatus;
+use App\Enums\UserRole;
 use App\Models\Activity;
 use App\Models\ActivityRegistration;
 use App\Models\Attendance;
 use App\Models\Certificate;
 use App\Models\CustomForm;
 use App\Models\CustomFormSubmission;
+use App\Models\Kegiatan;
+use App\Models\KegiatanPresensi;
+use App\Models\KegiatanRegistration;
+use App\Models\KegiatanSubmission;
 use App\Models\KipInfo;
 use App\Models\KipkDocument;
+use App\Models\PenerimaKipk;
 use App\Models\Scholarship;
+use App\Models\Sertifikat;
+use App\Support\Wib;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
+use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
@@ -28,30 +41,150 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
 
-        $registrationsCount = ActivityRegistration::where('user_id', $user->id)->count();
-        $attendancesCount = Attendance::where('user_id', $user->id)->count();
-        $certificatesCount = Certificate::where('user_id', $user->id)->count();
+        // 1. Registrasi kegiatan (kegiatan baru + arsip lama)
+        $newRegistrationsCount = KegiatanRegistration::where(function ($q) use ($user) {
+            $q->where('participant_user_id', $user->id)
+                ->orWhere('booker_user_id', $user->id);
+        })->active()->count();
+        $registrationsCount = $newRegistrationsCount + ActivityRegistration::where('user_id', $user->id)->count();
+
+        // 2. Presensi kegiatan
+        $newAttendancesCount = KegiatanPresensi::where(function ($q) use ($user) {
+            if ($user->nim) {
+                $q->where('nim', $user->nim);
+            }
+            if ($user->email) {
+                $q->orWhere('email', $user->email);
+            }
+        })->count();
+        $attendancesCount = $newAttendancesCount + Attendance::where('user_id', $user->id)->count();
+
+        // 3. Sertifikat resmi
+        $newCertificatesCount = Sertifikat::where(function ($q) use ($user) {
+            $q->where('user_id', $user->id)
+                ->orWhereHas('presensi', function ($pq) use ($user) {
+                    if ($user->nim) {
+                        $pq->where('nim', $user->nim);
+                    }
+                    if ($user->email) {
+                        $pq->orWhere('email', $user->email);
+                    }
+                });
+        })->count();
+        $certificatesCount = $newCertificatesCount + Certificate::where('user_id', $user->id)->count();
+
         $documentsCount = KipkDocument::where('user_id', $user->id)->count();
 
-        // Calculate XP
-        $registeredActivityIds = ActivityRegistration::where('user_id', $user->id)->pluck('activity_id');
-        $totalXp = Activity::whereIn('id', $registeredActivityIds)->sum('xp_points');
+        // 4. Calculate XP
+        $registeredKegiatanIds = KegiatanRegistration::where(function ($q) use ($user) {
+            $q->where('participant_user_id', $user->id)
+                ->orWhere('booker_user_id', $user->id);
+        })->active()->pluck('kegiatan_id');
+        $totalXp = (int) Kegiatan::whereIn('id', $registeredKegiatanIds)->sum('poin_xp');
+        $oldRegActivityIds = ActivityRegistration::where('user_id', $user->id)->pluck('activity_id');
+        $totalXp += (int) Activity::whereIn('id', $oldRegActivityIds)->sum('xp_points');
 
-        $upcomingActivities = Activity::where('is_closed', false)
-            ->latest()
-            ->take(4)
-            ->get();
+        // 5. Agenda mendatang (Kegiatan baru sesuai sasaran_peserta pengguna)
+        $kegiatanQuery = Kegiatan::query()
+            ->whereIn('status', [
+                KegiatanStatus::Published,
+                KegiatanStatus::Ongoing,
+            ]);
 
-        $myRecentActivities = ActivityRegistration::with('activity')
-            ->where('user_id', $user->id)
-            ->latest()
+        if (! $user->isSuperAdmin()) {
+            if ($user->role === UserRole::MahasiswaKipk) {
+                if ($user->isVerified()) {
+                    $kegiatanQuery->whereIn('sasaran_peserta', ['kipk_only', 'internal_unusa', 'umum']);
+                } else {
+                    $kegiatanQuery->whereIn('sasaran_peserta', ['internal_unusa', 'umum']);
+                }
+            } elseif ($user->role === UserRole::UserUmum) {
+                if ($user->hasUnusaEmail() || $user->is_unusa) {
+                    $kegiatanQuery->whereIn('sasaran_peserta', ['internal_unusa', 'umum']);
+                } else {
+                    $kegiatanQuery->where('sasaran_peserta', 'umum');
+                }
+            } else {
+                $kegiatanQuery->where('sasaran_peserta', 'umum');
+            }
+        }
+
+        $upcomingKegiatan = $kegiatanQuery->orderBy('tanggal_mulai', 'asc')->take(4)->get();
+
+        $upcomingActivities = $upcomingKegiatan->map(function (Kegiatan $k) {
+            return (object) [
+                'id' => $k->id,
+                'title' => $k->nama_kegiatan,
+                'category' => ucfirst($k->kategori),
+                'date_text' => $k->tanggal_mulai ? Wib::dari($k->tanggal_mulai)->translatedFormat('d F Y') : '-',
+                'price' => (float) $k->biaya > 0 ? 'Rp '.number_format($k->biaya, 0, ',', '.') : 'Gratis',
+                'is_kegiatan' => true,
+            ];
+        });
+
+        if ($upcomingActivities->isEmpty()) {
+            $upcomingActivities = Activity::where('is_closed', false)
+                ->where(function ($q) {
+                    $q->whereNull('status')
+                        ->orWhereNotIn(DB::raw('LOWER(status)'), ['draft', 'cancelled', 'dibatalkan']);
+                })
+                ->latest()
+                ->take(4)
+                ->get()
+                ->map(fn ($act) => (object) [
+                    'id' => $act->id,
+                    'title' => $act->title,
+                    'category' => $act->category,
+                    'date_text' => $act->date_text,
+                    'price' => $act->price,
+                    'is_kegiatan' => false,
+                ]);
+        }
+
+        // 6. My Recent Activities
+        $newRecent = KegiatanRegistration::with(['kegiatan', 'seat'])
+            ->where(function ($q) use ($user) {
+                $q->where('participant_user_id', $user->id)
+                    ->orWhere('booker_user_id', $user->id);
+            })
+            ->latest('id')
             ->take(4)
-            ->get();
+            ->get()
+            ->map(function (KegiatanRegistration $reg) {
+                return (object) [
+                    'id' => $reg->id,
+                    'title' => $reg->kegiatan?->nama_kegiatan ?? 'Kegiatan',
+                    'date_text' => $reg->kegiatan?->tanggal_mulai ? Wib::dari($reg->kegiatan->tanggal_mulai)->translatedFormat('d F Y') : '-',
+                    'seat' => $reg->seat?->seat_code ?? ($reg->needs_seat_reselection ? 'Perlu pilih ulang' : 'Reguler'),
+                    'status' => $reg->status_pembayaran?->label() ?? 'Terdaftar',
+                    'is_kegiatan' => true,
+                ];
+            });
+
+        if ($newRecent->isNotEmpty()) {
+            $myRecentActivities = $newRecent;
+        } else {
+            $myRecentActivities = ActivityRegistration::with('activity')
+                ->where('user_id', $user->id)
+                ->latest()
+                ->take(4)
+                ->get()
+                ->map(function ($reg) {
+                    return (object) [
+                        'id' => $reg->id,
+                        'title' => $reg->activity?->title ?? 'Kegiatan',
+                        'date_text' => $reg->activity?->date_text ?? '-',
+                        'seat' => $reg->selected_seat ?? 'Reguler',
+                        'status' => $reg->status,
+                        'is_kegiatan' => false,
+                    ];
+                });
+        }
 
         // Status KIP-K: baris penerima yang terhubung (nomor hanya tampil tersamar) & klaim yang sedang ditinjau.
         $penerimaKipk = $user->penerimaKipk;
         $klaimDitinjau = $user->isUmumUnusa()
-            && \App\Models\PenerimaKipk::where('klaim_user_id', $user->id)->where('status_tinjau', \App\Models\PenerimaKipk::TINJAU_PERLU)->exists();
+            && PenerimaKipk::where('klaim_user_id', $user->id)->where('status_tinjau', PenerimaKipk::TINJAU_PERLU)->exists();
 
         return view('dashboard.index', compact(
             'user',
@@ -72,110 +205,95 @@ class DashboardController extends Controller
      */
     public function kegiatan(Request $request): View
     {
-        $query = Activity::where('is_closed', false)
-            ->where(function ($q) {
-                $q->whereNull('status')
-                  ->orWhereNotIn(\Illuminate\Support\Facades\DB::raw('LOWER(status)'), ['draft', 'cancelled', 'dibatalkan']);
-            });
+        $user = Auth::user();
+        $query = Kegiatan::query()
+            ->whereIn('status', [
+                KegiatanStatus::Published,
+                KegiatanStatus::Ongoing,
+            ]);
+
+        // Filter sasaran_peserta berdasarkan hak akses role peserta
+        if ($user && ! $user->isSuperAdmin()) {
+            if ($user->role === UserRole::MahasiswaKipk) {
+                if ($user->isVerified()) {
+                    $query->whereIn('sasaran_peserta', ['kipk_only', 'internal_unusa', 'umum']);
+                } else {
+                    $query->whereIn('sasaran_peserta', ['internal_unusa', 'umum']);
+                }
+            } elseif ($user->role === UserRole::UserUmum) {
+                if ($user->hasUnusaEmail() || $user->is_unusa) {
+                    $query->whereIn('sasaran_peserta', ['internal_unusa', 'umum']);
+                } else {
+                    $query->where('sasaran_peserta', 'umum');
+                }
+            } else {
+                $query->where('sasaran_peserta', 'umum');
+            }
+        }
 
         if ($request->filled('q')) {
             $q = trim($request->input('q'));
             $query->where(function ($w) use ($q) {
-                $w->where('title', 'ilike', "%{$q}%")
-                  ->orWhere('description', 'ilike', "%{$q}%")
-                  ->orWhere('location', 'ilike', "%{$q}%");
+                $w->where('nama_kegiatan', 'like', "%{$q}%")
+                    ->orWhere('deskripsi', 'like', "%{$q}%")
+                    ->orWhere('lokasi_nama', 'like', "%{$q}%");
             });
         }
 
         if ($request->filled('category')) {
-            $query->where('category', $request->input('category'));
+            $category = strtolower(trim($request->input('category')));
+            $query->where('kategori', $category);
         }
 
-        $activities = $query->latest()->paginate(9)->withQueryString();
-        $myRegisteredIds = ActivityRegistration::where('user_id', Auth::id())->pluck('activity_id')->toArray();
+        $kegiatanPaginator = $query->orderBy('tanggal_mulai', 'asc')->paginate(9)->withQueryString();
+
+        $myRegisteredIds = [];
+        if ($user) {
+            $myRegisteredIds = KegiatanRegistration::where(function ($q) use ($user) {
+                $q->where('participant_user_id', $user->id)
+                    ->orWhere('booker_user_id', $user->id);
+            })
+                ->active()
+                ->pluck('kegiatan_id')
+                ->unique()
+                ->toArray();
+        }
+
+        $activities = $kegiatanPaginator->through(function (Kegiatan $k) {
+            return (object) [
+                'id' => $k->id,
+                'title' => $k->nama_kegiatan,
+                'category' => ucfirst($k->kategori),
+                'type' => ucfirst($k->metode_pelaksanaan),
+                'date_text' => $k->tanggal_mulai ? Wib::dari($k->tanggal_mulai)->translatedFormat('d F Y') : '-',
+                'description' => $k->deskripsi,
+                'location' => $k->lokasi_nama ?: 'Kampus UNUSA',
+                'quota' => $k->kuota,
+                'xp_points' => $k->poin_xp,
+                'price' => (float) $k->biaya > 0 ? 'Rp '.number_format($k->biaya, 0, ',', '.') : 'Gratis',
+                'image_url' => 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+                'is_kegiatan' => true,
+                'raw' => $k,
+            ];
+        });
 
         return view('dashboard.kegiatan', compact('activities', 'myRegisteredIds'));
     }
 
     /**
-     * Activity Detail & Registration Modal/Page.
+     * Activity Detail & Registration Modal/Page (dialihkan langsung ke alur kanonikal).
      */
-    public function kegiatanShow(int $id): View
+    public function kegiatanShow(int $id): RedirectResponse
     {
-        $activity = Activity::findOrFail($id);
-        if (strtolower((string) $activity->status) === 'draft' && Auth::user()?->role !== UserRole::SuperAdmin) {
-            abort(404);
-        }
-
-        $registration = ActivityRegistration::where('user_id', Auth::id())
-            ->where('activity_id', $id)
-            ->first();
-
-        $occupiedSeats = ActivityRegistration::where('activity_id', $id)
-            ->whereNotNull('selected_seat')
-            ->pluck('selected_seat')
-            ->toArray();
-
-        return view('dashboard.kegiatan-detail', compact('activity', 'registration', 'occupiedSeats'));
+        return redirect()->route('kegiatan.detail', $id);
     }
 
     /**
-     * Join / Register Activity.
+     * Join / Register Activity (dialihkan langsung ke alur pendaftaran kegiatan).
      */
     public function registerKegiatan(int $id, Request $request): RedirectResponse
     {
-        $activity = Activity::findOrFail($id);
-        $user = Auth::user();
-
-        if (strtolower((string) $activity->status) === 'draft' || $activity->is_closed) {
-            return back()->with('error', 'Pendaftaran untuk kegiatan ini telah ditutup atau masih berstatus draft.');
-        }
-
-        // Check if already registered
-        $existing = ActivityRegistration::where('user_id', $user->id)
-            ->where('activity_id', $id)
-            ->first();
-
-        if ($existing) {
-            return back()->with('error', 'Anda sudah terdaftar pada kegiatan ini.');
-        }
-
-        // Validate seat if seat booking enabled
-        $selectedSeat = $request->input('selected_seat');
-        if ($activity->enable_seat_booking && $selectedSeat) {
-            $isOccupied = ActivityRegistration::where('activity_id', $id)
-                ->where('selected_seat', $selectedSeat)
-                ->exists();
-
-            if ($isOccupied) {
-                return back()->with('error', "Kursi {$selectedSeat} telah dipilih peserta lain. Silakan pilih kursi lain.");
-            }
-        }
-
-        // Validate file upload if required
-        $uploadedFileUrl = null;
-        if ($activity->require_file_upload) {
-            $request->validate([
-                'upload_file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
-            ], [
-                'upload_file.required' => 'Kegiatan ini mewajibkan unggah berkas persyaratan.',
-            ]);
-
-            $path = $request->file('upload_file')->store('registrations', 'public');
-            $uploadedFileUrl = Storage::url($path);
-        }
-
-        ActivityRegistration::create([
-            'user_id' => $user->id,
-            'activity_id' => $activity->id,
-            'selected_seat' => $selectedSeat,
-            'uploaded_file_url' => $uploadedFileUrl,
-            'payment_status' => $activity->price === 'Gratis' ? 'Gratis' : 'Lunas',
-            'status' => 'Terdaftar',
-            'registered_at' => now(),
-        ]);
-
-        return redirect()->route('dashboard.kegiatan.saya')->with('success', "Pendaftaran kegiatan {$activity->title} berhasil!");
+        return redirect()->route('kegiatan.detail', $id);
     }
 
     /**
@@ -185,10 +303,10 @@ class DashboardController extends Controller
     {
         $userId = Auth::id();
 
-        $enterpriseRegistrations = \App\Models\KegiatanRegistration::with(['kegiatan', 'seat', 'payment', 'submission'])
+        $enterpriseRegistrations = KegiatanRegistration::with(['kegiatan', 'seat', 'payment', 'submission'])
             ->where(function ($q) use ($userId) {
                 $q->where('participant_user_id', $userId)
-                  ->orWhere('booker_user_id', $userId);
+                    ->orWhere('booker_user_id', $userId);
             })
             ->latest('id')
             ->get()
@@ -204,8 +322,8 @@ class DashboardController extends Controller
             ->latest()
             ->paginate(10);
 
-        if (class_exists(\Inertia\Inertia::class)) {
-            return \Inertia\Inertia::render('Dashboard/KegiatanSaya', [
+        if (class_exists(Inertia::class)) {
+            return Inertia::render('Dashboard/KegiatanSaya', [
                 'title' => 'Kegiatan Saya & E-Tiket',
                 'enterpriseRegistrations' => $enterpriseRegistrations,
                 'legacyRegistrations' => $registrations,
@@ -220,11 +338,11 @@ class DashboardController extends Controller
      */
     public function uploadKarya(Request $request, int $registrationId): RedirectResponse
     {
-        $registration = \App\Models\KegiatanRegistration::with('kegiatan')
+        $registration = KegiatanRegistration::with('kegiatan')
             ->where('id', $registrationId)
             ->where(function ($q) {
                 $q->where('participant_user_id', Auth::id())
-                  ->orWhere('booker_user_id', Auth::id());
+                    ->orWhere('booker_user_id', Auth::id());
             })
             ->firstOrFail();
 
@@ -241,7 +359,7 @@ class DashboardController extends Controller
         $path = $request->file('submission_file')->store('kegiatan/submissions', 'public');
         $fileUrl = Storage::url($path);
 
-        \App\Models\KegiatanSubmission::updateOrCreate(
+        KegiatanSubmission::updateOrCreate(
             ['registration_id' => $registration->id],
             [
                 'kegiatan_id' => $registration->kegiatan_id,
@@ -278,7 +396,7 @@ class DashboardController extends Controller
         $user = Auth::user();
 
         // Ambil dari tabel sertifikat alur baru
-        $sertifikats = \App\Models\Sertifikat::with('kegiatan')
+        $sertifikats = Sertifikat::with('kegiatan')
             ->where('user_id', $userId)
             ->latest('id')
             ->get();
@@ -299,12 +417,12 @@ class DashboardController extends Controller
                 'recipient_name' => $st->recipient_name,
                 'category' => $st->kegiatan->kategori ?? 'Kegiatan',
                 'organizer' => 'SEMADIKSI Panitia Pelaksana',
-                'date' => \Carbon\Carbon::parse($st->issued_at)->translatedFormat('d F Y'),
+                'date' => Carbon::parse($st->issued_at)->translatedFormat('d F Y'),
                 'duration' => '8 JP (Jam Pelajaran)',
                 'status' => 'Selesai',
                 'document_hash' => $st->document_hash,
                 'file_url' => route('sertifikat.download', $st->id),
-                'verification_url' => url('/verifikasi?code=' . $st->nomor_sertifikat),
+                'verification_url' => url('/verifikasi?code='.$st->nomor_sertifikat),
                 'is_legacy' => false,
             ]);
         }
@@ -317,12 +435,12 @@ class DashboardController extends Controller
                 'recipient_name' => $lc->user_name,
                 'category' => $lc->activity->category ?? 'Kegiatan',
                 'organizer' => 'SEMADIKSI Divisi Kemahasiswaan',
-                'date' => \Carbon\Carbon::parse($lc->issued_date)->translatedFormat('d F Y'),
+                'date' => Carbon::parse($lc->issued_date)->translatedFormat('d F Y'),
                 'duration' => '8 JP',
                 'status' => 'Selesai',
-                'document_hash' => hash('sha256', $lc->code . $lc->user_name),
+                'document_hash' => hash('sha256', $lc->code.$lc->user_name),
                 'file_url' => null,
-                'verification_url' => url('/verifikasi?code=' . $lc->code),
+                'verification_url' => url('/verifikasi?code='.$lc->code),
                 'is_legacy' => true,
             ]);
         }
@@ -501,7 +619,7 @@ class DashboardController extends Controller
 
     public function uploadBerkas(Request $request): RedirectResponse
     {
-        \Illuminate\Support\Facades\Gate::authorize('create', KipkDocument::class);
+        Gate::authorize('create', KipkDocument::class);
 
         $request->validate([
             'category' => ['required', 'string'],
@@ -538,7 +656,7 @@ class DashboardController extends Controller
     public function downloadBerkas(int $id)
     {
         $doc = KipkDocument::findOrFail($id);
-        \Illuminate\Support\Facades\Gate::authorize('download', $doc);
+        Gate::authorize('download', $doc);
 
         $relativePath = $doc->file_url ? str_replace('/storage/', '', parse_url($doc->file_url, PHP_URL_PATH)) : null;
         if ($relativePath && Storage::disk('public')->exists($relativePath)) {
@@ -558,6 +676,7 @@ class DashboardController extends Controller
     public function beasiswa(): View
     {
         $scholarships = Scholarship::latest()->paginate(9);
+
         return view('dashboard.beasiswa', compact('scholarships'));
     }
 
@@ -567,6 +686,7 @@ class DashboardController extends Controller
     public function infoKip(): View
     {
         $infoList = KipInfo::latest()->get();
+
         return view('dashboard.info-kip', compact('infoList'));
     }
 
@@ -576,6 +696,7 @@ class DashboardController extends Controller
     public function profil(): View
     {
         $user = Auth::user();
+
         return view('dashboard.profil', compact('user'));
     }
 

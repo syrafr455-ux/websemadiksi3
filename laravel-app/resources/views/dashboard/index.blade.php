@@ -130,9 +130,9 @@
                     @forelse($myRecentActivities as $reg)
                         <div class="p-4 rounded-2xl bg-surface-container flex items-center justify-between gap-3">
                             <div class="overflow-hidden">
-                                <h4 class="text-sm font-bold text-on-surface truncate">{{ $reg->activity->title ?? 'Kegiatan' }}</h4>
+                                <h4 class="text-sm font-bold text-on-surface truncate">{{ $reg->title ?? $reg->activity->title ?? 'Kegiatan' }}</h4>
                                 <p class="text-xs text-outline mt-0.5">
-                                    {{ $reg->activity->date_text ?? '-' }} &bull; Kursi: <span class="font-mono font-bold">{{ $reg->selected_seat ?? 'Reguler' }}</span>
+                                    {{ $reg->date_text ?? $reg->activity->date_text ?? '-' }} &bull; Kursi: <span class="font-mono font-bold">{{ $reg->seat ?? $reg->selected_seat ?? 'Reguler' }}</span>
                                 </p>
                             </div>
                             <span class="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
@@ -166,7 +166,7 @@
                                     {{ $act->date_text }} &bull; <span class="text-primary font-bold">{{ $act->price }}</span>
                                 </p>
                             </div>
-                            <a href="{{ route('dashboard.kegiatan.show', $act->id) }}" class="shrink-0 px-3 py-1.5 rounded-xl bg-primary hover:bg-primary-container text-white text-xs font-bold transition-all">
+                            <a href="{{ !empty($act->is_kegiatan) ? route('kegiatan.detail', $act->id) : route('dashboard.kegiatan.show', $act->id) }}" class="shrink-0 px-3 py-1.5 rounded-xl bg-primary hover:bg-primary-container text-white text-xs font-bold transition-all">
                                 Daftar
                             </a>
                         </div>
