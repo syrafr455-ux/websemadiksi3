@@ -22,17 +22,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Session Lifetime
+    | Session Lifetime & Inactivity Idle Timeout
     |--------------------------------------------------------------------------
     |
-    | Here you may specify the number of minutes that you wish the session
-    | to be allowed to remain idle before it expires. If you want them
-    | to expire immediately when the browser is closed then you may
-    | indicate that via the expire_on_close configuration option.
+    | 'lifetime' (menit) menentukan hard lifetime sesi/cookie di server/storage.
+    | 'idle_timeout_minutes' (menit) menentukan batas maksimal tanpa aktivitas
+    | sebelum sesi pengguna dilogout otomatis (default: 15 menit).
+    | Hubungan: SESSION_LIFETIME harus lebih besar atau sama dengan
+    | SESSION_IDLE_TIMEOUT_MINUTES agar data sesi tidak dibersihkan oleh garbage
+    | collection sebelum mekanisme batas inaktivitas sempat dievaluasi.
     |
     */
 
     'lifetime' => (int) env('SESSION_LIFETIME', 120),
+
+    'idle_timeout_minutes' => (int) env('SESSION_IDLE_TIMEOUT_MINUTES', 15),
 
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 

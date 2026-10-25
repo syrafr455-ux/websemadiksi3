@@ -112,6 +112,61 @@ Status pelacakan pengerjaan bertahap:
       6. `test_akun_tertunda_nim_tidak_ada_di_master_tetap_ditolak_sso`
     - Seluruh pengujian (32 tes, 179 assertions pada berkas pengujian Keycloak; 362 tes, 3041 assertions pada seluruh test suite `php artisan test`) serta build frontend `npm run build` lulus sempurna 100%.
 
+- [x] **Bagian 10: Larangan Cache Tombol Back & Batas Sesi 15 Menit Inaktivitas**
+  - **Latar Belakang & Masalah**:
+    - Setelah pengguna logout dan mendarat di `/masuk`, menekan tombol *Back* pada browser menampilkan kembali halaman dasbor lengkap dengan data akun yang tersimpan di bfcache/cache browser.
+    - Sesi pengguna di semua peran (mahasiswa, admin, verifikator, juri) harus otomatis keluar setelah 15 menit tanpa aktivitas untuk melindungi keamanan akun di perangkat bersama.
+  - **Bagian 1: Larangan Cache (Anti-Back History Cache)**:
+    - Middleware `App\Http\Middleware\PreventBackHistoryCache`:
+      - Diterapkan pada grup middleware `web` di `bootstrap/app.php` membungkus seluruh respons.
+      - Menambahkan header `Cache-Control: no-store, no-cache, must-revalidate, max-age=0`, `Pragma: no-cache`, dan `Expires: Fri, 01 Jan 1990 00:00:00 GMT` pada:
+        - Semua halaman terautentikasi (semua peran: peserta, admin, juri, verifikator).
+        - Respons Inertia (`X-Inertia: true` atau header `X-Inertia`).
+        - Halaman login (`/masuk`, `/admin/masuk`, form 2FA, form pendaftaran dan aktivasi).
+      - Mengecualikan berkas biner/unduhan (`BinaryFileResponse`), streaming (`StreamedResponse`), aset statis, dan halaman publik (landing `/`, `/verifikasi*`, sertifikat publik).
+      - Menjaga header `no-store` yang sudah ditentukan controller spesifik (misal `bukaNomor` pada KIP-K).
+    - Sisi Klien / Browser:
+      - Ditambahkan skrip `resources/js/session-guard.js` yang dimuat pada entri app Blade (`app.js`) dan Inertia (`app.jsx`).
+      - Pada event `pageshow` dengan `event.persisted === true` (halaman dipulihkan dari bfcache browser) di halaman terautentikasi (`meta[name="user-authenticated"]`), melakukan `window.location.reload()`.
+      - Pada logout via Inertia di layout `ParticipantLayout.jsx` dan `AdminLayout.jsx`, memanggil `router.clearHistory()` untuk mengosongkan riwayat kunjungan dan prefetched cache Inertia di sisi klien.
+      - Alur logout di `AuthController::logout`: menghapus remember token pengguna (`$user->setRememberToken(null)->saveQuietly()`), memanggil `Auth::logout()`, meng-invalidate sesi (`$request->session()->invalidate()`), dan me-regenerate token CSRF (`$request->session()->regenerateToken()`).
+  - **Bagian 2: Batas 15 Menit Inaktivitas & Penghapusan Remember-Me**:
+    - Konfigurasi:
+      - Menambahkan `idle_timeout_minutes` di `config/session.php` bernilai `(int) env('SESSION_IDLE_TIMEOUT_MINUTES', 15)`.
+      - Menambahkan `SESSION_IDLE_TIMEOUT_MINUTES=15` di `.env.example`.
+      - Menjelaskan hubungan di komentar `config/session.php`: `SESSION_LIFETIME` (bawaan 120 menit) harus selalu `>= SESSION_IDLE_TIMEOUT_MINUTES` (15 menit) agar garbage collection sesi PHP/Laravel tidak memotong sesi sebelum batas inaktivitas tercapai.
+    - Middleware Sisi Server `App\Http\Middleware\EnforceSessionTimeout`:
+      - Berjalan pada pengguna terautentikasi di grup `web`.
+      - Melacak `last_activity_time` dan `last_activity_user_id` di sesi.
+      - Bila inaktivitas melebihi batas (15 menit):
+        - Melakukan logout penuh: invalidasi sesi, regenerasi token CSRF, dan penghapusan remember token.
+        - Staf dialihkan ke `/admin/masuk`, peserta dialihkan ke `/masuk` dengan flash message: *"Sesi Anda berakhir karena tidak ada aktivitas selama 15 menit. Silakan masuk kembali."*.
+        - Permintaan Inertia mendapatkan respons 409 dengan header `X-Inertia-Location` (Inertia::location) ke halaman login terkait.
+        - Permintaan JSON / API / ping mendapatkan respons 401 Unauthorized dengan JSON `{"message": "Sesi Anda berakhir karena tidak ada aktivitas selama 15 menit. Silakan masuk kembali."}`.
+        - Di `bootstrap/app.php`, exception handler menangani 401 dan 419 (CSRF token mismatch) untuk permintaan Inertia secara ramah dengan mengalihkan via `Inertia::location` ke halaman login beserta pesan peringatan, mencegah dialog modal galat mentah.
+    - Keputusan Desain Fitur "Ingat Saya":
+      - Fitur "Ingat saya di perangkat ini" secara inheren bertentangan dengan batas keras 15 menit tanpa aktivitas.
+      - Kotak centang "Ingat saya" dihapus dari formulir login peserta (`resources/views/auth/login.blade.php`).
+      - Nilai `remember` pada permintaan login diabaikan di `AuthController::login` dan `AuthController::adminLogin` (`Auth::login($user, false)`).
+      - Di `EnforceSessionTimeout`, setiap permintaan yang terautentikasi via cookie remember-me (`Auth::viaRemember()`) langsung dilogout, token remember di-null-kan, dan dialihkan ke login.
+    - Klien / Pelacak Aktivitas (`resources/js/session-guard.js`):
+      - Mendengarkan event aktivitas pengguna (`mousemove`, `mousedown`, `keydown`, `scroll`, `touchstart`, `input`), dibatasi (throttled) per 1 detik.
+      - Pengguna yang aktif secara otomatis memicu ping setiap 2.5 menit ke endpoint `POST /sesi/ping` (terautentikasi, di-throttle 60/menit, mengembalikan `{"ok": true, "status": "active"}` tanpa membocorkan data pribadi). Jika pengguna menganggur, tidak ada ping yang dikirim sehingga sesi di server akan kedaluwarsa tepat pada batas 15 menit.
+      - Mendeteksi proses unggahan berkas (form `enctype="multipart/form-data"` atau input berkas yang sedang diunggah) untuk menunda hitung mundur inaktivitas agar formulir panjang/unggah berkas tidak terputus di tengah jalan.
+      - Pada menit ke-14 tanpa aktivitas: menampilkan modal peringatan ramah *"Sesi akan berakhir dalam 1 menit"* dengan tombol *"Tetap masuk"* (tanpa data pribadi). Mengklik tombol ini memicu ping dan memperpanjang sesi.
+      - Pada menit ke-15 tanpa aktivitas: secara otomatis memicu redirect ke halaman login yang sesuai dengan pesan sesi berakhir.
+  - **Pengujian & Verifikasi**:
+    - Dibuat suite pengujian `Tests\Feature\SessionTimeoutAndCachePreventionTest` (8 tes, 51 assertions) yang memverifikasi:
+      1. Respons terautentikasi dan halaman login memuat header `no-store, no-cache, must-revalidate, max-age=0` serta `Expires` lampau; landing publik dan `/verifikasi` tidak memuat `no-store`.
+      2. Setelah logout, akses ke dasbor dialihkan ke login dan token sesi lama tidak valid.
+      3. Permintaan pada menit ke-14 berhasil dan memperpanjang sesi; permintaan pada menit ke-16 dialihkan ke login dengan pesan Indonesia; staf diarahkan ke `/admin/masuk`.
+      4. Permintaan Inertia yang kedaluwarsa menerima 409 dengan `X-Inertia-Location`; permintaan JSON/ping menerima 401.
+      5. Endpoint ping memperpanjang aktivitas tanpa membocorkan data pribadi.
+      6. Form login tidak lagi memuat elemen checkbox `remember`.
+      7. Autentikasi via `Auth::viaRemember()` langsung dilogout.
+    - Seluruh test suite `php artisan test` (370 tes, 3094 assertions) lulus 100%.
+    - `npm run build` dan `php vendor/bin/pint` lulus tanpa galat.
+
 ## Temuan Belum Ditangani / Catatan
 - Pemasangan paket `phpoffice/phpspreadsheet` dan `openspout/openspout` via Composer dist zipball mengalami kegagalan izin penulisan file sementara pada Windows (`vendor/composer/tmp-*.zip: Permission denied`). Sesuai aturan tugas, berkas composer di-revert bersih dan sistem menggunakan cadangan OpenXML .xlsx engine bawaan PHP (`ZipArchive` + XML) dengan CSV cadangan yang tetap aktif.
-- Seluruh tugas perbaikan alur login, logout, SSO prompt login, logging kegagalan SSO, dan aktivasi akun mahasiswa KIP-K tertunda via login SSO telah selesai dikerjakan, diuji, dan diverifikasi end-to-end.
+- Seluruh tugas pencegahan cache tombol Back, batas inaktivitas 15 menit, penyesuaian remember-me, dan pembersihan riwayat Inertia telah selesai dikerjakan, diuji, dan diverifikasi end-to-end.

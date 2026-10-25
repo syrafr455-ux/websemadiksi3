@@ -97,8 +97,9 @@ Route::middleware('auth')->prefix('two-factor')->name('two-factor.')->group(func
     Route::post('/challenge', [TwoFactorController::class, 'verify'])->name('challenge.verify');
 });
 
-// Authenticated Logout
+// Authenticated Logout & Session Ping
 Route::post('/keluar', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
+Route::post('/sesi/ping', [AuthController::class, 'pingSession'])->name('session.ping')->middleware(['auth', 'throttle:60,1']);
 
 // Student Dashboard Routes
 Route::middleware(['auth', 'email.terverifikasi'])->prefix('dashboard')->name('dashboard.')->group(function () {

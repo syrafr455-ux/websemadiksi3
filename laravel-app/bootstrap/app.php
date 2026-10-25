@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnforceSessionTimeout;
 use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureEmailVerifiedForJalurUmum;
@@ -32,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
             EnsureActiveAccount::class,
             EnsureTwoFactorAuthenticated::class,
             HandleInertiaRequests::class,
+            EnforceSessionTimeout::class,
         ]);
 
         $middleware->append(SecurityHeaders::class);
@@ -51,12 +53,22 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $exceptions->respond(function (Response $response, Throwable $e, Request $request) {
-            if ($request->header('X-Inertia') && in_array($response->getStatusCode(), [403, 404, 419, 429, 500])) {
-                return Inertia::render('Error', [
-                    'status' => $response->getStatusCode(),
-                ])
-                    ->toResponse($request)
-                    ->setStatusCode($response->getStatusCode());
+            if ($request->header('X-Inertia')) {
+                // Tangani 401 dan 419 pada Inertia secara ramah (alihkan ke login dengan pesan)
+                if (in_array($response->getStatusCode(), [401, 419], true)) {
+                    $targetRoute = $request->is('admin*') ? route('admin.login') : route('login');
+                    $request->session()->flash('warning', 'Sesi Anda berakhir karena tidak ada aktivitas selama 15 menit. Silakan masuk kembali.');
+
+                    return Inertia::location($targetRoute);
+                }
+
+                if (in_array($response->getStatusCode(), [403, 404, 429, 500], true)) {
+                    return Inertia::render('Error', [
+                        'status' => $response->getStatusCode(),
+                    ])
+                        ->toResponse($request)
+                        ->setStatusCode($response->getStatusCode());
+                }
             }
 
             return $response;

@@ -9,6 +9,24 @@
                 <p class="text-sm text-outline mt-1.5">Gunakan akun UNUSA atau NIM/email yang terdaftar.</p>
             </div>
 
+            @if(session('warning'))
+                <div class="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3 text-sm" role="alert" id="session-warning-banner">
+                    <span class="material-symbols-outlined text-amber-600 text-xl shrink-0 mt-0.5">warning</span>
+                    <div class="flex-1 font-medium leading-relaxed">
+                        {{ session('warning') }}
+                    </div>
+                </div>
+            @endif
+
+            @if(session('info'))
+                <div class="mb-6 p-4 rounded-xl bg-sky-50 border border-sky-200 text-sky-800 flex items-start gap-3 text-sm" role="alert">
+                    <span class="material-symbols-outlined text-sky-600 text-xl shrink-0 mt-0.5">info</span>
+                    <div class="flex-1 font-medium leading-relaxed">
+                        {{ session('info') }}
+                    </div>
+                </div>
+            @endif
+
             @if($errors->has('sso') || session('sso_error'))
                 <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-3 text-sm" role="alert" id="sso-error-banner">
                     <span class="material-symbols-outlined text-rose-600 text-xl shrink-0 mt-0.5">error</span>
@@ -96,13 +114,6 @@
                             {{ $message }}
                         </p>
                     @enderror
-                </div>
-
-                <div class="flex items-center justify-between text-xs">
-                    <label class="flex items-center gap-2 cursor-pointer text-outline hover:text-on-surface">
-                        <input type="checkbox" name="remember" class="w-4 h-4 rounded text-primary focus:ring-primary/20 border-surface-variant">
-                        <span>Ingat saya di perangkat ini</span>
-                    </label>
                 </div>
 
                 <button 

@@ -1,4 +1,5 @@
 import './bootstrap';
+import './session-guard';
 import Alpine from 'alpinejs';
 
 window.Alpine = Alpine;

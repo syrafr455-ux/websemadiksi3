@@ -78,6 +78,7 @@ class KegiatanEditFormRoundTripTest extends TestCase
      */
     protected function propsKegiatan(Kegiatan $kegiatan): array
     {
+        session(['last_activity_time' => now()->timestamp]);
         $html = $this->actingAs($this->admin)->get(route('admin.kegiatan'))->assertOk()->getContent();
         preg_match('#<script data-page="app" type="application/json">(.*?)</script>#s', $html, $match);
         $page = json_decode($match[1], true, flags: JSON_THROW_ON_ERROR);
@@ -154,6 +155,8 @@ class KegiatanEditFormRoundTripTest extends TestCase
     /** Kirim form edit seperti React: POST dengan _method=PUT. */
     protected function simpanForm(Kegiatan $kegiatan, array $data)
     {
+        session(['last_activity_time' => now()->timestamp]);
+
         return $this->actingAs($this->admin)
             ->post(route('admin.kegiatan.update', $kegiatan->id), ['_method' => 'PUT', ...$this->payload($data)])
             ->assertRedirect()

@@ -9,6 +9,24 @@
                 <p class="text-sm text-outline mt-1.5">Masuk untuk mengelola verifikasi beasiswa & kegiatan SEMADIKSI.</p>
             </div>
 
+            @if(session('warning'))
+                <div class="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3 text-sm" role="alert">
+                    <span class="material-symbols-outlined text-amber-600 text-xl shrink-0 mt-0.5">warning</span>
+                    <div class="flex-1 font-medium leading-relaxed">
+                        {{ session('warning') }}
+                    </div>
+                </div>
+            @endif
+
+            @if(session('info'))
+                <div class="mb-6 p-4 rounded-xl bg-sky-50 border border-sky-200 text-sky-800 flex items-start gap-3 text-sm" role="alert">
+                    <span class="material-symbols-outlined text-sky-600 text-xl shrink-0 mt-0.5">info</span>
+                    <div class="flex-1 font-medium leading-relaxed">
+                        {{ session('info') }}
+                    </div>
+                </div>
+            @endif
+
             <form action="{{ route('admin.login.post') }}" method="POST" class="space-y-5">
                 @csrf
 

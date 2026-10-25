@@ -119,6 +119,7 @@ class AdminDashboardStatsTest extends TestCase
 
     protected function stats(): array
     {
+        session(['last_activity_time' => now()->timestamp]);
         $response = $this->actingAs($this->admin)->get(route('admin.dashboard'));
         $response->assertOk();
 

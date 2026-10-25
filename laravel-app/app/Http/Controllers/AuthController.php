@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Models\User;
 use App\Services\Auth\KeycloakService;
 use App\Support\MenuAdmin;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -79,8 +80,9 @@ class AuthController extends Controller
             'last_login_ip' => $request->ip(),
         ])->saveQuietly();
 
-        Auth::login($user, $request->boolean('remember'));
+        Auth::login($user, false);
         $request->session()->regenerate();
+        $request->session()->put('last_activity_time', now()->timestamp);
 
         if ($user->requiresTwoFactor()) {
             $request->session()->put('two_factor_required', true);
@@ -155,8 +157,9 @@ class AuthController extends Controller
             'last_login_ip' => $request->ip(),
         ])->saveQuietly();
 
-        Auth::login($user, $request->boolean('remember'));
+        Auth::login($user, false);
         $request->session()->regenerate();
+        $request->session()->put('last_activity_time', now()->timestamp);
 
         if ($user->requiresTwoFactor()) {
             $request->session()->put('two_factor_required', true);
@@ -214,5 +217,16 @@ class AuthController extends Controller
         }
 
         return redirect()->to($targetRoute);
+    }
+
+    /**
+     * Heartbeat ping to keep authenticated session alive.
+     */
+    public function pingSession(Request $request): JsonResponse
+    {
+        return response()->json([
+            'ok' => true,
+            'status' => 'active',
+        ]);
     }
 }
