@@ -305,6 +305,26 @@ Status pelacakan pengerjaan bertahap:
     - Suite baru `Tests\Feature\SeatNonPesertaRestrictionTest` (8 tes, 53 assertions) memvalidasi seluruh skenario penolakan, netralitas pesan, pencegahan kebocoran payload, kapasitas denah peserta, penempatan oleh admin, dan proteksi balapan (race condition).
     - Seluruh rangkaian pengujian sistem `php artisan test` (**403 tes, 3295 assertions**) lulus 100%.
 
+- [x] **Bagian 15: Tinjau Ulang Hasil Sebelumnya & Perbaikan Keamanan (Bagian 0)**
+  - **Audit Entitas & Relasi (Anti-Halusinasi)**:
+    - Dilakukan verifikasi kode menyeluruh via Grep pada seluruh repositori. Terbukti bahwa `KegiatanMahasiswaController`, tabel `kegiatan_pendaftaran`, dan relasi `kegiatanPendaftarans` **tidak pernah ada** di dalam codebase.
+    - Entitas kanonikal yang sah dan terbukti ada di kode adalah: `DashboardController` & `KegiatanBookingController`, tabel `kegiatan_registrations`, dan relasi `Kegiatan::registrations()`.
+  - **Penguatan Keamanan SimpleXlsxService**:
+    - **Daftar Putih Entri**: Hanya membaca entri terdaftar (`[Content_Types].xml`, `xl/workbook.xml`, `xl/_rels/workbook.xml.rels`, `xl/worksheets/sheet*.xml`, `xl/sharedStrings.xml`) langsung di dalam memori tanpa pernah mengekstrak ke disk.
+    - **Pencegahan Bom Zip**: Memeriksa jumlah entri (maksimal 100) serta total ukuran tak terkompresi per entri dan akumulasi total (maksimal 10 MB) *sebelum* berkas XML dibaca.
+    - **Proteksi DOCTYPE & XXE**: Menolak berkas XML yang mengandung deklarasi `<!DOCTYPE` atau `<!ENTITY` dengan melempar `RuntimeException`.
+    - **Dukungan Format Sel Excel Lengkap**: Mendukung sel teks bersama `t="s"` (sharedStrings teks biasa & rich text `<r><t>`), string sebaris `t="inlineStr"`, numerik (tanpa `t`), string hasil formula `t="str"`, dan sel kosong `<c r="..."/>`.
+    - Unit test baru `Tests\Unit\SimpleXlsxServiceTest` (4 tes, 14 assertions) memvalidasi skenario di atas.
+  - **Pencegahan Replay Attack pada TOTP (TotpService)**:
+    - Menambahkan kolom `two_factor_last_used_step` (unsignedBigInteger, nullable) pada tabel `users` via migrasi `2026_10_25_000002_add_two_factor_last_used_step_to_users_table.php`.
+    - `TotpService@verifyCode` kini memeriksa `lastUsedStep` dan menolak kode apa pun pada time step yang sama atau lebih lampau (`$step <= $lastUsedStep`), serta membandingkan token dengan `hash_equals`.
+    - `TwoFactorController@confirm` dan `@verify` menyimpan `two_factor_last_used_step` saat kode berhasil diverifikasi sehingga kode tidak dapat dipakai dua kali dalam jendela waktu yang sama.
+    - Uji unit `Tests\Unit\TotpServiceTest` dan fitur `Tests\Feature\TwoFactorAuthenticationTest` berhasil memvalidasi penolakan replay attack.
+  - **Konsolidasi Lokasi Dokumentasi**:
+    - Folder `docs/` di root repositori ditetapkan sebagai lokasi kanonik tunggal seluruh dokumentasi (`status-tugas.md`, `penyatuan-alur-lama.md`, `panduan-bahasa-dan-tampilan.md`, `api-unusa.md`).
+    - Seluruh berkas duplikat dan usang di `laravel-app/docs/` telah dihapus bersih.
+    - Aturan dokumentasi kanonik dicatat di `CLAUDE.md`.
+
 ## Jalur Presensi dan Pemicuan Sertifikat Otomatis
 1. **Rute `/dashboard/absensi` (`DashboardController@storeAbsensi`)**:
    - Jalur presensi mandiri dashboard (bukti kehadiran/swafoto).

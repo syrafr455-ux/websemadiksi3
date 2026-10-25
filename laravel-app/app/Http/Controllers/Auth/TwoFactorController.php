@@ -83,8 +83,10 @@ class TwoFactorController extends Controller
         ]);
 
         $code = trim((string) $request->input('code'));
+        $matchedStep = null;
+        $isValid = $totp->verifyCode($user->two_factor_secret, $code, 1, null, 6, 30, $user->two_factor_last_used_step, $matchedStep);
 
-        if (! $totp->verifyCode($user->two_factor_secret, $code, 1)) {
+        if (! $isValid) {
             RateLimiter::hit($throttleKey, 600);
 
             return back()->withErrors([
@@ -100,6 +102,7 @@ class TwoFactorController extends Controller
         $user->forceFill([
             'two_factor_confirmed_at' => now(),
             'two_factor_recovery_codes' => $recoveryData['hashed'],
+            'two_factor_last_used_step' => $matchedStep,
         ])->save();
 
         // Luluskan 2FA sesi ini dan simpan plain recovery codes satu kali untuk ditampilkan
@@ -191,8 +194,10 @@ class TwoFactorController extends Controller
 
         // Verifikasi kode TOTP 6 digit
         $code = trim((string) $request->input('code'));
+        $matchedStep = null;
+        $isValid = $code !== '' && $totp->verifyCode($user->two_factor_secret, $code, 1, null, 6, 30, $user->two_factor_last_used_step, $matchedStep);
 
-        if ($code === '' || ! $totp->verifyCode($user->two_factor_secret, $code, 1)) {
+        if (! $isValid) {
             RateLimiter::hit($throttleKey, 600);
 
             return back()->withErrors([
@@ -201,6 +206,10 @@ class TwoFactorController extends Controller
         }
 
         RateLimiter::clear($throttleKey);
+
+        $user->forceFill([
+            'two_factor_last_used_step' => $matchedStep,
+        ])->save();
 
         $request->session()->regenerate();
         $request->session()->forget('two_factor_required');

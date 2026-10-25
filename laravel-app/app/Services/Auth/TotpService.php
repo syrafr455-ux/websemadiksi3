@@ -81,10 +81,28 @@ class TotpService
     }
 
     /**
-     * Verify TOTP code with window tolerance (default ±1 window = ±30s).
+     * Hitung langkah waktu (time step) saat ini untuk periode TOTP.
      */
-    public function verifyCode(string $secret, string $code, int $window = 1, ?int $timestamp = null, int $digits = 6, int $period = 30): bool
+    public function currentStep(?int $timestamp = null, int $period = 30): int
     {
+        return (int) floor(($timestamp ?? time()) / $period);
+    }
+
+    /**
+     * Verify TOTP code with window tolerance (default ±1 window = ±30s) and replay protection.
+     * Returns true on success and populates $matchedStep by reference; returns false on failure.
+     * If $lastUsedStep is passed, skips any step <= $lastUsedStep to prevent replay attacks.
+     */
+    public function verifyCode(
+        string $secret,
+        string $code,
+        int $window = 1,
+        ?int $timestamp = null,
+        int $digits = 6,
+        int $period = 30,
+        ?int $lastUsedStep = null,
+        ?int &$matchedStep = null
+    ): bool {
         $timestamp = $timestamp ?? time();
         $cleanCode = trim(str_replace([' ', '-'], '', $code));
 
@@ -92,10 +110,20 @@ class TotpService
             return false;
         }
 
+        $currentStep = (int) floor($timestamp / $period);
+
         for ($i = -$window; $i <= $window; $i++) {
-            $checkTime = $timestamp + ($i * $period);
+            $step = $currentStep + $i;
+
+            if ($lastUsedStep !== null && $step <= $lastUsedStep) {
+                continue;
+            }
+
+            $checkTime = $step * $period;
             $validCode = $this->generateCode($secret, $checkTime, $digits, $period);
             if (hash_equals($validCode, $cleanCode)) {
+                $matchedStep = $step;
+
                 return true;
             }
         }

@@ -68,4 +68,41 @@ class TotpServiceTest extends TestCase
         $res3 = $totp->consumeRecoveryCode('INVALID-CODE', $res['remainingHashed']);
         $this->assertFalse($res3['valid']);
     }
+
+    /**
+     * Uji pencegahan replay attack (kode yang sudah berhasil tidak bisa dipakai lagi dalam jendela waktu yang sama).
+     */
+    public function test_prevents_replay_attack_in_same_or_earlier_time_step(): void
+    {
+        $totp = new TotpService;
+        $secret = $totp->generateSecret();
+        $timestamp = 1700000000;
+
+        $code = $totp->generateCode($secret, $timestamp);
+
+        // Penggunaan pertama: Berhasil dan menghasilkan matchedStep
+        $matchedStep = null;
+        $success = $totp->verifyCode($secret, $code, 1, $timestamp, 6, 30, null, $matchedStep);
+        $this->assertTrue($success);
+        $this->assertNotNull($matchedStep);
+        $this->assertSame((int) floor($timestamp / 30), $matchedStep);
+
+        // Penggunaan kedua (replay attack pada waktu yang sama): DITOLAK
+        $replayStep = null;
+        $replayed = $totp->verifyCode($secret, $code, 1, $timestamp, 6, 30, $matchedStep, $replayStep);
+        $this->assertFalse($replayed);
+        $this->assertNull($replayStep);
+
+        // Penggunaan kedua dalam toleransi jendela (misal +15 detik masih step yang sama): DITOLAK
+        $replayedWindow = $totp->verifyCode($secret, $code, 1, $timestamp + 15, 6, 30, $matchedStep);
+        $this->assertFalse($replayedWindow);
+
+        // Waktu berikutnya (+30 detik, step baru) dengan kode baru: BERHASIL
+        $nextTimestamp = $timestamp + 30;
+        $nextCode = $totp->generateCode($secret, $nextTimestamp);
+        $nextStep = null;
+        $nextSuccess = $totp->verifyCode($secret, $nextCode, 1, $nextTimestamp, 6, 30, $matchedStep, $nextStep);
+        $this->assertTrue($nextSuccess);
+        $this->assertSame($matchedStep + 1, $nextStep);
+    }
 }

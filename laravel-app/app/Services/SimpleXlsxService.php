@@ -184,6 +184,41 @@ class SimpleXlsxService
     }
 
     /**
+     * Entri XML yang diizinkan untuk dibaca dari arsip XLSX.
+     * Hanya membaca entri dalam daftar putih dan jangan pernah mengekstrak berkas ke disk.
+     */
+    public static function isWhitelistedEntry(string $entryName): bool
+    {
+        $exactWhitelist = [
+            '[Content_Types].xml',
+            'xl/workbook.xml',
+            'xl/_rels/workbook.xml.rels',
+            'xl/sharedStrings.xml',
+        ];
+
+        if (in_array($entryName, $exactWhitelist, true)) {
+            return true;
+        }
+
+        // xl/worksheets/sheet*.xml (contoh: xl/worksheets/sheet1.xml)
+        if (preg_match('#^xl/worksheets/sheet[0-9]+\.xml$#i', $entryName)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Validasi konten XML terhadap ancaman DOCTYPE dan XXE (XML External Entity).
+     */
+    public static function validateXmlSecurity(string $xmlContent): void
+    {
+        if (preg_match('/<!(?:DOCTYPE|ENTITY)\b/i', $xmlContent)) {
+            throw new \RuntimeException('Dokumen XML tidak aman: memuat deklarasi DOCTYPE atau entitas eksternal.');
+        }
+    }
+
+    /**
      * Baca berkas XLSX dan kembalikan array berisi baris data (array of arrays).
      *
      * @return array<int, array<int, string>>
@@ -195,11 +230,39 @@ class SimpleXlsxService
             throw new \RuntimeException('Gagal membuka berkas XLSX.');
         }
 
-        // Baca shared strings jika ada
+        // Periksa perlindungan bom zip: jumlah entri, ukuran tak terkompresi per entri & total (maksimal 10 MB)
+        $totalUncompressed = 0;
+        $maxTotalBytes = 10 * 1024 * 1024; // 10 MB
+
+        if ($zip->numFiles > 100) {
+            $zip->close();
+            throw new \RuntimeException('Berkas XLSX memuat terlalu banyak entri arsip.');
+        }
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            if ($stat === false) {
+                continue;
+            }
+
+            if ($stat['size'] > $maxTotalBytes) {
+                $zip->close();
+                throw new \RuntimeException('Ukuran entri berkas XLSX melebihi batas aman (maksimal 10 MB).');
+            }
+
+            $totalUncompressed += $stat['size'];
+            if ($totalUncompressed > $maxTotalBytes) {
+                $zip->close();
+                throw new \RuntimeException('Total ukuran dekompresi berkas XLSX melebihi batas aman (maksimal 10 MB).');
+            }
+        }
+
+        // Baca shared strings jika ada (hanya jika ada di daftar putih)
         $sharedStrings = [];
         $sharedStringsXml = $zip->getFromName('xl/sharedStrings.xml');
         if ($sharedStringsXml !== false) {
-            $xmlObj = simplexml_load_string($sharedStringsXml);
+            self::validateXmlSecurity($sharedStringsXml);
+            $xmlObj = simplexml_load_string($sharedStringsXml, 'SimpleXMLElement', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
             if ($xmlObj && isset($xmlObj->si)) {
                 foreach ($xmlObj->si as $si) {
                     if (isset($si->t)) {
@@ -217,13 +280,15 @@ class SimpleXlsxService
             }
         }
 
-        // Cari sheet1
-        $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
-        if ($sheetXml === false) {
-            // Coba temukan sheet apapun
+        // Cari sheet1 atau sheet pertama yang ada di daftar putih
+        $sheetXml = false;
+        $sheetXmlCandidate = $zip->getFromName('xl/worksheets/sheet1.xml');
+        if ($sheetXmlCandidate !== false) {
+            $sheetXml = $sheetXmlCandidate;
+        } else {
             for ($i = 0; $i < $zip->numFiles; $i++) {
                 $name = $zip->getNameIndex($i);
-                if (str_starts_with($name, 'xl/worksheets/sheet') && str_ends_with($name, '.xml')) {
+                if ($name !== false && self::isWhitelistedEntry($name) && str_starts_with($name, 'xl/worksheets/sheet')) {
                     $sheetXml = $zip->getFromIndex($i);
                     break;
                 }
@@ -236,7 +301,8 @@ class SimpleXlsxService
             throw new \RuntimeException('Worksheet tidak ditemukan di dalam berkas XLSX.');
         }
 
-        $xml = simplexml_load_string($sheetXml);
+        self::validateXmlSecurity($sheetXml);
+        $xml = simplexml_load_string($sheetXml, 'SimpleXMLElement', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
         if (! $xml || ! isset($xml->sheetData)) {
             return [];
         }
@@ -257,9 +323,20 @@ class SimpleXlsxService
                     // Shared string index
                     $idx = (int) $cell->v;
                     $val = $sharedStrings[$idx] ?? '';
-                } elseif ($type === 'inlineStr' && isset($cell->is->t)) {
-                    $val = (string) $cell->is->t;
+                } elseif ($type === 'inlineStr') {
+                    if (isset($cell->is->t)) {
+                        $val = (string) $cell->is->t;
+                    } elseif (isset($cell->is->r)) {
+                        $val = '';
+                        foreach ($cell->is->r as $r) {
+                            $val .= (string) $r->t;
+                        }
+                    }
+                } elseif ($type === 'str') {
+                    // Formula string result
+                    $val = (string) ($cell->v ?? '');
                 } elseif (isset($cell->v)) {
+                    // Numeric or default value
                     $val = (string) $cell->v;
                 }
 

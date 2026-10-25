@@ -276,4 +276,38 @@ class TwoFactorAuthenticationTest extends TestCase
             'action' => 'reset_two_factor',
         ]);
     }
+
+    public function test_replaying_same_totp_code_is_rejected(): void
+    {
+        $totp = new TotpService;
+        $userUmum = $this->createUserUmum();
+        $secret = $totp->generateSecret();
+        $userUmum->update([
+            'two_factor_secret' => $secret,
+            'two_factor_confirmed_at' => now(),
+            'two_factor_recovery_codes' => $totp->generateRecoveryCodes(8)['hashed'],
+        ]);
+
+        $code = $totp->generateCode($secret);
+
+        // Verifikasi pertama: Berhasil
+        $res1 = $this->actingAs($userUmum)
+            ->withSession(['two_factor_required' => true])
+            ->post(route('two-factor.challenge.verify'), [
+                'code' => $code,
+            ]);
+
+        $res1->assertRedirect(route('dashboard.index'));
+        $userUmum->refresh();
+        $this->assertNotNull($userUmum->two_factor_last_used_step);
+
+        // Verifikasi kedua dengan kode yang sama (replay attack): Ditolak
+        $res2 = $this->actingAs($userUmum)
+            ->withSession(['two_factor_required' => true])
+            ->post(route('two-factor.challenge.verify'), [
+                'code' => $code,
+            ]);
+
+        $res2->assertSessionHasErrors(['code' => 'Kode autentikasi tidak valid.']);
+    }
 }
