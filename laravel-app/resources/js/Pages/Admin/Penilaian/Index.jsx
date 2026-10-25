@@ -9,8 +9,8 @@ export default function PenilaianIndex({
     submissions = {},
     filters = {}
 }) {
-    const [search, setSearch] = useState(filters.q || '');
-    const [statusFilter, setStatusFilter] = useState(filters.status || '');
+    const [search, setSearch] = useState(filters?.q || '');
+    const [statusFilter, setStatusFilter] = useState(filters?.status || '');
     const [gradeModalOpen, setGradeModalOpen] = useState(false);
     const [selectedSubmission, setSelectedSubmission] = useState(null);
     const [finalScore, setFinalScore] = useState('');
@@ -120,7 +120,7 @@ export default function PenilaianIndex({
                                 onChange={handleKegiatanChange}
                                 className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold focus:border-amber-500 focus:outline-none"
                             >
-                                {kegiatans.map((k) => (
+                                {(kegiatans || []).map((k) => (
                                     <option key={k.id} value={k.id}>
                                         {k.nama_kegiatan} ({k.kategori})
                                     </option>
@@ -182,7 +182,7 @@ export default function PenilaianIndex({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/80 text-slate-300">
-                                {submissions.data && submissions.data.length > 0 ? (
+                                {submissions?.data && submissions.data.length > 0 ? (
                                     submissions.data.map((sub) => (
                                         <tr key={sub.id} className="hover:bg-slate-800/40 transition-colors">
                                             <td className="px-6 py-4">
@@ -343,7 +343,7 @@ export default function PenilaianIndex({
                                     <input
                                         type="file"
                                         accept=".xlsx,.csv,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                        onChange={(e) => setCsvFile(e.target.files[0])}
+                                        onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
                                         className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500"
                                         required
                                     />

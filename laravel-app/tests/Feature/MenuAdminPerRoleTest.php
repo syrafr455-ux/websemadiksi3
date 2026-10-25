@@ -108,6 +108,8 @@ class MenuAdminPerRoleTest extends TestCase
 
     public function test_staff_login_lands_on_first_menu_page(): void
     {
+        config(['unusa.two_factor_roles' => []]);
+
         $harapan = [
             [UserRole::SuperAdmin, '/admin'],
             [UserRole::VerifikatorBerkas, '/admin/berkas'],

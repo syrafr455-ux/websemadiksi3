@@ -5,7 +5,38 @@
 @section('pageSubtitle', 'Review pengajuan pencairan beasiswa, pelaporan kegiatan, dan monev IPK mahasiswa')
 
 @section('content')
-<div class="p-6 md:p-8 space-y-8" x-data="{ selectedSub: null, viewDetail: null }">
+<div class="p-6 md:p-8 space-y-8" x-data="{
+    isDetailOpen: false,
+    detailTitle: '',
+    detailStudent: '',
+    detailAnswers: {},
+    openDetail(detail) {
+        this.detailTitle = detail?.title || 'Formulir';
+        this.detailStudent = detail?.student || '-';
+        this.detailAnswers = detail?.answers && typeof detail.answers === 'object' ? detail.answers : {};
+        this.isDetailOpen = true;
+    },
+    closeDetail() {
+        this.isDetailOpen = false;
+    },
+    isStatusOpen: false,
+    subId: '',
+    subForm: '',
+    subStudent: '',
+    subStatus: 'Disetujui',
+    subNotes: '',
+    openStatus(sub) {
+        this.subId = sub?.id || '';
+        this.subForm = sub?.form || 'Formulir';
+        this.subStudent = sub?.student || '-';
+        this.subStatus = sub?.status || 'Disetujui';
+        this.subNotes = sub?.admin_notes || '';
+        this.isStatusOpen = true;
+    },
+    closeStatus() {
+        this.isStatusOpen = false;
+    }
+}">
     {{-- Header --}}
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -69,14 +100,14 @@
                             <td class="px-6 py-4 text-right">
                                 <div class="flex items-center justify-end gap-2">
                                     <button 
-                                        @click="viewDetail = {{ json_encode(['title' => $sub->form->title ?? 'Formulir', 'student' => $sub->applicant_name ?: $sub->user?->name, 'answers' => $sub->answers, 'submitted_at' => $sub->submitted_at]) }}"
+                                        @click="openDetail({{ json_encode(['title' => $sub->form->title ?? 'Formulir', 'student' => $sub->applicant_name ?: $sub->user?->name, 'answers' => $sub->answers ?? [], 'submitted_at' => $sub->submitted_at]) }})"
                                         class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-bold text-[11px] transition-colors"
                                     >
                                         Lihat Isian
                                     </button>
 
                                     <button 
-                                        @click="selectedSub = {{ json_encode(['id' => $sub->id, 'student' => $sub->applicant_name ?: $sub->user?->name, 'form' => $sub->form->title ?? 'Formulir', 'status' => $sub->status, 'admin_notes' => $sub->admin_notes]) }}"
+                                        @click="openStatus({{ json_encode(['id' => $sub->id, 'student' => $sub->applicant_name ?: $sub->user?->name, 'form' => $sub->form->title ?? 'Formulir', 'status' => $sub->status, 'admin_notes' => $sub->admin_notes]) }})"
                                         class="px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 font-bold text-[11px] transition-colors"
                                     >
                                         Update Status
@@ -104,7 +135,7 @@
 
     {{-- Modal Lihat Isian Jawaban --}}
     <div 
-        x-show="viewDetail !== null" 
+        x-show="isDetailOpen" 
         x-transition:enter="transition ease-out duration-200" 
         x-transition:enter-start="opacity-0" 
         x-transition:enter-end="opacity-100" 
@@ -114,42 +145,43 @@
         class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
         style="display: none;"
     >
-        <template x-if="viewDetail !== null">
-            <div 
-                @click.away="viewDetail = null" 
-                class="bg-slate-950 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-6 shadow-2xl max-h-[85vh] overflow-y-auto"
-            >
-                <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-                    <div>
-                        <h3 class="text-base font-bold text-white" x-text="viewDetail.title"></h3>
-                        <p class="text-xs text-slate-400" x-text="'Oleh: ' + viewDetail.student"></p>
+        <div 
+            @click.away="closeDetail()" 
+            class="bg-slate-950 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-6 shadow-2xl max-h-[85vh] overflow-y-auto"
+        >
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div>
+                    <h3 class="text-base font-bold text-white" x-text="detailTitle"></h3>
+                    <p class="text-xs text-slate-400" x-text="'Oleh: ' + detailStudent"></p>
+                </div>
+                <button type="button" @click="closeDetail()" class="p-1 rounded-lg text-slate-400 hover:bg-slate-800">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <template x-for="(val, key) in detailAnswers" :key="key">
+                    <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                        <span class="font-bold text-slate-400 uppercase tracking-wider text-[10px]" x-text="key"></span>
+                        <div class="text-white font-medium" x-text="val"></div>
                     </div>
-                    <button type="button" @click="viewDetail = null" class="p-1 rounded-lg text-slate-400 hover:bg-slate-800">
-                        <span class="material-symbols-outlined text-xl">close</span>
-                    </button>
-                </div>
-
-                <div class="space-y-4 text-xs">
-                    <template x-for="(val, key) in viewDetail.answers" :key="key">
-                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                            <span class="font-bold text-slate-400 uppercase tracking-wider text-[10px]" x-text="key"></span>
-                            <div class="text-white font-medium" x-text="val"></div>
-                        </div>
-                    </template>
-                </div>
-
-                <div class="flex justify-end pt-4 border-t border-slate-800">
-                    <button type="button" @click="viewDetail = null" class="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold hover:bg-slate-700">
-                        Tutup
-                    </button>
+                </template>
+                <div x-show="Object.keys(detailAnswers).length === 0" class="text-slate-500 italic text-center py-4">
+                    Tidak ada lampiran isian khusus.
                 </div>
             </div>
-        </template>
+
+            <div class="flex justify-end pt-4 border-t border-slate-800">
+                <button type="button" @click="closeDetail()" class="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold hover:bg-slate-700">
+                    Tutup
+                </button>
+            </div>
+        </div>
     </div>
 
     {{-- Modal Update Status Submission --}}
     <div 
-        x-show="selectedSub !== null" 
+        x-show="isStatusOpen" 
         x-transition:enter="transition ease-out duration-200" 
         x-transition:enter-start="opacity-0" 
         x-transition:enter-end="opacity-100" 
@@ -159,48 +191,46 @@
         class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
         style="display: none;"
     >
-        <template x-if="selectedSub !== null">
-            <div 
-                @click.away="selectedSub = null" 
-                class="bg-slate-950 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl"
-            >
-                <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-                    <div>
-                        <h3 class="text-base font-bold text-white">Status Persetujuan Formulir</h3>
-                        <p class="text-xs text-slate-400" x-text="selectedSub.form + ' (' + selectedSub.student + ')'"></p>
-                    </div>
-                    <button type="button" @click="selectedSub = null" class="p-1 rounded-lg text-slate-400 hover:bg-slate-800">
-                        <span class="material-symbols-outlined text-xl">close</span>
-                    </button>
+        <div 
+            @click.away="closeStatus()" 
+            class="bg-slate-950 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl"
+        >
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div>
+                    <h3 class="text-base font-bold text-white">Status Persetujuan Formulir</h3>
+                    <p class="text-xs text-slate-400" x-text="subForm + ' (' + subStudent + ')'"></p>
+                </div>
+                <button type="button" @click="closeStatus()" class="p-1 rounded-lg text-slate-400 hover:bg-slate-800">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
+
+            <form :action="'{{ url('/admin/submissions') }}/' + subId + '/status'" method="POST" class="space-y-4">
+                @csrf
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Status Pengajuan</label>
+                    <select name="status" x-model="subStatus" class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500">
+                        <option value="Disetujui">Disetujui</option>
+                        <option value="Perlu Revisi">Perlu Revisi</option>
+                        <option value="Ditolak">Ditolak</option>
+                    </select>
                 </div>
 
-                <form :action="'{{ url('/admin/submissions') }}/' + selectedSub.id + '/status'" method="POST" class="space-y-4">
-                    @csrf
-                    <div>
-                        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Status Pengajuan</label>
-                        <select name="status" x-model="selectedSub.status" class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500">
-                            <option value="Disetujui">Disetujui</option>
-                            <option value="Perlu Revisi">Perlu Revisi</option>
-                            <option value="Ditolak">Ditolak</option>
-                        </select>
-                    </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Catatan Admin</label>
+                    <textarea name="admin_notes" x-model="subNotes" rows="3" placeholder="Misal: Berkas telah diverifikasi untuk pencairan gelombang 1..." class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500"></textarea>
+                </div>
 
-                    <div>
-                        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Catatan Admin</label>
-                        <textarea name="admin_notes" x-model="selectedSub.admin_notes" rows="3" placeholder="Misal: Berkas telah diverifikasi untuk pencairan gelombang 1..." class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500"></textarea>
-                    </div>
-
-                    <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                        <button type="button" @click="selectedSub = null" class="px-4 py-2 rounded-xl border border-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-900">
-                            Batal
-                        </button>
-                        <button type="submit" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold">
-                            Simpan Status
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </template>
+                <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                    <button type="button" @click="closeStatus()" class="px-4 py-2 rounded-xl border border-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-900">
+                        Batal
+                    </button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold">
+                        Simpan Status
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 @endsection

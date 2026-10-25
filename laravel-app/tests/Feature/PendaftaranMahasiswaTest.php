@@ -12,6 +12,7 @@ use App\Models\ProgramStudi;
 use App\Models\User;
 use App\Services\AktivasiMahasiswaService;
 use Illuminate\Auth\Notifications\VerifyEmail;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -190,7 +191,7 @@ class PendaftaranMahasiswaTest extends TestCase
     {
         $mail = new ActivationLinkMail('Fauzan Hidayat', 'https://contoh.test/aktivasi', 60);
 
-        $this->assertInstanceOf(\Illuminate\Contracts\Queue\ShouldQueue::class, $mail);
+        $this->assertInstanceOf(ShouldQueue::class, $mail);
         $mail->assertSeeInHtml('Buat Kata Sandi');
         $mail->assertSeeInText('Link berlaku 60 menit');
         $mail->assertSeeInText('https://contoh.test/aktivasi');
@@ -363,6 +364,8 @@ class PendaftaranMahasiswaTest extends TestCase
 
     public function test_activated_student_can_log_in_with_nim_and_with_email(): void
     {
+        config(['unusa.two_factor_roles' => []]);
+
         $this->post($this->linkDariEmail(), $this->passwordBaru())->assertRedirect(route('login'));
         $user = User::where('nim', '2241010001')->firstOrFail();
 
