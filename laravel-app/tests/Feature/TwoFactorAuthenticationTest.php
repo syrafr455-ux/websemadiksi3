@@ -247,8 +247,12 @@ class TwoFactorAuthenticationTest extends TestCase
             'two_factor_recovery_codes' => $totp->generateRecoveryCodes(8)['hashed'],
         ]);
 
-        // Non-admin (mahasiswa, verifikator, penilai) tidak boleh mereset
+        // Non-admin (mahasiswa, umum, verifikator, penilai) tidak boleh mereset
         $this->actingAs($this->createMahasiswaKipk())
+            ->postJson(route('admin.users.reset-2fa', $userUmum->id), ['reason' => 'Reset permintaan'])
+            ->assertForbidden();
+
+        $this->actingAs($userUmum)
             ->postJson(route('admin.users.reset-2fa', $userUmum->id), ['reason' => 'Reset permintaan'])
             ->assertForbidden();
 
