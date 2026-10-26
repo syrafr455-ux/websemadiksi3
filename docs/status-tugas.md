@@ -423,3 +423,5 @@ Status pelacakan pengerjaan bertahap:
     - Seluruh tes round-trip WIB (`KegiatanEditFormRoundTripTest` 8 tes, `TimezoneConsistencyTest` 16 tes) lulus 100%.
     - Ditambahkan tes `test_payload_from_form_without_seconds_is_stored_as_correct_utc` yang memvalidasi bahwa payload form tanpa detik (`YYYY-MM-DDTHH:mm`) diterima dan disimpan sebagai UTC yang benar di database.
     - Total suite PHPUnit: **436 passed (3458 assertions)**. Kompilasi `npm run build` dan linter `vendor/bin/pint` sukses.
+
+- [x] **Panduan Uji Manual**: Panduan pengujian manual langkah demi langkah yang terbukti dari kode untuk pemilik proyek tersedia di [`docs/panduan-uji-manual.md`](docs/panduan-uji-manual.md).
