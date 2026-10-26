@@ -19,6 +19,13 @@ class EnsureActiveAccount
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akun Anda sedang dibekukan. Silakan hubungi admin.',
+                ], 403);
+            }
+
             return redirect()->route('login')->with('error', 'Akun Anda dinonaktifkan oleh administrator. Hubungi admin SEMADIKSI.');
         }
 

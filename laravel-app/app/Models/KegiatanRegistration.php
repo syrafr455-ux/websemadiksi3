@@ -109,6 +109,11 @@ class KegiatanRegistration extends Model
         return $this->hasOne(KegiatanSubmission::class, 'registration_id');
     }
 
+    public function gabung(): HasOne
+    {
+        return $this->hasOne(KegiatanGabung::class, 'registration_id');
+    }
+
     /**
      * Registrasi yang masih memegang kursi/kuota (free, pending, paid).
      */

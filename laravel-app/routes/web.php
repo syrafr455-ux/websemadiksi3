@@ -13,6 +13,7 @@ use App\Http\Controllers\CertificateController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\KegiatanBookingController;
+use App\Http\Controllers\KegiatanGabungController;
 use App\Http\Controllers\KlaimKipController;
 use App\Http\Controllers\LupaKataSandiController;
 use App\Http\Controllers\PendaftaranController;
@@ -44,6 +45,7 @@ Route::post('/kegiatan/{kegiatan}/presensi', [PresensiController::class, 'submit
 Route::get('/presensi/{kegiatan}', [PresensiController::class, 'showSelfAttendance'])->name('presensi.self');
 Route::post('/presensi/{kegiatan}', [PresensiController::class, 'submitSelfAttendance'])->name('presensi.self.submit');
 Route::get('/kegiatan/{kegiatan}/presensi-akhir', [PresensiScannerController::class, 'scanPresensiAkhir'])->name('kegiatan.presensi-akhir.scan')->middleware('auth');
+Route::get('/kegiatan/{kegiatan}/presensi-akhir/tautan', [PresensiScannerController::class, 'presensiAkhirTautan'])->name('kegiatan.presensi-akhir.tautan')->middleware('signed');
 Route::get('/tiket/{nomorTiket}/qr', [PresensiScannerController::class, 'renderTicketQr'])->name('tiket.qr');
 
 Route::get('/absensi', [HomeController::class, 'absensiPublic'])->name('absensi.public');
@@ -154,6 +156,7 @@ Route::post('/kegiatan/{id}/reselect-seat', [KegiatanBookingController::class, '
 Route::post('/kegiatan/{id}/pilih-kursi', [KegiatanBookingController::class, 'bookSeats'])->whereNumber('id')->middleware('auth')->name('kegiatan.pilih-kursi');
 Route::post('/kegiatan/{id}/book-seats', [KegiatanBookingController::class, 'bookSeats'])->whereNumber('id')->middleware('auth')->name('kegiatan.book-seats');
 Route::post('/kegiatan/{id}/alokasi-kursi', [KegiatanBookingController::class, 'bookSeats'])->whereNumber('id')->middleware('auth')->name('kegiatan.alokasi-kursi');
+Route::post('/kegiatan/{id}/gabung', [KegiatanGabungController::class, 'gabung'])->whereNumber('id')->middleware(['auth', 'throttle:30,1'])->name('kegiatan.gabung');
 
 // Admin & Staff Dashboard Routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -170,6 +173,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::post('/kegiatan/{id}/ajukan', [KegiatanController::class, 'ajukan'])->name('kegiatan.ajukan');
         Route::post('/kegiatan/{id}/setujui', [KegiatanController::class, 'setujui'])->name('kegiatan.setujui');
         Route::post('/kegiatan/{id}/tolak', [KegiatanController::class, 'tolak'])->name('kegiatan.tolak');
+        Route::post('/kegiatan/{id}/tarik-draft', [KegiatanController::class, 'tarikDraft'])->name('kegiatan.tarik-draft');
+        Route::post('/kegiatan/{id}/akses-gabung/buka', [KegiatanController::class, 'bukaAksesGabung'])->name('kegiatan.akses-gabung.buka');
+        Route::post('/kegiatan/{id}/akses-gabung/tutup', [KegiatanController::class, 'tutupAksesGabung'])->name('kegiatan.akses-gabung.tutup');
+        Route::post('/kegiatan/{id}/pengaturan-daring', [KegiatanController::class, 'updatePengaturanDaring'])->name('kegiatan.pengaturan-daring');
 
         // Dynamic Venue Layout & Booking Lifecycle Config (Super Admin Only)
         Route::match(['put', 'patch'], '/kegiatan/{id}/venue-config', [KegiatanSeatController::class, 'updateVenueConfig'])->name('kegiatan.venue-config');
@@ -218,6 +225,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/absensi', [App\Http\Controllers\Admin\DashboardController::class, 'attendances'])->name('attendances');
         Route::get('/absensi/export', [App\Http\Controllers\Admin\DashboardController::class, 'exportAttendances'])->name('attendances.export');
         Route::get('/presensi/{id}/signature', [App\Http\Controllers\Admin\DashboardController::class, 'signaturePreview'])->name('attendances.signature');
+        Route::get('/presensi/{id}/tangkapan-layar', [PresensiController::class, 'tangkapanLayarPrivat'])->whereNumber('id')->name('attendances.screenshot');
         Route::match(['post', 'patch'], '/absensi/{id}', [App\Http\Controllers\Admin\DashboardController::class, 'updateAttendanceStatus'])->name('attendances.update');
         Route::match(['post', 'patch'], '/absensi/{id}/status', [App\Http\Controllers\Admin\DashboardController::class, 'updateAttendanceStatus'])->name('attendances.status');
 

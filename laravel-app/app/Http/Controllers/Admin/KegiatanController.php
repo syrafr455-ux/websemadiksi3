@@ -5,13 +5,17 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\KegiatanStatus;
 use App\Enums\RegistrationPaymentStatus;
 use App\Enums\SeatStatus;
+use App\Enums\UserRole;
 use App\Events\KegiatanUpdatedEvent;
 use App\Http\Controllers\Controller;
+use App\Jobs\SendProtectedEmailJob;
 use App\Mail\KegiatanDiajukanMail;
 use App\Models\AuditLog;
 use App\Models\Kegiatan;
 use App\Models\KegiatanPersetujuan;
 use App\Models\KegiatanRegistration;
+use App\Models\User;
+use App\Rules\ValidMeetingUrl;
 use App\Services\Kegiatan\DenahKursiService;
 use App\Services\Kegiatan\PetaKursiService;
 use App\Services\UnusaFacilityService;
@@ -21,7 +25,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -42,6 +46,7 @@ class KegiatanController extends Controller
         Gate::authorize('viewAny', Kegiatan::class);
 
         $query = Kegiatan::query()
+            ->with(['persetujuan.user:id,name,email', 'createdBy:id,name,email'])
             ->withCount(['seats', 'registrations', 'submissions'])
             ->latest('id');
 
@@ -66,9 +71,17 @@ class KegiatanController extends Controller
         $kegiatans = $query->paginate(12)->withQueryString();
         $unusaFacilities = $this->facilityService->listCampuses();
 
+        $currentUser = auth()->user();
+        $currentUserId = $currentUser?->id;
+        $isSuperAdmin = $currentUser?->isSuperAdmin() ?? false;
+
+        $adaSuperAdminLain = User::where('role', UserRole::SuperAdmin)
+            ->where('id', '!=', $currentUserId)
+            ->where('is_blocked', false)
+            ->exists();
+
         $menungguPersetujuanAnda = 0;
-        if (auth()->user()?->isSuperAdmin()) {
-            $currentUserId = auth()->id();
+        if ($isSuperAdmin) {
             $menungguPersetujuanAnda = Kegiatan::query()
                 ->where('status', KegiatanStatus::Diajukan)
                 ->where(function ($q) use ($currentUserId) {
@@ -80,6 +93,47 @@ class KegiatanController extends Controller
                 ->count();
         }
 
+        $kegiatans->through(function (Kegiatan $item) use ($currentUserId, $isSuperAdmin) {
+            $penyetujuWajib = $item->penyetujuWajib();
+            $totalPenyetuju = $penyetujuWajib->count();
+            $jumlahSetuju = $item->persetujuan->where('keputusan', 'setuju')->count();
+
+            $statusTeks = match ($item->status) {
+                KegiatanStatus::Draft => 'Draft',
+                KegiatanStatus::Diajukan => "Menunggu persetujuan {$jumlahSetuju} dari {$totalPenyetuju}",
+                KegiatanStatus::Published => 'Terbit',
+                KegiatanStatus::Archived => 'Diarsipkan',
+                KegiatanStatus::Cancelled => 'Dibatalkan',
+                KegiatanStatus::Ongoing => 'Berlangsung',
+                KegiatanStatus::Completed => 'Selesai',
+                default => $item->status?->label() ?? 'Draft',
+            };
+
+            if ($item->status === KegiatanStatus::Draft && ! empty($item->catatan_penolakan)) {
+                $statusTeks = 'Ditolak: '.Str::limit($item->catatan_penolakan, 40);
+            }
+
+            $sudahVote = (bool) $item->persetujuan->firstWhere('user_id', $currentUserId);
+            $perluTindakanAnda = $isSuperAdmin
+                && $item->status === KegiatanStatus::Diajukan
+                && $item->created_by !== $currentUserId
+                && ! $sudahVote;
+
+            $bisaDiajukanOlehAnda = ($item->created_by === $currentUserId || ! $item->created_by)
+                && $item->status === KegiatanStatus::Draft;
+
+            $itemArray = $item->toArray();
+            $itemArray['status_teks'] = $statusTeks;
+            $itemArray['perlu_tindakan_anda'] = $perluTindakanAnda;
+            $itemArray['bisa_diajukan_oleh_anda'] = $bisaDiajukanOlehAnda;
+            $itemArray['catatan_penolakan'] = $item->catatan_penolakan;
+            $itemArray['jumlah_setuju'] = $jumlahSetuju;
+            $itemArray['total_penyetuju'] = $totalPenyetuju;
+            $itemArray['creator_name'] = $item->createdBy?->name;
+
+            return $itemArray;
+        });
+
         return Inertia::render('Admin/Kegiatan/Index', [
             'title' => 'Manajemen Kegiatan Enterprise',
             'kegiatans' => $kegiatans,
@@ -87,6 +141,7 @@ class KegiatanController extends Controller
             'unusaFacilities' => $unusaFacilities,
             'statusOptions' => KegiatanStatus::cases(),
             'menungguPersetujuanAnda' => $menungguPersetujuanAnda,
+            'adaSuperAdminLain' => $adaSuperAdminLain,
         ]);
     }
 
@@ -98,7 +153,41 @@ class KegiatanController extends Controller
         Gate::authorize('create', Kegiatan::class);
 
         $this->normalizeKegiatanInput($request);
-        $validated = $request->validate($this->kegiatanRules(), $this->kegiatanMessages());
+        $rules = $this->kegiatanRules();
+        $rules['aksi_submit'] = ['nullable', 'string', 'in:draft,ajukan'];
+        $validated = $request->validate($rules, $this->kegiatanMessages());
+
+        $aksiSubmit = $validated['aksi_submit'] ?? null;
+        $lokasiType = $validated['lokasi_type'];
+        $metode = $validated['metode_pelaksanaan'] ?? ($lokasiType === 'online' ? 'online' : 'offline');
+        $isOnlineOrHybrid = ($lokasiType === 'online' || in_array($metode, ['online', 'hybrid'], true));
+
+        if ($aksiSubmit) {
+            $statusKegiatan = $aksiSubmit === 'ajukan' ? KegiatanStatus::Diajukan : KegiatanStatus::Draft;
+        } elseif (isset($validated['status'])) {
+            $statusKegiatan = KegiatanStatus::tryFrom($validated['status']) ?? KegiatanStatus::Draft;
+        } else {
+            $statusKegiatan = KegiatanStatus::Published;
+        }
+
+        if ($statusKegiatan === KegiatanStatus::Diajukan) {
+            $adaSuperAdminLain = User::where('role', UserRole::SuperAdmin)
+                ->where('id', '!=', auth()->id())
+                ->where('is_blocked', false)
+                ->exists();
+
+            if (! $adaSuperAdminLain) {
+                throw ValidationException::withMessages([
+                    'aksi_submit' => 'Tidak dapat mengajukan persetujuan karena tidak ada Super Administrator aktif lain dalam sistem.',
+                ]);
+            }
+
+            if ($isOnlineOrHybrid && empty($validated['tautan_rapat'])) {
+                throw ValidationException::withMessages([
+                    'tautan_rapat' => 'Tautan rapat daring wajib diisi sebelum kegiatan dapat diajukan.',
+                ]);
+            }
+        }
 
         $tanggalMulaiUtc = Wib::keUtc($validated['tanggal_mulai']);
         $tanggalSelesaiUtc = ! empty($validated['tanggal_selesai'])
@@ -126,7 +215,6 @@ class KegiatanController extends Controller
 
         DB::beginTransaction();
         try {
-            $lokasiType = $validated['lokasi_type'];
             $seatBookingActive = $request->boolean('is_seat_booking_active');
             $seatLayout = $this->denah->normalisasi($validated['seat_layout_config'] ?? null);
 
@@ -135,7 +223,7 @@ class KegiatanController extends Controller
                 'nama_kegiatan' => trim($validated['nama_kegiatan']),
                 'deskripsi' => $validated['deskripsi'] ?? null,
                 'kategori' => $validated['kategori'],
-                'metode_pelaksanaan' => $validated['metode_pelaksanaan'] ?? ($lokasiType === 'online' ? 'online' : 'offline'),
+                'metode_pelaksanaan' => $metode,
                 'sasaran_peserta' => $validated['sasaran_peserta'] ?? 'umum',
                 // Input jadwal dianggap WIB, disimpan dalam UTC.
                 'tanggal_mulai' => $tanggalMulaiUtc,
@@ -156,8 +244,18 @@ class KegiatanController extends Controller
                 'is_seat_booking_active' => $seatBookingActive,
                 'is_submission_active' => $request->boolean('is_submission_active'),
                 'submission_instructions' => $validated['submission_instructions'] ?? null,
-                'status' => KegiatanStatus::tryFrom($validated['status'] ?? '') ?? KegiatanStatus::Published,
+                'status' => $statusKegiatan,
                 'seat_layout_config' => $seatBookingActive ? $seatLayout : null,
+                // Kolom daring
+                'platform_daring' => $validated['platform_daring'] ?? 'zoom',
+                'tautan_rapat' => $validated['tautan_rapat'] ?? null,
+                'meeting_id' => $validated['meeting_id'] ?? null,
+                'passcode_rapat' => $validated['passcode_rapat'] ?? null,
+                'join_button_mode' => $validated['join_button_mode'] ?? 'otomatis',
+                'menit_buka_gabung' => isset($validated['menit_buka_gabung']) ? (int) $validated['menit_buka_gabung'] : 15,
+                'batas_tutup_gabung' => ! empty($validated['batas_tutup_gabung']) ? Wib::keUtc($validated['batas_tutup_gabung']) : null,
+                'izin_tautan_presensi_akhir' => $request->boolean('izin_tautan_presensi_akhir'),
+                'wajib_tangkapan_layar' => $request->boolean('wajib_tangkapan_layar'),
             ]);
 
             // Buat denah kursi interaktif jika booking kursi aktif
@@ -172,11 +270,22 @@ class KegiatanController extends Controller
                 $kegiatan
             );
 
+            // Jika langsung diajukan, kirim email notifikasi ke semua penyetuju wajib lewat antrean pengamanan
+            if ($statusKegiatan === KegiatanStatus::Diajukan) {
+                foreach ($kegiatan->penyetujuWajib() as $penyetuju) {
+                    SendProtectedEmailJob::dispatch($penyetuju->email, new KegiatanDiajukanMail($kegiatan, $penyetuju));
+                }
+            }
+
             DB::commit();
 
             return redirect()->route('admin.kegiatan')->with('success', 'Kegiatan enterprise berhasil disimpan.');
         } catch (\Throwable $e) {
             DB::rollBack();
+
+            if ($e instanceof ValidationException) {
+                throw $e;
+            }
 
             return back()->with('error', 'Gagal membuat kegiatan: '.$e->getMessage())->withInput();
         }
@@ -234,6 +343,12 @@ class KegiatanController extends Controller
         });
 
         $sudahMemberiSuara = (bool) $persetujuan->firstWhere('user_id', $currentUserId);
+        $creatorName = $kegiatan->createdBy?->name ?? 'Pembuat';
+
+        $pesanStatus = null;
+        if ($kegiatan->status === KegiatanStatus::Draft) {
+            $pesanStatus = "Belum diajukan oleh {$creatorName}";
+        }
 
         return Inertia::render('Admin/Kegiatan/Show', [
             'title' => 'Detail Kegiatan',
@@ -245,17 +360,36 @@ class KegiatanController extends Controller
                     'biaya', 'kuota', 'is_seat_booking_active', 'booking_opens_at', 'booking_closes_at',
                     'venue_change_count', 'is_submission_active', 'file_panduan_url',
                 ]),
+                'created_by' => $kegiatan->createdBy ? [
+                    'id' => $kegiatan->createdBy->id,
+                    'name' => $kegiatan->createdBy->name,
+                    'email' => $kegiatan->createdBy->email,
+                ] : null,
                 'status' => $kegiatan->status?->value,
                 'seat_booking_open' => $kegiatan->isSeatBookingOpen(),
                 'status_booking' => $kegiatan->statusBookingKursi(),
                 'registration_open' => $kegiatan->isRegistrationOpen(),
+                'platform_daring' => $kegiatan->platform_daring,
+                'join_button_mode' => $kegiatan->join_button_mode,
+                'menit_buka_gabung' => $kegiatan->menit_buka_gabung,
+                'batas_tutup_gabung' => $kegiatan->batas_tutup_gabung,
+                'is_gabung_manual_open' => $kegiatan->is_gabung_manual_open,
+                'izin_tautan_presensi_akhir' => (bool) $kegiatan->izin_tautan_presensi_akhir,
+                'wajib_tangkapan_layar' => (bool) $kegiatan->wajib_tangkapan_layar,
+                'status_akses_gabung' => $kegiatan->statusAksesGabung(),
+                'is_online' => $kegiatan->isOnline(),
+                'is_hybrid' => $kegiatan->isHybrid(),
+                'is_daring_or_hybrid' => $kegiatan->isDaringOrHybrid(),
             ],
             'approval' => [
                 'status' => $kegiatan->status?->value,
                 'created_by' => $kegiatan->created_by,
-                'creator_name' => $kegiatan->createdBy?->name,
+                'creator_name' => $creatorName,
+                'pesan_status' => $pesanStatus,
+                'catatan_penolakan' => $kegiatan->catatan_penolakan,
                 'is_creator' => $currentUserId === $kegiatan->created_by,
                 'can_submit' => ($currentUserId === $kegiatan->created_by || ! $kegiatan->created_by) && $kegiatan->status === KegiatanStatus::Draft,
+                'can_withdraw' => ($currentUserId === $kegiatan->created_by || ! $kegiatan->created_by) && $kegiatan->status === KegiatanStatus::Diajukan,
                 'can_approve' => $currentUserId !== $kegiatan->created_by && $kegiatan->status === KegiatanStatus::Diajukan && ! $sudahMemberiSuara,
                 'can_reject' => $currentUserId !== $kegiatan->created_by && $kegiatan->status === KegiatanStatus::Diajukan,
                 'bisa_terbit' => $penyetujuWajib->isNotEmpty(),
@@ -495,16 +629,21 @@ class KegiatanController extends Controller
             return back()->with('error', 'Hanya kegiatan berstatus draft yang dapat diajukan.');
         }
 
+        if ($kegiatan->isDaringOrHybrid() && empty($kegiatan->tautan_rapat)) {
+            return back()->with('error', 'Tautan rapat daring wajib diisi sebelum kegiatan dapat diajukan.');
+        }
+
         $kegiatan->status = KegiatanStatus::Diajukan;
+        $kegiatan->catatan_penolakan = null;
         $kegiatan->save();
 
         // Hapus persetujuan lama bila ada bekas penolakan sebelumnya
         $kegiatan->persetujuan()->delete();
 
-        // Kirim email notifikasi ke semua penyetuju wajib lewat antrean
+        // Kirim email notifikasi ke semua penyetuju wajib lewat antrean pengamanan email
         $penyetujuWajib = $kegiatan->penyetujuWajib();
         foreach ($penyetujuWajib as $penyetuju) {
-            Mail::to($penyetuju->email)->queue(new KegiatanDiajukanMail($kegiatan, $penyetuju));
+            SendProtectedEmailJob::dispatch($penyetuju->email, new KegiatanDiajukanMail($kegiatan, $penyetuju));
         }
 
         AuditLog::record(
@@ -515,6 +654,38 @@ class KegiatanController extends Controller
         );
 
         return back()->with('success', 'Kegiatan berhasil diajukan untuk persetujuan seluruh Super Admin.');
+    }
+
+    /**
+     * Tarik kembali kegiatan diajukan ke status draft oleh pembuat kegiatan.
+     */
+    public function tarikDraft(int $id): RedirectResponse
+    {
+        $kegiatan = Kegiatan::findOrFail($id);
+        Gate::authorize('update', $kegiatan);
+
+        if ($kegiatan->created_by && $kegiatan->created_by !== auth()->id()) {
+            abort(403, 'Hanya pembuat kegiatan yang dapat menarik kembali kegiatan ke status draft.');
+        }
+
+        if ($kegiatan->status !== KegiatanStatus::Diajukan) {
+            return back()->with('error', 'Hanya kegiatan berstatus diajukan yang dapat ditarik kembali ke draft.');
+        }
+
+        $kegiatan->status = KegiatanStatus::Draft;
+        $kegiatan->save();
+
+        // Hapus suara persetujuan yang sudah masuk
+        $kegiatan->persetujuan()->delete();
+
+        AuditLog::record(
+            auth()->id(),
+            'withdraw_kegiatan',
+            "Menarik kembali kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id}) ke status draft",
+            $kegiatan
+        );
+
+        return back()->with('success', 'Kegiatan berhasil ditarik kembali ke status draft.');
     }
 
     /**
@@ -588,6 +759,7 @@ class KegiatanController extends Controller
         // Satu penolakan (catatan wajib) mengembalikan kegiatan ke draft dan menghapus semua persetujuan
         $kegiatan->persetujuan()->delete();
         $kegiatan->status = KegiatanStatus::Draft;
+        $kegiatan->catatan_penolakan = $catatan;
         $kegiatan->save();
 
         AuditLog::record(
@@ -598,6 +770,98 @@ class KegiatanController extends Controller
         );
 
         return back()->with('success', 'Kegiatan ditolak dan dikembalikan ke status draft.');
+    }
+
+    /**
+     * Buka akses tombol gabung secara manual (override).
+     */
+    public function bukaAksesGabung(Request $request, int $id): RedirectResponse
+    {
+        $kegiatan = Kegiatan::findOrFail($id);
+        Gate::authorize('update', $kegiatan);
+
+        $kegiatan->is_gabung_manual_open = true;
+        $kegiatan->save();
+
+        AuditLog::record(
+            auth()->id(),
+            'open_join_access',
+            "Membuka akses tombol gabung ruang daring kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id}) secara manual",
+            $kegiatan
+        );
+
+        return back()->with('success', 'Akses tombol gabung berhasil dibuka untuk peserta.');
+    }
+
+    /**
+     * Tutup akses tombol gabung secara manual (override).
+     */
+    public function tutupAksesGabung(Request $request, int $id): RedirectResponse
+    {
+        $kegiatan = Kegiatan::findOrFail($id);
+        Gate::authorize('update', $kegiatan);
+
+        $kegiatan->is_gabung_manual_open = false;
+        $kegiatan->save();
+
+        AuditLog::record(
+            auth()->id(),
+            'close_join_access',
+            "Menutup akses tombol gabung ruang daring kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id}) secara manual",
+            $kegiatan
+        );
+
+        return back()->with('success', 'Akses tombol gabung telah ditutup.');
+    }
+
+    /**
+     * Perbarui pengaturan rapat daring (bukan field kritis, dicatat di audit log tanpa membocorkan rahasia).
+     */
+    public function updatePengaturanDaring(Request $request, int $id): RedirectResponse
+    {
+        $kegiatan = Kegiatan::findOrFail($id);
+        Gate::authorize('update', $kegiatan);
+
+        $validated = $request->validate([
+            'platform_daring' => ['required', 'string', 'in:zoom,meet,teams,lainnya'],
+            'tautan_rapat' => ['required', 'url', 'max:500', new ValidMeetingUrl],
+            'meeting_id' => ['nullable', 'string', 'max:100'],
+            'passcode_rapat' => ['nullable', 'string', 'max:100'],
+            'join_button_mode' => ['required', 'string', 'in:otomatis,manual'],
+            'menit_buka_gabung' => ['required', 'integer', 'min:0', 'max:180'],
+            'batas_tutup_gabung' => ['nullable', 'date'],
+            'izin_tautan_presensi_akhir' => ['boolean'],
+            'wajib_tangkapan_layar' => ['boolean'],
+        ]);
+
+        $kegiatan->platform_daring = $validated['platform_daring'];
+        $kegiatan->tautan_rapat = $validated['tautan_rapat'];
+        $kegiatan->meeting_id = $validated['meeting_id'] ?? null;
+        if (array_key_exists('passcode_rapat', $validated)) {
+            $kegiatan->passcode_rapat = $validated['passcode_rapat'];
+        }
+        $kegiatan->join_button_mode = $validated['join_button_mode'];
+        $kegiatan->menit_buka_gabung = (int) $validated['menit_buka_gabung'];
+        $kegiatan->batas_tutup_gabung = ! empty($validated['batas_tutup_gabung']) ? Wib::keUtc($validated['batas_tutup_gabung']) : null;
+        $kegiatan->izin_tautan_presensi_akhir = $request->boolean('izin_tautan_presensi_akhir');
+        $kegiatan->wajib_tangkapan_layar = $request->boolean('wajib_tangkapan_layar');
+        $kegiatan->save();
+
+        AuditLog::record(
+            auth()->id(),
+            'update_kegiatan_daring',
+            "Memperbarui pengaturan rapat daring kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id})",
+            $kegiatan,
+            [
+                'platform' => $kegiatan->platform_daring,
+                'mode' => $kegiatan->join_button_mode,
+                'menit_buka' => $kegiatan->menit_buka_gabung,
+                'izin_presensi_tautan' => $kegiatan->izin_tautan_presensi_akhir,
+                'wajib_tangkapan_layar' => $kegiatan->wajib_tangkapan_layar,
+            ]
+        );
+
+        return back()->with('success', 'Pengaturan rapat daring berhasil diperbarui.');
     }
 
     /**
@@ -643,6 +907,15 @@ class KegiatanController extends Controller
             'panduan_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
             'certificate_template_file' => ['nullable', 'file', 'mimes:png,jpg,jpeg,pdf', 'max:10240'],
             'certificate_schema_config' => ['nullable', 'array'],
+            'platform_daring' => ['nullable', 'string', 'in:zoom,meet,teams,lainnya'],
+            'tautan_rapat' => ['nullable', 'url', 'max:500', new ValidMeetingUrl],
+            'meeting_id' => ['nullable', 'string', 'max:100'],
+            'passcode_rapat' => ['nullable', 'string', 'max:100'],
+            'join_button_mode' => ['nullable', 'string', 'in:otomatis,manual'],
+            'menit_buka_gabung' => ['nullable', 'integer', 'min:0', 'max:180'],
+            'batas_tutup_gabung' => ['nullable', 'date'],
+            'izin_tautan_presensi_akhir' => ['boolean'],
+            'wajib_tangkapan_layar' => ['boolean'],
             'seat_layout_config' => ['nullable', 'array'],
             'seat_layout_config.rows' => ['sometimes', 'array'],
             'seat_layout_config.rows.*' => ['string', 'max:3'],
@@ -744,6 +1017,29 @@ class KegiatanController extends Controller
 
         if ($ada('narasumber')) {
             $payload['narasumber'] = $this->normalizeNarasumber($validated['narasumber']);
+        }
+
+        foreach (['platform_daring', 'meeting_id', 'join_button_mode'] as $key) {
+            if ($ada($key)) {
+                $payload[$key] = $validated[$key];
+            }
+        }
+        if ($ada('tautan_rapat')) {
+            $payload['tautan_rapat'] = $validated['tautan_rapat'];
+        }
+        if ($ada('passcode_rapat')) {
+            $payload['passcode_rapat'] = $validated['passcode_rapat'];
+        }
+        if ($ada('menit_buka_gabung')) {
+            $payload['menit_buka_gabung'] = (int) $validated['menit_buka_gabung'];
+        }
+        if ($ada('batas_tutup_gabung')) {
+            $payload['batas_tutup_gabung'] = ! empty($validated['batas_tutup_gabung']) ? Wib::keUtc($validated['batas_tutup_gabung']) : null;
+        }
+        foreach (['izin_tautan_presensi_akhir', 'wajib_tangkapan_layar'] as $key) {
+            if ($ada($key)) {
+                $payload[$key] = $request->boolean($key);
+            }
         }
 
         return $payload;

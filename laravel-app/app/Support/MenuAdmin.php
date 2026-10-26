@@ -2,7 +2,9 @@
 
 namespace App\Support;
 
+use App\Enums\KegiatanStatus;
 use App\Enums\UserRole;
+use App\Models\Kegiatan;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -51,16 +53,45 @@ class MenuAdmin
                 continue;
             }
 
+            $badge = null;
+            if ($item['route'] === 'admin.kegiatan') {
+                $count = self::hitungMenungguPersetujuan($user);
+                if ($count > 0) {
+                    $badge = $count;
+                }
+            }
+
             $menu[] = [
                 'label' => $item['label'],
                 'icon' => $item['icon'],
                 'href' => route($item['route'], absolute: false),
                 'route' => $item['route'],
                 'active' => (bool) $request?->routeIs($item['aktif']),
+                'badge' => $badge,
             ];
         }
 
         return $menu;
+    }
+
+    /**
+     * Hitung kegiatan yang berstatus diajukan dan menunggu persetujuan dari user ini.
+     */
+    public static function hitungMenungguPersetujuan(?User $user): int
+    {
+        if (! $user || ! $user->isSuperAdmin()) {
+            return 0;
+        }
+
+        return Kegiatan::query()
+            ->where('status', KegiatanStatus::Diajukan)
+            ->where(function ($q) use ($user) {
+                $q->whereNull('created_by')->orWhere('created_by', '!=', $user->id);
+            })
+            ->whereDoesntHave('persetujuan', function ($q) use ($user) {
+                $q->where('user_id', $user->id);
+            })
+            ->count();
     }
 
     /**

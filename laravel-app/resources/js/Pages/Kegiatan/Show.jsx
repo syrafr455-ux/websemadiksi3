@@ -83,6 +83,40 @@ export default function KegiatanShow({
     const [pemberitahuan, setPemberitahuan] = useState(null);
     const petaRef = useRef(null);
 
+    // Rapat daring
+    const [meetingModal, setMeetingModal] = useState({ open: false, data: null });
+    const [sedangGabung, setSedangGabung] = useState(false);
+    const [copiedField, setCopiedField] = useState(null);
+
+    const handleGabungDaring = async () => {
+        setSedangGabung(true);
+        try {
+            const response = await window.axios.post(`/kegiatan/${kegiatan.id}/gabung`);
+            const data = response.data;
+            if (data && data.success) {
+                if (data.join_url) {
+                    window.open(data.join_url, '_blank');
+                }
+                setMeetingModal({ open: true, data });
+            } else {
+                setPemberitahuan(data?.message || 'Gagal mengakses ruang pertemuan daring.');
+            }
+        } catch (err) {
+            const msg = err.response?.data?.message || 'Akses ruang pertemuan belum dibuka atau tidak dapat diakses.';
+            setPemberitahuan(msg);
+        } finally {
+            setSedangGabung(false);
+        }
+    };
+
+    const copyMeetingField = (val, key) => {
+        if (!val) return;
+        navigator.clipboard.writeText(val).then(() => {
+            setCopiedField(key);
+            setTimeout(() => setCopiedField(null), 2000);
+        });
+    };
+
     const bisaPilih = booking.memakai_denah && booking.bisa_pilih;
     const statusBooking = STATUS_BOOKING[booking.status] || STATUS_BOOKING.ditutup;
 
@@ -522,6 +556,69 @@ export default function KegiatanShow({
                     </div>
                 )}
 
+                {/* Ruang Pertemuan Daring untuk Peserta Terdaftar */}
+                {registrasiSaya.length > 0 && kegiatan.is_daring_or_hybrid && (
+                    <div className="p-4 rounded-2xl bg-teal-950/40 border border-teal-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4" data-daring-show>
+                        <div className="text-xs text-teal-100 min-w-0 space-y-1">
+                            <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-teal-400 text-base">videocam</span>
+                                <span className="font-bold text-white text-sm">Ruang Pertemuan Daring ({kegiatan.platform_daring ? kegiatan.platform_daring.toUpperCase() : 'ONLINE'})</span>
+                                {kegiatan.status_akses_gabung === 'dibuka' ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                        Akses Dibuka
+                                    </span>
+                                ) : kegiatan.status_akses_gabung === 'ditutup' ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                        Akses Ditutup
+                                    </span>
+                                ) : (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                        Belum Dibuka
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-slate-300">
+                                {kegiatan.status_akses_gabung === 'dibuka'
+                                    ? 'Ruang pertemuan daring telah dibuka. Klik tombol untuk bergabung ke sesi rapat.'
+                                    : kegiatan.status_akses_gabung === 'ditutup'
+                                    ? 'Akses ruang pertemuan daring telah ditutup oleh penyelenggara.'
+                                    : `Tombol gabung akan dibuka pada ${kegiatan.waktu_buka_gabung_wib ? `${kegiatan.waktu_buka_gabung_wib} WIB` : '15 menit sebelum acara dimulai'}.`}
+                            </p>
+                            {registrasiSaya.some(r => r.sudah_gabung) && (
+                                <div className="text-[11px] text-teal-400 font-medium flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-xs">check_circle</span>
+                                    <span>Kehadiran daring Anda sudah tercatat.</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={handleGabungDaring}
+                            disabled={kegiatan.status_akses_gabung !== 'dibuka' || sedangGabung}
+                            className={`shrink-0 px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                                kegiatan.status_akses_gabung === 'dibuka'
+                                    ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-md shadow-teal-600/25'
+                                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
+                            }`}
+                        >
+                            <span className="material-symbols-outlined text-sm">
+                                {sedangGabung ? 'progress_activity' : 'videocam'}
+                            </span>
+                            <span>
+                                {sedangGabung
+                                    ? 'Menghubungkan...'
+                                    : kegiatan.status_akses_gabung === 'dibuka'
+                                    ? 'Gabung Sekarang'
+                                    : kegiatan.status_akses_gabung === 'ditutup'
+                                    ? 'Akses Ditutup'
+                                    : (kegiatan.waktu_buka_gabung_wib ? `Dibuka ${kegiatan.waktu_buka_gabung_wib} WIB` : 'Belum Dibuka')}
+                            </span>
+                        </button>
+                    </div>
+                )}
+
                 {pemberitahuan && (
                     <div role="alert" className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-100 text-xs font-medium flex items-start gap-2" data-pemberitahuan-kursi>
                         <span className="material-symbols-outlined text-base" aria-hidden="true">error</span>
@@ -895,6 +992,101 @@ export default function KegiatanShow({
                         )}
                     </div>
                 </div>
+                {/* Meeting Credentials Modal */}
+                {meetingModal.open && meetingModal.data && (
+                    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-5">
+                            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-10 h-10 rounded-xl bg-teal-600/20 text-teal-400 flex items-center justify-center border border-teal-500/30">
+                                        <span className="material-symbols-outlined text-xl">videocam</span>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-black text-white">Ruang Pertemuan Daring</h3>
+                                        <p className="text-xs text-teal-400 font-semibold uppercase">{meetingModal.data.platform || 'Online'}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setMeetingModal({ open: false, data: null })}
+                                    className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                                >
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+
+                            <div className="space-y-3 text-xs">
+                                <div className="p-3.5 rounded-2xl bg-teal-950/40 border border-teal-800/50 text-teal-200">
+                                    <p className="font-semibold leading-relaxed">
+                                        Tautan rapat telah dibuka di tab baru peramban Anda. Anda dapat menggunakan informasi kredensial di bawah bila aplikasi rapat meminta verifikasi manual:
+                                    </p>
+                                </div>
+
+                                {meetingModal.data.meeting_id && (
+                                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3">
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 uppercase font-bold">Meeting ID</div>
+                                            <div className="font-mono font-bold text-white text-sm select-all">
+                                                {meetingModal.data.meeting_id}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => copyMeetingField(meetingModal.data.meeting_id, 'id')}
+                                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-teal-400 font-bold text-xs flex items-center gap-1 border border-slate-700"
+                                        >
+                                            <span className="material-symbols-outlined text-xs">
+                                                {copiedField === 'id' ? 'check' : 'content_copy'}
+                                            </span>
+                                            <span>{copiedField === 'id' ? 'Tersalin' : 'Salin'}</span>
+                                        </button>
+                                    </div>
+                                )}
+
+                                {meetingModal.data.passcode && (
+                                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3">
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 uppercase font-bold">Passcode / Kata Sandi</div>
+                                            <div className="font-mono font-bold text-white text-sm select-all">
+                                                {meetingModal.data.passcode}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => copyMeetingField(meetingModal.data.passcode, 'passcode')}
+                                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-teal-400 font-bold text-xs flex items-center gap-1 border border-slate-700"
+                                        >
+                                            <span className="material-symbols-outlined text-xs">
+                                                {copiedField === 'passcode' ? 'check' : 'content_copy'}
+                                            </span>
+                                            <span>{copiedField === 'passcode' ? 'Tersalin' : 'Salin'}</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="pt-2 flex flex-col gap-2">
+                                {meetingModal.data.join_url && (
+                                    <a
+                                        href={meetingModal.data.join_url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-teal-600/25 transition-all text-center"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">open_in_new</span>
+                                        Buka Ulang Tautan Rapat
+                                    </a>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setMeetingModal({ open: false, data: null })}
+                                    className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors"
+                                >
+                                    Tutup
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </ParticipantLayout>
     );

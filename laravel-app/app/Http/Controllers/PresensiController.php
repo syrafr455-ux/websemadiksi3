@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -141,12 +142,31 @@ class PresensiController extends Controller
             return [false, redirect()->route('dashboard.kegiatan.saya')->with('error', $msg), null];
         }
 
-        // (b) Syarat mutlak: Sudah check-in fase 1
+        // (b) Syarat mutlak: Sudah absen awal (offline: check-in; daring: gabung; hybrid: check-in atau gabung)
         $isCheckedInFase1 = ($registration->status_kehadiran === AttendanceStatus::CheckedIn
             || $registration->status_kehadiran?->value === AttendanceStatus::CheckedIn->value
             || $registration->checked_in_at !== null);
+        $sudahGabung = $kegiatan->gabungs()->where('registration_id', $registration->id)->exists();
 
-        if (! $isCheckedInFase1) {
+        if ($kegiatan->isOnline() && ! $sudahGabung) {
+            $msg = 'Kehadiran awal belum tercatat. Anda belum tercatat bergabung ke ruang pertemuan daring.';
+            if ($request->wantsJson()) {
+                return [false, response()->json(['success' => false, 'message' => $msg], 422), null];
+            }
+
+            return [false, redirect()->route('dashboard.kegiatan.saya')->with('error', $msg), null];
+        }
+
+        if ($kegiatan->isHybrid() && ! $isCheckedInFase1 && ! $sudahGabung) {
+            $msg = 'Kehadiran awal belum tercatat (belum check-in tiket fisik maupun bergabung ruang daring).';
+            if ($request->wantsJson()) {
+                return [false, response()->json(['success' => false, 'message' => $msg], 422), null];
+            }
+
+            return [false, redirect()->route('dashboard.kegiatan.saya')->with('error', $msg), null];
+        }
+
+        if (! $kegiatan->isDaringOrHybrid() && ! $isCheckedInFase1) {
             $msg = 'Check-in awal belum tercatat. Hubungi panitia.';
             if ($request->wantsJson()) {
                 return [false, response()->json(['success' => false, 'message' => $msg], 422), null];
@@ -237,13 +257,38 @@ class PresensiController extends Controller
             return $response;
         }
 
-        $validated = $request->validate([
+        $rules = [
             'nama_lengkap' => ['required', 'string', 'max:255'],
             'nim' => ['required', 'string', 'max:50'],
             'prodi' => ['required', 'string', 'max:150'],
             'email' => ['required', 'email', 'max:255'],
             'nomor_telepon' => ['required', 'string', 'max:30'],
             'signature' => ['required', 'string'], // base64 PNG dari signature canvas
+        ];
+
+        if ($kegiatan->wajib_tangkapan_layar) {
+            $rules['tangkapan_layar'] = [
+                'required',
+                'file',
+                'image',
+                'mimes:jpeg,jpg,png,webp',
+                'max:3072',
+            ];
+        } else {
+            $rules['tangkapan_layar'] = [
+                'nullable',
+                'file',
+                'image',
+                'mimes:jpeg,jpg,png,webp',
+                'max:3072',
+            ];
+        }
+
+        $validated = $request->validate($rules, [
+            'tangkapan_layar.required' => 'Bukti tangkapan layar (screenshot) kehadiran wajib diunggah.',
+            'tangkapan_layar.image' => 'Bukti kehadiran harus berupa gambar (JPG, PNG, atau WebP).',
+            'tangkapan_layar.mimes' => 'Format gambar yang didukung hanya JPG, JPEG, PNG, dan WebP.',
+            'tangkapan_layar.max' => 'Ukuran gambar tangkapan layar maksimal 3 MB.',
         ]);
 
         $signatureData = $validated['signature'];
@@ -272,6 +317,14 @@ class PresensiController extends Controller
         $signaturePath = "{$storageDir}/{$filename}";
         Storage::disk('public')->put($signaturePath, $imageBinary);
 
+        // Simpan tangkapan layar ke storage private (disk local)
+        $tangkapanLayarPath = null;
+        if ($request->hasFile('tangkapan_layar')) {
+            $file = $request->file('tangkapan_layar');
+            $ssName = 'ss_'.Str::random(40).'.'.$file->getClientOriginalExtension();
+            $tangkapanLayarPath = $file->storeAs("presensi/screenshots/{$kegiatan->id}", $ssName, 'local');
+        }
+
         $user = Auth::user();
         $nim = trim($validated['nim']);
         $email = trim($validated['email']);
@@ -297,6 +350,7 @@ class PresensiController extends Controller
                 'email' => $email,
                 'nomor_telepon' => trim($validated['nomor_telepon']),
                 'signature_path' => $signaturePath,
+                'tangkapan_layar_path' => $tangkapanLayarPath,
                 'check_in_at' => now(),
             ]
         );
@@ -329,5 +383,20 @@ class PresensiController extends Controller
         return redirect()->route('dashboard.kegiatan.saya')
             ->with('success', 'Presensi mandiri berhasil! Sertifikat Anda telah selesai diterbitkan.')
             ->with('sertifikat', $sertifikat);
+    }
+
+    /**
+     * Tampilkan berkas tangkapan layar presensi yang tersimpan di disk privat (khusus super admin).
+     */
+    public function tangkapanLayarPrivat(int $id)
+    {
+        $presensi = KegiatanPresensi::findOrFail($id);
+        Gate::authorize('managePresensiAkhir', KegiatanPresensi::class);
+
+        if (! $presensi->tangkapan_layar_path || ! Storage::disk('local')->exists($presensi->tangkapan_layar_path)) {
+            abort(404, 'Bukti tangkapan layar tidak ditemukan.');
+        }
+
+        return Storage::disk('local')->response($presensi->tangkapan_layar_path);
     }
 }

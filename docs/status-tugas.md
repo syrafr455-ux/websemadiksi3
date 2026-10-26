@@ -426,3 +426,41 @@ Status pelacakan pengerjaan bertahap:
 
 - [x] **Panduan Uji Manual**: Panduan pengujian manual langkah demi langkah yang terbukti dari kode untuk pemilik proyek tersedia di [`docs/panduan-uji-manual.md`](docs/panduan-uji-manual.md).
 - [x] **Penerapan Anti-Slop Skills & Desain Otentik**: Mengintegrasikan sistem skill `anti-slop` (core, UI, copywriting, human a11y, mobile layout, code comments) dari `miqdadbadjuber/anti-slop` ke `.agents/skills/`, membuat panduan arah visual di [`DESIGN.md`](DESIGN.md), membersihkan elemen AI slop pada portal (menghilangkan kartu hero statis dekoratif palsu dan menjadikannya menu layanan interaktif fungsional, menghapus placeholder stock photo Unsplash pada kartu kegiatan, menghapus blur blob `.organic-blob` di CSS, merapikan navbar branding), serta memastikan 436 tes PHPUnit dan build frontend `npm run build` lulus 100%.
+
+- [x] **Bagian 20: Alur Persetujuan Transparan & Mekanisme Kegiatan Daring/Hybrid**
+  - **Temuan Bagian 0 (Investigasi & Pembuktian Kode Eksisting)**:
+    - **a. Alur Persetujuan (Approval Flow)**:
+      - **Akar Masalah Tombol Tidak Terlihat & Status Draft**:
+        1. Pada `resources/js/Pages/Admin/Kegiatan/Index.jsx` langkah 5 wizard, tombol submit baru sebelumnya bertuliskan `'Terbitkan Kegiatan'` padahal form mengirim `status: 'draft'`, membingungkan pengurus. Kini dipisahkan menjadi dua tombol jelas: *"Simpan sebagai Draft"* dan *"Simpan & Ajukan Persetujuan"*.
+        2. Pada `KegiatanController@store`, parameter `aksi_submit` diproses tegas (`draft` -> Draft, `ajukan` -> Diajukan), dan pengajuan divalidasi memerlukan Super Admin aktif lain serta mewajibkan tautan rapat bila daring/hybrid.
+        3. Pada `Index.jsx` daftar kegiatan, kolom status menyajikan lencana status informatif dengan rincian progres (*"Menunggu persetujuan x dari y"*, tooltip alasan penolakan), serta tombol aksi cepat *"Ajukan"* (untuk pembuat), *"Tolak"*, dan *"Setujui"* langsung di baris tabel untuk Super Admin yang berhak.
+        4. Pada halaman detail `Show.jsx`, pembuat kegiatan kini dikirim sebagai objek profil lengkap (`id`, `name`, `email`), status alur diperjelas pada seluruh status (`draft`, `diajukan`, `published`), dan pembuat dapat menarik kembali pengajuan ke draft (*"Tarik Kembali ke Draft"*).
+        5. Notifikasi dalam aplikasi: Kartu ringkasan interaktif *"Menunggu persetujuan Anda (n)"* disematkan di Ringkasan Utama Dasbor Admin (`admin.dashboard`) dan lencana counter disematkan di menu *"Kelola Kegiatan"* baik pada tata letak Blade maupun Inertia React.
+        6. Pengiriman email antrean pengajuan dipusatkan melalui `SendProtectedEmailJob` dan `EmailProtectionService`.
+    - **b. Mekanisme Kegiatan Daring & Hybrid**:
+      - **Migrasi & Penyimpanan Terenkripsi**:
+        - Migrasi `2026_10_26_000001_add_daring_and_approval_columns_to_kegiatan_and_presensi_tables.php` menambahkan kolom: `catatan_penolakan`, `platform_daring`, `tautan_rapat` (terenkripsi `encrypted`), `meeting_id`, `passcode_rapat` (terenkripsi `encrypted`), `join_button_mode` (otomatis/manual), `menit_buka_gabung`, `batas_tutup_gabung`, `is_gabung_manual_open`, `izin_tautan_presensi_akhir`, dan `wajib_tangkapan_layar` pada tabel `kegiatan`.
+        - Tabel baru `kegiatan_gabung` (`kegiatan_id`, `registration_id`, `user_id`, `pertama_pada`, `terakhir_pada`, `jumlah`).
+        - Kolom `tangkapan_layar_path` pada tabel `kegiatan_presensi`.
+      - **Kerahasiaan & Keamanan Tautan Rapat**:
+        - Tautan dan passcode rapat disimpan terenkripsi di database dan tidak pernah dibocorkan pada payload awal halaman publik, detail kegiatan, atau kartu Kegiatan Saya.
+        - Validasi whitelist host rapat terpusat (`App\Rules\ValidMeetingUrl`): hanya mengizinkan domain sah Zoom (`*.zoom.us`, `zoom.us`), Google Meet (`meet.google.com`), dan Microsoft Teams (`teams.microsoft.com`, `teams.live.com`).
+        - Perubahan tautan rapat dicatat pada `audit_logs` tanpa mengekspos nilai rahasia (hanya mencatat penanda diperbarui).
+      - **Endpoint & Interaksi Gabung Daring**:
+        - Endpoint aman `POST /kegiatan/{kegiatan}/gabung` (`KegiatanGabungController@gabung`):
+          - Memvalidasi tiket terdaftar dan terkonfirmasi (Free/Paid), akun aktif (tidak diblokir), dan jendela akses buka (`isJoinWindowOpen()`).
+          - Menolak akses dengan pesan informatif jika tombol belum dibuka atau kegiatan berstatus draft/cancelled.
+          - Mencatat rekam jejak pada `kegiatan_gabung` (pertama_pada, terakhir_pada, increment jumlah klik) secara atomik.
+          - Mengembalikan JSON kredensial rapat (`tautan_rapat`, `meeting_id`, `passcode`) untuk dibuka di tab baru atau modal rincian rapat.
+        - Di Kegiatan Saya (`KegiatanSaya.jsx`) dan Detail Kegiatan (`Kegiatan/Show.jsx`): disematkan panel/kartu rapat daring dengan tombol interaktif *"Gabung Sekarang"*, penghitung mundur/jadwal buka WIB, serta modal detail kredensial rapat.
+        - Pada kegiatan hybrid, klik gabung daring diakui sebagai check-in awal alternatif selain pemindaian QR tiket fisik di pintu aula.
+      - **Presensi Akhir & Tangkapan Layar**:
+        - Tautan presensi akhir daring ber-HMAC dapat diizinkan melalui sakelar `izin_tautan_presensi_akhir` dan disalin langsung dari halaman proyektor atau panel presensi admin.
+        - Formulir presensi mandiri (`presensi.self-attendance`) mendukung pengunggahan bukti tangkapan layar rapat daring bila sakelar `wajib_tangkapan_layar` diaktifkan, disimpan privat di disk `local` (`private/presensi/screenshots`), dan hanya dapat diakses oleh Super Admin lewat route terotorisasi `GET /admin/presensi/{id}/screenshot`.
+      - **Kontrol Akses Admin di Panel Presensi**:
+        - Di halaman Presensi & Kehadiran (`admin.attendances`): tombol manual *"Buka Akses Gabung"* dan *"Tutup Akses Gabung"*, kartu statistik total bergabung daring, kolom riwayat gabung peserta, serta tautan unduh/lihat bukti layar bagi peserta daring.
+  - **Pengujian & Verifikasi**:
+    - Suite `Tests\Feature\AlurPersetujuanKegiatanTerlihatTest` (6 tes, 42 assertions) lulus 100%.
+    - Suite `Tests\Feature\MekanismeKegiatanDaringDanHybridTest` (9 tes, 65 assertions) lulus 100%.
+    - Seluruh rangkaian pengujian sistem `php artisan test` (**451 tes, 3579 assertions**) lulus 100% tanpa ada kegagalan.
+    - Build aset Vite `npm run build` dan linter gaya kode `php vendor/bin/pint` lulus sempurna.

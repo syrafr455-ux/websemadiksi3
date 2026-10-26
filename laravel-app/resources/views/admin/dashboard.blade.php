@@ -18,6 +18,24 @@
                 </div>
             </div>
         @endif
+        @if(!empty($menungguPersetujuanAnda) && $menungguPersetujuanAnda > 0)
+            <div class="bg-amber-950/40 border border-amber-600/40 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-amber-200">
+                <div class="flex items-start sm:items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                        <span class="material-symbols-outlined text-2xl">pending_actions</span>
+                    </div>
+                    <div class="space-y-0.5">
+                        <h4 class="text-sm font-bold text-amber-300">Menunggu persetujuan Anda ({{ $menungguPersetujuanAnda }})</h4>
+                        <p class="text-xs text-amber-200/90 leading-relaxed">
+                            Terdapat {{ $menungguPersetujuanAnda }} permohonan penerbitan kegiatan baru yang membutuhkan verifikasi dan suara persetujuan Anda sebagai Super Administrator.
+                        </p>
+                    </div>
+                </div>
+                <a href="{{ route('admin.kegiatan', ['status' => 'diajukan']) }}" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black shrink-0 transition-colors text-center">
+                    Tinjau Sekarang
+                </a>
+            </div>
+        @endif
 
         {{-- Kartu Data Terkini Sistem (Pindahan dari Landing Page, Khusus Super Admin) --}}
         <div class="bg-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6">

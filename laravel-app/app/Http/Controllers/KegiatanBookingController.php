@@ -15,6 +15,7 @@ use App\Models\KegiatanSeat;
 use App\Models\User;
 use App\Services\Kegiatan\PetaKursiService;
 use App\Services\PaymentGatewayService;
+use App\Support\Wib;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -59,12 +60,20 @@ class KegiatanBookingController extends Controller
 
         return Inertia::render('Kegiatan/Show', [
             // toArray(): tanggal terserialisasi ISO-8601 UTC seperti props Inertia lainnya.
-            'kegiatan' => Arr::only($kegiatan->toArray(), [
-                'id', 'nama_kegiatan', 'deskripsi', 'kategori', 'metode_pelaksanaan', 'sasaran_peserta',
-                'tanggal_mulai', 'tanggal_selesai', 'registration_deadline', 'status',
-                'lokasi_type', 'lokasi_nama', 'lokasi_detail', 'narasumber', 'biaya', 'kuota', 'file_panduan_url',
-                'is_seat_booking_active', 'seat_layout_config',
-            ]),
+            'kegiatan' => [
+                ...Arr::only($kegiatan->toArray(), [
+                    'id', 'nama_kegiatan', 'deskripsi', 'kategori', 'metode_pelaksanaan', 'sasaran_peserta',
+                    'tanggal_mulai', 'tanggal_selesai', 'registration_deadline', 'status',
+                    'lokasi_type', 'lokasi_nama', 'lokasi_detail', 'narasumber', 'biaya', 'kuota', 'file_panduan_url',
+                    'is_seat_booking_active', 'seat_layout_config',
+                ]),
+                'is_daring_or_hybrid' => $kegiatan->isDaringOrHybrid(),
+                'platform_daring' => $kegiatan->platform_daring,
+                'status_akses_gabung' => $kegiatan->isDaringOrHybrid() ? $kegiatan->statusAksesGabung() : null,
+                'waktu_buka_gabung_wib' => ($kegiatan->isDaringOrHybrid() && $kegiatan->statusAksesGabung() === 'belum_dibuka' && $kegiatan->tanggal_mulai)
+                    ? Wib::format($kegiatan->tanggal_mulai->copy()->subMinutes((int) ($kegiatan->menit_buka_gabung ?? 15)))
+                    : null,
+            ],
             'isDraftPreview' => $kegiatan->status === KegiatanStatus::Draft,
             'pendaftaran' => [
                 'dibuka' => $kegiatan->isRegistrationOpen(),
@@ -127,7 +136,7 @@ class KegiatanBookingController extends Controller
             return [];
         }
 
-        return KegiatanRegistration::with(['seat:id,seat_code', 'participantUser:id,name', 'bookerUser:id,name'])
+        return KegiatanRegistration::with(['seat:id,seat_code', 'participantUser:id,name', 'bookerUser:id,name', 'gabung'])
             ->where('kegiatan_id', $kegiatan->id)
             ->active()
             ->where(fn ($q) => $q->where('booker_user_id', $user->id)->orWhere('participant_user_id', $user->id))
@@ -143,6 +152,9 @@ class KegiatanBookingController extends Controller
                 'saya_pemesan' => (int) $reg->booker_user_id === (int) $user->id,
                 'saya_peserta' => (int) $reg->participant_user_id === (int) $user->id,
                 'nama_pemesan' => $reg->bookerUser?->name,
+                'sudah_gabung' => (bool) $reg->gabung,
+                'pertama_gabung_pada' => $reg->gabung?->pertama_pada ? Wib::format($reg->gabung->pertama_pada) : null,
+                'jumlah_gabung' => (int) ($reg->gabung?->jumlah ?? 0),
             ])
             ->values()
             ->all();

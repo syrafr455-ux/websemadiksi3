@@ -304,7 +304,7 @@ class DashboardController extends Controller
     {
         $userId = Auth::id();
 
-        $enterpriseRegistrations = KegiatanRegistration::with(['kegiatan', 'seat', 'payment', 'submission'])
+        $enterpriseRegistrations = KegiatanRegistration::with(['kegiatan', 'seat', 'payment', 'submission', 'gabung'])
             ->where(function ($q) use ($userId) {
                 $q->where('participant_user_id', $userId)
                     ->orWhere('booker_user_id', $userId);
@@ -316,6 +316,23 @@ class DashboardController extends Controller
                 $reg->append('payment_status');
                 $reg->setAttribute('perlu_pilih_ulang', (bool) $reg->needs_seat_reselection);
                 $reg->setAttribute('bisa_pilih_ulang', (bool) $reg->needs_seat_reselection && (int) $reg->booker_user_id === (int) $userId);
+
+                $kegiatan = $reg->kegiatan;
+                if ($kegiatan && ($kegiatan->metode_pelaksanaan === 'online' || $kegiatan->metode_pelaksanaan === 'hybrid' || $kegiatan->lokasi_type === 'online')) {
+                    $statusAkses = $kegiatan->statusAksesGabung();
+                    $waktuBukaWib = null;
+                    if ($statusAkses === 'belum_dibuka' && $kegiatan->tanggal_mulai) {
+                        $menit = (int) ($kegiatan->menit_buka_gabung ?? 15);
+                        $waktuBukaUtc = $kegiatan->tanggal_mulai->copy()->subMinutes($menit);
+                        $waktuBukaWib = Wib::format($waktuBukaUtc);
+                    }
+
+                    $reg->setAttribute('status_akses_gabung', $statusAkses);
+                    $reg->setAttribute('waktu_buka_gabung_wib', $waktuBukaWib);
+                    $reg->setAttribute('sudah_gabung', (bool) $reg->gabung);
+                    $reg->setAttribute('pertama_gabung_pada', $reg->gabung?->pertama_pada ? Wib::format($reg->gabung->pertama_pada) : null);
+                    $reg->setAttribute('jumlah_gabung', (int) ($reg->gabung?->jumlah ?? 0));
+                }
             });
 
         $registrations = ActivityRegistration::with('activity')

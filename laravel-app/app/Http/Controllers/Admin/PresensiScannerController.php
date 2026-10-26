@@ -20,6 +20,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
@@ -432,12 +433,22 @@ class PresensiScannerController extends Controller
             ->count();
         $totalPresensiFase2 = $kegiatan->presensis()->count();
 
+        $tautanPresensiAkhir = null;
+        if ($kegiatan->isDaringOrHybrid() && $kegiatan->izin_tautan_presensi_akhir) {
+            $tautanPresensiAkhir = URL::temporarySignedRoute(
+                'kegiatan.presensi-akhir.tautan',
+                $kegiatan->presensi_akhir_selesai && $kegiatan->presensi_akhir_selesai->gt(now()) ? $kegiatan->presensi_akhir_selesai : now()->addHours(2),
+                ['kegiatan' => $kegiatan->id]
+            );
+        }
+
         return view('admin.attendances.proyektor', [
             'kegiatan' => $kegiatan,
             'initialToken' => $token,
             'initialSeconds' => $secondsRemaining,
             'totalCheckedInFase1' => $totalCheckedInFase1,
             'totalPresensiFase2' => $totalPresensiFase2,
+            'tautanPresensiAkhir' => $tautanPresensiAkhir,
             'title' => "Layar Presensi Akhir: {$kegiatan->nama_kegiatan}",
         ]);
     }
@@ -469,6 +480,15 @@ class PresensiScannerController extends Controller
             ? (string) QrCode::format('svg')->size(380)->margin(1)->errorCorrection('M')->generate($scanUrl)
             : null;
 
+        $tautanPresensiAkhir = null;
+        if ($kegiatan->isDaringOrHybrid() && $kegiatan->izin_tautan_presensi_akhir) {
+            $tautanPresensiAkhir = URL::temporarySignedRoute(
+                'kegiatan.presensi-akhir.tautan',
+                $kegiatan->presensi_akhir_selesai && $kegiatan->presensi_akhir_selesai->gt(now()) ? $kegiatan->presensi_akhir_selesai : now()->addHours(2),
+                ['kegiatan' => $kegiatan->id]
+            );
+        }
+
         return response()->json([
             'token' => $token,
             'seconds_remaining' => $secondsRemaining,
@@ -477,6 +497,7 @@ class PresensiScannerController extends Controller
             'fase1_count' => $totalCheckedInFase1,
             'fase2_count' => $totalPresensiFase2,
             'session_status' => $kegiatan->statusPresensiAkhir(),
+            'tautan_presensi_akhir' => $tautanPresensiAkhir,
         ]);
     }
 
@@ -523,12 +544,23 @@ class PresensiScannerController extends Controller
                 ->with('error', 'Anda tidak terdaftar dalam kegiatan ini dengan tiket yang sah.');
         }
 
-        // 4. Syarat mutlak: SUDAH check-in fase 1
+        // 4. Syarat mutlak: SUDAH absen awal (offline: check-in; daring: gabung; hybrid: check-in atau gabung)
         $isCheckedInFase1 = ($registration->status_kehadiran === AttendanceStatus::CheckedIn
             || $registration->status_kehadiran?->value === AttendanceStatus::CheckedIn->value
             || $registration->checked_in_at !== null);
+        $sudahGabung = $kegiatan->gabungs()->where('registration_id', $registration->id)->exists();
 
-        if (! $isCheckedInFase1) {
+        if ($kegiatan->isOnline() && ! $sudahGabung) {
+            return redirect()->route('dashboard.index')
+                ->with('error', 'Kehadiran awal belum tercatat. Anda belum tercatat bergabung ke ruang pertemuan daring.');
+        }
+
+        if ($kegiatan->isHybrid() && ! $isCheckedInFase1 && ! $sudahGabung) {
+            return redirect()->route('dashboard.index')
+                ->with('error', 'Kehadiran awal belum tercatat (belum check-in tiket fisik maupun bergabung ruang daring).');
+        }
+
+        if (! $kegiatan->isDaringOrHybrid() && ! $isCheckedInFase1) {
             return redirect()->route('dashboard.index')
                 ->with('error', 'Check-in awal belum tercatat. Hubungi panitia.');
         }
@@ -566,6 +598,104 @@ class PresensiScannerController extends Controller
 
         return redirect()->route('kegiatan.presensi.show', $kegiatan->id)
             ->with('success', 'Verifikasi QR presensi akhir berhasil! Silakan bubuhkan tanda tangan digital Anda di bawah ini.');
+    }
+
+    /**
+     * Endpoint alur peserta mendarat melalui tautan presensi akhir ber-HMAC untuk daring/hybrid.
+     */
+    public function presensiAkhirTautan(
+        Request $request,
+        Kegiatan $kegiatan
+    ): RedirectResponse {
+        if (! $request->hasValidSignature()) {
+            return redirect()->route('dashboard.kegiatan.saya')
+                ->with('error', 'Tautan presensi akhir tidak valid atau telah kedaluwarsa.');
+        }
+
+        if (! $kegiatan->isDaringOrHybrid()) {
+            return redirect()->route('dashboard.kegiatan.saya')
+                ->with('error', 'Tautan presensi akhir mandiri hanya berlaku untuk kegiatan daring atau hybrid.');
+        }
+
+        if (! $kegiatan->izin_tautan_presensi_akhir) {
+            return redirect()->route('dashboard.kegiatan.saya')
+                ->with('error', 'Presensi akhir melalui tautan langsung tidak diaktifkan oleh panitia.');
+        }
+
+        if (! $kegiatan->isPresensiAkhirOpen()) {
+            return redirect()->route('dashboard.kegiatan.saya')
+                ->with('error', 'Sesi presensi akhir belum dibuka atau sudah ditutup oleh panitia.');
+        }
+
+        $user = Auth::user();
+        if (! $user) {
+            return redirect()->route('login')
+                ->with('error', 'Silakan masuk ke akun Anda terlebih dahulu untuk melakukan presensi akhir.');
+        }
+
+        if ($user->is_blocked) {
+            return redirect()->route('dashboard.kegiatan.saya')
+                ->with('error', 'Akun Anda sedang dibekukan.');
+        }
+
+        $registration = KegiatanRegistration::where('kegiatan_id', $kegiatan->id)
+            ->where(function ($q) use ($user) {
+                $q->where('participant_user_id', $user->id)
+                    ->orWhere('booker_user_id', $user->id);
+                if ($user->is_unusa && $user->nim) {
+                    $q->orWhere('participant_identity', $user->nim);
+                }
+            })
+            ->confirmed()
+            ->first();
+
+        if (! $registration) {
+            return redirect()->route('dashboard.kegiatan.saya')
+                ->with('error', 'Anda tidak terdaftar dalam kegiatan ini dengan tiket yang sah.');
+        }
+
+        // Syarat absen awal tercatat
+        $isCheckedInFase1 = ($registration->status_kehadiran === AttendanceStatus::CheckedIn
+            || $registration->status_kehadiran?->value === AttendanceStatus::CheckedIn->value
+            || $registration->checked_in_at !== null);
+        $sudahGabung = $kegiatan->gabungs()->where('registration_id', $registration->id)->exists();
+
+        if ($kegiatan->isOnline() && ! $sudahGabung) {
+            return redirect()->route('dashboard.kegiatan.saya')
+                ->with('error', 'Kehadiran awal belum tercatat. Anda belum tercatat bergabung ke ruang pertemuan daring.');
+        }
+
+        if ($kegiatan->isHybrid() && ! $isCheckedInFase1 && ! $sudahGabung) {
+            return redirect()->route('dashboard.kegiatan.saya')
+                ->with('error', 'Kehadiran awal belum tercatat (belum check-in tiket fisik maupun bergabung ruang daring).');
+        }
+
+        $alreadyPresensi = KegiatanPresensi::where('kegiatan_id', $kegiatan->id)
+            ->where(function ($q) use ($user, $registration) {
+                if ($user) {
+                    $q->where('user_id', $user->id);
+                    if ($user->is_unusa && $user->nim) {
+                        $q->orWhere('nim', $user->nim);
+                    }
+                }
+                if ($registration->participant_identity) {
+                    $q->orWhere('nim', $registration->participant_identity);
+                }
+            })
+            ->exists();
+
+        session()->put("presensi_akhir_unlocked_{$kegiatan->id}", [
+            'kegiatan_id' => $kegiatan->id,
+            'expires_at' => now()->addMinutes(15)->timestamp,
+        ]);
+
+        if ($alreadyPresensi) {
+            return redirect()->route('kegiatan.presensi.show', $kegiatan->id)
+                ->with('info', 'Anda sudah melakukan presensi akhir untuk kegiatan ini.');
+        }
+
+        return redirect()->route('kegiatan.presensi.show', $kegiatan->id)
+            ->with('success', 'Verifikasi kehadiran daring berhasil! Silakan bubuhkan tanda tangan digital Anda di bawah ini.');
     }
 
     /**

@@ -151,15 +151,72 @@
                     </a>
                 </div>
             </div>
-        </div>
+        @if($selectedKegiatan->isDaringOrHybrid())
+            {{-- Panel Kontrol Akses Rapat Daring --}}
+            <div class="bg-slate-950 border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Akses Rapat Daring ({{ ucfirst($selectedKegiatan->platform_daring ?? 'Zoom') }})</span>
+                        @php $statusGabung = $selectedKegiatan->statusAksesGabung(); @endphp
+                        @if($statusGabung === 'dibuka')
+                            <span class="px-3 py-1 rounded-full text-xs font-bold bg-teal-500/10 text-teal-400 border border-teal-500/20 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+                                Akses Terbuka
+                            </span>
+                        @elseif($statusGabung === 'ditutup')
+                            <span class="px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                Akses Ditutup
+                            </span>
+                        @else
+                            <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                Belum Dibuka
+                            </span>
+                        @endif
+                    </div>
+                    <p class="text-xs text-slate-400">
+                        Mode tombol gabung: <strong class="text-slate-200">{{ ucfirst($selectedKegiatan->mode_tombol_gabung ?? 'otomatis') }}</strong> 
+                        ({{ $selectedKegiatan->menit_buka_gabung ?? 15 }} menit sebelum mulai).
+                        @if($selectedKegiatan->akses_gabung_dibuka_manual === true)
+                            <span class="text-teal-400 font-semibold">(Sedang dibuka manual oleh admin)</span>
+                        @elseif($selectedKegiatan->akses_gabung_dibuka_manual === false)
+                            <span class="text-rose-400 font-semibold">(Sedang ditutup manual oleh admin)</span>
+                        @endif
+                    </p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <form action="{{ route('admin.kegiatan.buka-akses-gabung', $selectedKegiatan->id) }}" method="POST">
+                        @csrf
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all">
+                            <span class="material-symbols-outlined text-base">meeting_room</span>
+                            Buka Akses Gabung
+                        </button>
+                    </form>
+                    <form action="{{ route('admin.kegiatan.tutup-akses-gabung', $selectedKegiatan->id) }}" method="POST">
+                        @csrf
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all">
+                            <span class="material-symbols-outlined text-base">no_meeting_room</span>
+                            Tutup Akses Gabung
+                        </button>
+                    </form>
+                </div>
+            </div>
+        @endif
 
         {{-- Stats Cards --}}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-{{ $selectedKegiatan->isDaringOrHybrid() ? '5' : '4' }} gap-4">
             <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
                 <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Peserta Terdaftar</div>
                 <div class="text-2xl font-black text-white mt-1">{{ number_format($stats['total_registered']) }}</div>
                 <div class="text-[10px] text-slate-500 mt-1">Seluruh kuota terisi</div>
             </div>
+
+            @if($selectedKegiatan->isDaringOrHybrid())
+                <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
+                    <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Sudah Bergabung Daring</div>
+                    <div class="text-2xl font-black text-teal-400 mt-1">{{ number_format($stats['total_gabung'] ?? 0) }}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">Peserta klik gabung rapat</div>
+                </div>
+            @endif
 
             <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
                 <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Check-In Fase 1</div>
@@ -254,8 +311,11 @@
                             <th class="px-5 py-3.5">Peserta</th>
                             <th class="px-5 py-3.5">Tiket &amp; Kursi</th>
                             <th class="px-5 py-3.5">Check-In Fase 1</th>
+                            @if($selectedKegiatan->isDaringOrHybrid())
+                                <th class="px-5 py-3.5">Gabung Daring</th>
+                            @endif
                             <th class="px-5 py-3.5">Presensi Fase 2</th>
-                            <th class="px-5 py-3.5">Tanda Tangan</th>
+                            <th class="px-5 py-3.5">Tanda Tangan &amp; Bukti</th>
                             <th class="px-5 py-3.5">Status Sertifikat</th>
                             <th class="px-5 py-3.5 text-right">Tindakan</th>
                         </tr>
@@ -292,6 +352,23 @@
                                         </span>
                                     @endif
                                 </td>
+                                @if($selectedKegiatan->isDaringOrHybrid())
+                                    <td class="px-5 py-4">
+                                        @if($p->is_gabung)
+                                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-teal-500/10 text-teal-400 border border-teal-500/20 inline-flex items-center gap-1">
+                                                <span class="material-symbols-outlined text-[12px]">videocam</span>
+                                                Bergabung ({{ $p->gabung_count }}x)
+                                            </span>
+                                            @if($p->gabung_time)
+                                                <div class="text-[10px] text-slate-400 mt-1 font-mono">{{ $p->gabung_time }}</div>
+                                            @endif
+                                        @else
+                                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                                Belum Gabung
+                                            </span>
+                                        @endif
+                                    </td>
+                                @endif
                                 <td class="px-5 py-4">
                                     @if($p->is_phase2)
                                         <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 inline-flex items-center gap-1">
@@ -309,18 +386,31 @@
                                     @endif
                                 </td>
                                 <td class="px-5 py-4">
-                                    @if($p->signature_url)
-                                        <button 
-                                            type="button" 
-                                            @click="signatureModal = true; signatureUrl = '{{ $p->signature_url }}'; signatureName = '{{ addslashes($p->name) }}'"
-                                            class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-800 font-bold text-[11px] flex items-center gap-1.5 transition-colors"
-                                        >
-                                            <span class="material-symbols-outlined text-sm">draw</span>
-                                            Lihat Tanda Tangan
-                                        </button>
-                                    @else
-                                        <span class="text-slate-600 text-xs italic">-</span>
-                                    @endif
+                                    <div class="flex flex-col items-start gap-1">
+                                        @if($p->signature_url)
+                                            <button 
+                                                type="button" 
+                                                @click="signatureModal = true; signatureUrl = '{{ $p->signature_url }}'; signatureName = '{{ addslashes($p->name) }}'"
+                                                class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-800 font-bold text-[11px] flex items-center gap-1.5 transition-colors"
+                                            >
+                                                <span class="material-symbols-outlined text-sm">draw</span>
+                                                Tanda Tangan
+                                            </button>
+                                        @endif
+                                        @if($p->screenshot_url)
+                                            <a 
+                                                href="{{ $p->screenshot_url }}" 
+                                                target="_blank"
+                                                class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-teal-400 border border-slate-800 font-bold text-[11px] inline-flex items-center gap-1.5 transition-colors"
+                                            >
+                                                <span class="material-symbols-outlined text-sm">screenshot</span>
+                                                Bukti Layar
+                                            </a>
+                                        @endif
+                                        @if(!$p->signature_url && !$p->screenshot_url)
+                                            <span class="text-slate-600 text-xs italic">-</span>
+                                        @endif
+                                    </div>
                                 </td>
                                 <td class="px-5 py-4">
                                     @if($p->is_certificate)

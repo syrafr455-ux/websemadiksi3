@@ -44,7 +44,12 @@
             @foreach (\App\Support\MenuAdmin::untuk(Auth::user(), request()) as $menu)
                 <a href="{{ $menu['href'] }}" data-menu-admin="{{ $menu['route'] }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ $menu['active'] ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
                     <span class="material-symbols-outlined text-lg">{{ $menu['icon'] }}</span>
-                    {{ $menu['label'] }}
+                    <span>{{ $menu['label'] }}</span>
+                    @if(!empty($menu['badge']))
+                        <span class="ml-auto px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
+                            {{ $menu['badge'] }}
+                        </span>
+                    @endif
                 </a>
             @endforeach
         </nav>

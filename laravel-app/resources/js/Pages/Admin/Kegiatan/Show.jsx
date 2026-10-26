@@ -4,6 +4,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { formatWib } from '@/lib/waktuWib';
 import { KATEGORI_OPTIONS, METODE_OPTIONS, SASARAN_OPTIONS, labelDari } from '@/lib/kegiatanForm';
 import DenahBookingKegiatan from '@/Components/Admin/DenahBookingKegiatan';
+import InputWaktuWib from '@/Components/Form/InputWaktuWib';
 
 const LOKASI_LABEL = { unusa_campus: 'Kampus UNUSA', external: 'Venue Eksternal', online: 'Online' };
 
@@ -63,6 +64,18 @@ export default function KegiatanShow({
     const [hanyaPilihUlang, setHanyaPilihUlang] = useState(false);
     const [modalTolakOpen, setModalTolakOpen] = useState(false);
     const [catatanTolak, setCatatanTolak] = useState('');
+    const [modalDaringOpen, setModalDaringOpen] = useState(false);
+    const [formDaring, setFormDaring] = useState({
+        platform_daring: 'zoom',
+        tautan_rapat: '',
+        meeting_id: '',
+        passcode_rapat: '',
+        join_button_mode: 'otomatis',
+        menit_buka_gabung: 15,
+        batas_tutup_gabung: '',
+        izin_tautan_presensi_akhir: false,
+        wajib_tangkapan_layar: false,
+    });
     // Tab aktif tersimpan di hash URL (#denah-booking) agar bertahan saat halaman dimuat ulang.
     const [tab, setTab] = useState(() => (typeof window !== 'undefined' && window.location.hash === '#denah-booking' ? 'denah-booking' : 'pendaftar'));
     const gantiTab = (id) => {
@@ -122,19 +135,25 @@ export default function KegiatanShow({
                 </div>
 
                 {/* Panel Persetujuan Kegiatan */}
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div id="persetujuan" className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-emerald-400">verified_user</span>
                             <div>
                                 <h3 className="text-sm font-bold text-white">Alur Persetujuan Kegiatan</h3>
                                 <p className="text-[11px] text-slate-400">
-                                    Pembuat: <span className="text-slate-200 font-medium">{approval?.created_by?.name || 'Super Admin'}</span>
-                                    {approval?.created_by?.email && ` (${approval.created_by.email})`}
+                                    Pembuat: <span className="text-slate-200 font-medium">{approval?.created_by?.name || kegiatan?.created_by?.name || 'Super Admin'}</span>
+                                    {(approval?.created_by?.email || kegiatan?.created_by?.email) && ` (${approval?.created_by?.email || kegiatan?.created_by?.email})`}
                                 </p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            {approval?.pesan_status && (
+                                <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-300 flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-amber-400 text-sm">info</span>
+                                    <span>{approval.pesan_status}</span>
+                                </div>
+                            )}
                             {approval?.can_submit && (
                                 <button
                                     onClick={() => router.post(`/admin/kegiatan/${kegiatan.id}/ajukan`)}
@@ -142,6 +161,19 @@ export default function KegiatanShow({
                                 >
                                     <span className="material-symbols-outlined text-sm">send</span>
                                     Ajukan Persetujuan
+                                </button>
+                            )}
+                            {approval?.can_withdraw && (
+                                <button
+                                    onClick={() => {
+                                        if (confirm('Tarik kembali kegiatan ini ke status Draft? Anda dapat mengedit dan mengajukannya kembali nanti.')) {
+                                            router.post(`/admin/kegiatan/${kegiatan.id}/tarik-draft`);
+                                        }
+                                    }}
+                                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                                >
+                                    <span className="material-symbols-outlined text-sm">undo</span>
+                                    Tarik kembali ke draft
                                 </button>
                             )}
                             {approval?.can_approve && (
@@ -203,6 +235,108 @@ export default function KegiatanShow({
                         </div>
                     )}
                 </div>
+
+                {/* Panel Pengaturan & Kontrol Akses Rapat Daring */}
+                {(kegiatan.is_online || kegiatan.is_hybrid) && (
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                            <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-indigo-400">videocam</span>
+                                <div>
+                                    <h3 className="text-sm font-bold text-white">Akses &amp; Rapat Daring ({kegiatan.platform_daring?.toUpperCase() || 'ONLINE'})</h3>
+                                    <p className="text-[11px] text-slate-400">
+                                        Mode tombol gabung: <strong className="text-slate-200 capitalize">{kegiatan.join_button_mode}</strong>
+                                        {kegiatan.join_button_mode === 'otomatis' && ` (${kegiatan.menit_buka_gabung} menit sebelum mulai)`}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                    kegiatan.status_akses_gabung === 'terbuka'
+                                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                        : kegiatan.status_akses_gabung === 'belum_dibuka'
+                                        ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                        : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                                }`}>
+                                    {kegiatan.status_akses_gabung === 'terbuka' ? 'Akses Terbuka' : kegiatan.status_akses_gabung === 'belum_dibuka' ? 'Belum Dibuka' : 'Akses Ditutup'}
+                                </span>
+
+                                {kegiatan.status_akses_gabung === 'terbuka' ? (
+                                    <button
+                                        onClick={() => {
+                                            if (confirm('Tutup akses gabung ke rapat daring ini untuk seluruh peserta?')) {
+                                                router.post(`/admin/kegiatan/${kegiatan.id}/akses-gabung/tutup`);
+                                            }
+                                        }}
+                                        className="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition-all"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">lock</span>
+                                        Tutup Akses Gabung
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => {
+                                            if (confirm('Buka akses gabung ke rapat daring sekarang juga untuk peserta terdaftar?')) {
+                                                router.post(`/admin/kegiatan/${kegiatan.id}/akses-gabung/buka`);
+                                            }
+                                        }}
+                                        className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">lock_open</span>
+                                        Buka Akses Gabung
+                                    </button>
+                                )}
+
+                                <button
+                                    onClick={() => {
+                                        setFormDaring({
+                                            platform_daring: kegiatan.platform_daring || 'zoom',
+                                            tautan_rapat: '',
+                                            meeting_id: '',
+                                            passcode_rapat: '',
+                                            join_button_mode: kegiatan.join_button_mode || 'otomatis',
+                                            menit_buka_gabung: kegiatan.menit_buka_gabung ?? 15,
+                                            batas_tutup_gabung: '',
+                                            izin_tautan_presensi_akhir: Boolean(kegiatan.izin_tautan_presensi_akhir),
+                                            wajib_tangkapan_layar: Boolean(kegiatan.wajib_tangkapan_layar),
+                                        });
+                                        setModalDaringOpen(true);
+                                    }}
+                                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-all border border-slate-700"
+                                >
+                                    <span className="material-symbols-outlined text-sm">edit</span>
+                                    Ubah Pengaturan Daring
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-300">
+                            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80">
+                                <span className="text-slate-500 text-[11px] block">Tautan Presensi Akhir:</span>
+                                <span className="font-semibold text-slate-200">
+                                    {kegiatan.izin_tautan_presensi_akhir ? 'Diizinkan via Tautan (HMAC)' : 'Hanya Layar Proyektor'}
+                                </span>
+                            </div>
+                            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80">
+                                <span className="text-slate-500 text-[11px] block">Bukti Tangkapan Layar:</span>
+                                <span className="font-semibold text-slate-200">
+                                    {kegiatan.wajib_tangkapan_layar ? 'Wajib Diunggah Peserta' : 'Tidak Diwajibkan'}
+                                </span>
+                            </div>
+                            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80">
+                                <span className="text-slate-500 text-[11px] block">Override Akses Admin:</span>
+                                <span className="font-semibold text-slate-200">
+                                    {kegiatan.is_gabung_manual_open === true
+                                        ? 'Dipaksa Buka (Override)'
+                                        : kegiatan.is_gabung_manual_open === false
+                                        ? 'Dipaksa Tutup (Override)'
+                                        : 'Sesuai Jadwal Otomatis'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Ringkasan */}
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -413,7 +547,7 @@ export default function KegiatanShow({
                                 </button>
                                 <button
                                     type="button"
-                                    disabled={!catatanTolak.trim()}
+                                    disabled={catatanTolak.trim().length < 5}
                                     onClick={() => {
                                         router.post(
                                             `/admin/kegiatan/${kegiatan.id}/tolak`,
@@ -426,6 +560,162 @@ export default function KegiatanShow({
                                     className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold transition-all"
                                 >
                                     Konfirmasi Penolakan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Ubah Pengaturan Daring */}
+                {modalDaringOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-5 space-y-4 shadow-2xl">
+                            <h3 className="text-base font-bold text-white flex items-center gap-2">
+                                <span className="material-symbols-outlined text-indigo-400">tune</span>
+                                Ubah Pengaturan Rapat Daring
+                            </h3>
+                            <p className="text-xs text-slate-400">
+                                Perubahan tautan rapat, passcode, atau jadwal akses gabung akan dicatat di log audit tanpa menampilkan nilai rahasia.
+                            </p>
+
+                            <div className="space-y-3 text-xs">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Platform</label>
+                                        <select
+                                            value={formDaring.platform_daring}
+                                            onChange={(e) => setFormDaring({ ...formDaring, platform_daring: e.target.value })}
+                                            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                        >
+                                            <option value="zoom">Zoom Meeting</option>
+                                            <option value="meet">Google Meet</option>
+                                            <option value="teams">Microsoft Teams</option>
+                                            <option value="lainnya">Lainnya</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Mode Tombol Gabung</label>
+                                        <select
+                                            value={formDaring.join_button_mode}
+                                            onChange={(e) => setFormDaring({ ...formDaring, join_button_mode: e.target.value })}
+                                            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                        >
+                                            <option value="otomatis">Otomatis</option>
+                                            <option value="manual">Manual</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Tautan Rapat Baru (Kosongkan bila tidak diubah)</label>
+                                    <input
+                                        type="url"
+                                        value={formDaring.tautan_rapat}
+                                        onChange={(e) => setFormDaring({ ...formDaring, tautan_rapat: e.target.value })}
+                                        placeholder="https://zoom.us/j/1234567890"
+                                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono"
+                                    />
+                                    <span className="text-[10px] text-slate-500">Wajib host resmi (zoom.us, meet.google.com, teams.microsoft.com).</span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Meeting ID</label>
+                                        <input
+                                            type="text"
+                                            value={formDaring.meeting_id}
+                                            onChange={(e) => setFormDaring({ ...formDaring, meeting_id: e.target.value })}
+                                            placeholder="Kosongkan bila tidak diubah"
+                                            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Passcode Baru</label>
+                                        <input
+                                            type="text"
+                                            value={formDaring.passcode_rapat}
+                                            onChange={(e) => setFormDaring({ ...formDaring, passcode_rapat: e.target.value })}
+                                            placeholder="Kosongkan bila tidak diubah"
+                                            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-mono"
+                                        />
+                                    </div>
+                                </div>
+
+                                {formDaring.join_button_mode === 'otomatis' && (
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Menit Dibuka Sebelum Mulai</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={formDaring.menit_buka_gabung}
+                                            onChange={(e) => setFormDaring({ ...formDaring, menit_buka_gabung: e.target.value })}
+                                            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                                        />
+                                    </div>
+                                )}
+
+                                <InputWaktuWib
+                                    id="modal_batas_tutup_gabung"
+                                    name="modal_batas_tutup_gabung"
+                                    label="Batas Tutup Akses Gabung (WIB)"
+                                    value={formDaring.batas_tutup_gabung}
+                                    opsional
+                                    onChange={(e) => setFormDaring({ ...formDaring, batas_tutup_gabung: e.target.value })}
+                                    onKosongkan={() => setFormDaring({ ...formDaring, batas_tutup_gabung: '' })}
+                                    bantuan="Bawaan: waktu kegiatan selesai bila dikosongkan."
+                                />
+
+                                <div className="space-y-2 pt-2 border-t border-slate-800">
+                                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formDaring.izin_tautan_presensi_akhir}
+                                            onChange={(e) => setFormDaring({ ...formDaring, izin_tautan_presensi_akhir: e.target.checked })}
+                                            className="rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500"
+                                        />
+                                        <span>Izinkan tautan presensi akhir daring (HMAC)</span>
+                                    </label>
+
+                                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formDaring.wajib_tangkapan_layar}
+                                            onChange={(e) => setFormDaring({ ...formDaring, wajib_tangkapan_layar: e.target.checked })}
+                                            className="rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-emerald-500"
+                                        />
+                                        <span>Wajibkan tangkapan layar (screenshot) kehadiran</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                                <button
+                                    type="button"
+                                    onClick={() => setModalDaringOpen(false)}
+                                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const payload = { ...formDaring };
+                                        if (!payload.tautan_rapat) delete payload.tautan_rapat;
+                                        if (!payload.meeting_id) delete payload.meeting_id;
+                                        if (!payload.passcode_rapat) delete payload.passcode_rapat;
+                                        if (!payload.batas_tutup_gabung) delete payload.batas_tutup_gabung;
+
+                                        router.post(
+                                            `/admin/kegiatan/${kegiatan.id}/pengaturan-daring`,
+                                            payload,
+                                            {
+                                                onSuccess: () => setModalDaringOpen(false),
+                                            }
+                                        );
+                                    }}
+                                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all"
+                                >
+                                    Simpan Pengaturan
                                 </button>
                             </div>
                         </div>

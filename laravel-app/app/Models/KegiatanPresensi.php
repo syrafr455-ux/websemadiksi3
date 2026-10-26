@@ -21,6 +21,7 @@ class KegiatanPresensi extends Model
         'email',
         'nomor_telepon',
         'signature_path',
+        'tangkapan_layar_path',
         'check_in_at',
     ];
 

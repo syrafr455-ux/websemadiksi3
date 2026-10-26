@@ -78,14 +78,21 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
                             key={item.href}
                             href={item.href}
                             data-menu-admin={item.route}
-                            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                            className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                                 item.active
                                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/25 font-bold'
                                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                             }`}
                         >
-                            <span className="material-symbols-outlined text-lg">{item.icon}</span>
-                            <span>{item.label}</span>
+                            <div className="flex items-center gap-3">
+                                <span className="material-symbols-outlined text-lg">{item.icon}</span>
+                                <span>{item.label}</span>
+                            </div>
+                            {item.badge > 0 && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
+                                    {item.badge}
+                                </span>
+                            )}
                         </a>
                     ))}
                 </nav>

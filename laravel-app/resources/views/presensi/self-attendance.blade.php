@@ -94,7 +94,7 @@
             @endif
 
             {{-- Presensi Form --}}
-            <form action="{{ route('kegiatan.presensi.submit', $kegiatan->id) }}" method="POST" id="attendanceForm" class="space-y-6">
+            <form action="{{ route('kegiatan.presensi.submit', $kegiatan->id) }}" method="POST" enctype="multipart/form-data" id="attendanceForm" class="space-y-6">
                 @csrf
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -214,6 +214,29 @@
                     {{-- Hidden input for base64 signature image --}}
                     <input type="hidden" name="signature" id="signatureInput" required>
                 </div>
+
+                {{-- Unggah Tangkapan Layar (Wajib jika dikonfigurasi) --}}
+                @if($kegiatan->wajib_tangkapan_layar)
+                    <div class="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                        <label for="tangkapan_layar" class="block text-xs font-bold uppercase tracking-wider text-amber-900">
+                            Bukti Tangkapan Layar (Screenshot) Rapat Daring <span class="text-rose-500">*</span>
+                        </label>
+                        <p class="text-xs text-amber-800 leading-relaxed">
+                            Unggah bukti tangkapan layar saat Anda mengikuti sesi rapat daring (Zoom / Google Meet / Teams) sebagai verifikasi kehadiran (Maksimal 3 MB, format JPG/PNG/WebP).
+                        </p>
+                        <input 
+                            type="file" 
+                            name="tangkapan_layar" 
+                            id="tangkapan_layar" 
+                            accept="image/jpeg,image/png,image/webp" 
+                            required
+                            class="w-full text-slate-700 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-teal-700 file:text-white hover:file:bg-teal-800 transition"
+                        >
+                        @error('tangkapan_layar')
+                            <p class="text-xs text-rose-600 mt-1 font-semibold">{{ $message }}</p>
+                        @enderror
+                    </div>
+                @endif
 
                 {{-- Submit Button --}}
                 <div class="pt-4">

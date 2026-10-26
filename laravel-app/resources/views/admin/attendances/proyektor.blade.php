@@ -32,6 +32,19 @@
         </div>
 
         <div class="flex items-center gap-3">
+            @if($tautanPresensiAkhir)
+                <button 
+                    id="salinTautanBtnHeader"
+                    type="button" 
+                    data-url="{{ $tautanPresensiAkhir }}"
+                    onclick="navigator.clipboard.writeText(this.dataset.url).then(() => { const el = this.querySelector('.label'); el.textContent = 'Tersalin!'; setTimeout(() => el.textContent = 'Salin Tautan Presensi', 2000); })"
+                    class="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-teal-600/20 transition-all"
+                >
+                    <span class="material-symbols-outlined text-base">link</span>
+                    <span class="label">Salin Tautan Presensi</span>
+                </button>
+            @endif
+
             {{-- Tombol Layar Penuh --}}
             <button 
                 id="fullscreenBtn" 
@@ -110,6 +123,24 @@
                 <p class="text-xs text-slate-400">
                     Presensi akhir masuk <strong id="progressSentence" class="text-white">{{ $totalPresensiFase2 }} dari {{ $totalCheckedInFase1 }}</strong> peserta yang hadir pada check-in fase 1.
                 </p>
+
+                @if($tautanPresensiAkhir)
+                    <div class="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
+                        <div class="text-[11px] text-teal-300">
+                            <span class="font-bold">Presensi Daring:</span> Bagikan tautan ke peserta Zoom/Meet
+                        </div>
+                        <button 
+                            type="button" 
+                            data-url="{{ $tautanPresensiAkhir }}"
+                            onclick="navigator.clipboard.writeText(this.dataset.url).then(() => { const el = this.querySelector('.label'); el.textContent = 'Tersalin!'; setTimeout(() => el.textContent = 'Salin Tautan', 2000); })"
+                            class="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-colors shrink-0"
+                            id="salinTautanBtnCard"
+                        >
+                            <span class="material-symbols-outlined text-sm">content_copy</span>
+                            <span class="label">Salin Tautan</span>
+                        </button>
+                    </div>
+                @endif
             </div>
 
             {{-- 3 Langkah Mudah untuk Peserta --}}

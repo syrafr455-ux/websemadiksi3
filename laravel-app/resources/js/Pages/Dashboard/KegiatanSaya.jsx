@@ -16,6 +16,55 @@ export default function KegiatanSaya({
     const [submissionFile, setSubmissionFile] = useState(null);
     const [uploading, setUploading] = useState(false);
 
+    // Modal kredensial rapat daring
+    const [meetingModal, setMeetingModal] = useState({ open: false, data: null, error: null });
+    const [joiningRegId, setJoiningRegId] = useState(null);
+    const [copiedKey, setCopiedKey] = useState(null);
+
+    const handleGabung = async (reg) => {
+        setJoiningRegId(reg.id);
+        try {
+            const response = await window.axios.post(`/kegiatan/${reg.kegiatan_id}/gabung`);
+            const data = response.data;
+            if (data && data.success) {
+                // Perbarui status lokal pada objek registrasi
+                reg.sudah_gabung = true;
+                reg.jumlah_gabung = data.jumlah;
+                if (data.pertama_pada && !reg.pertama_gabung_pada) {
+                    reg.pertama_gabung_pada = data.pertama_pada;
+                }
+
+                // Buka tautan rapat di tab baru
+                if (data.join_url) {
+                    window.open(data.join_url, '_blank');
+                }
+
+                // Tampilkan modal info kredensial (Meeting ID dan Passcode untuk disalin)
+                setMeetingModal({
+                    open: true,
+                    data: data,
+                    kegiatanName: reg.kegiatan?.nama_kegiatan || 'Pertemuan Daring',
+                    error: null,
+                });
+            } else {
+                alert(data?.message || 'Gagal mengakses ruang pertemuan daring.');
+            }
+        } catch (err) {
+            const msg = err.response?.data?.message || 'Akses ruang pertemuan belum dibuka atau tidak dapat diakses saat ini.';
+            alert(msg);
+        } finally {
+            setJoiningRegId(null);
+        }
+    };
+
+    const copyText = (text, key) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+            setCopiedKey(key);
+            setTimeout(() => setCopiedKey(null), 2000);
+        });
+    };
+
     const openTicketModal = (reg) => {
         setActiveTicket(reg);
     };
@@ -193,6 +242,76 @@ export default function KegiatanSaya({
                                                         className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-xs font-bold border border-amber-500/30"
                                                     >
                                                         {reg.submission ? 'Ubah Karya' : 'Unggah Karya'}
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Ruang Pertemuan Daring */}
+                                            {(kegiatan.metode_pelaksanaan === 'online' || kegiatan.metode_pelaksanaan === 'hybrid' || kegiatan.lokasi_type === 'online' || reg.status_akses_gabung) && (
+                                                <div className="p-3.5 rounded-2xl bg-teal-950/40 border border-teal-800/40 space-y-2.5" data-blok-daring={reg.id}>
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-1.5 text-xs font-bold text-teal-300">
+                                                            <span className="material-symbols-outlined text-sm">videocam</span>
+                                                            <span>Ruang Pertemuan Daring ({kegiatan.platform_daring ? kegiatan.platform_daring.toUpperCase() : 'ONLINE'})</span>
+                                                        </div>
+                                                        {reg.status_akses_gabung === 'dibuka' ? (
+                                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                                                Akses Dibuka
+                                                            </span>
+                                                        ) : reg.status_akses_gabung === 'ditutup' ? (
+                                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                                                Akses Ditutup
+                                                            </span>
+                                                        ) : (
+                                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                                                Belum Dibuka
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="text-[11px] text-slate-300">
+                                                        {reg.status_akses_gabung === 'dibuka' ? (
+                                                            <span>Ruang pertemuan telah dibuka. Silakan klik tombol di bawah untuk bergabung.</span>
+                                                        ) : reg.status_akses_gabung === 'ditutup' ? (
+                                                            <span className="text-slate-400">Akses ruang pertemuan daring telah ditutup oleh penyelenggara.</span>
+                                                        ) : (
+                                                            <span className="text-amber-200/90">
+                                                                Akses tombol gabung akan dibuka pada {reg.waktu_buka_gabung_wib ? `${reg.waktu_buka_gabung_wib} WIB` : '15 menit sebelum acara dimulai'}.
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {reg.sudah_gabung && (
+                                                        <div className="text-[10px] text-teal-400 font-medium flex items-center gap-1">
+                                                            <span className="material-symbols-outlined text-xs">check_circle</span>
+                                                            <span>Tercatat bergabung ({reg.jumlah_gabung || 1}x){reg.pertama_gabung_pada ? ` • Pertama: ${reg.pertama_gabung_pada}` : ''}</span>
+                                                        </div>
+                                                    )}
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleGabung(reg)}
+                                                        disabled={!isPaidOrFree || reg.status_akses_gabung !== 'dibuka' || joiningRegId === reg.id}
+                                                        className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                                                            reg.status_akses_gabung === 'dibuka' && isPaidOrFree
+                                                                ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-md shadow-teal-600/25'
+                                                                : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
+                                                        }`}
+                                                        data-tombol-gabung={reg.id}
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">
+                                                            {joiningRegId === reg.id ? 'progress_activity' : 'videocam'}
+                                                        </span>
+                                                        <span>
+                                                            {joiningRegId === reg.id
+                                                                ? 'Menghubungkan...'
+                                                                : reg.status_akses_gabung === 'dibuka'
+                                                                ? (reg.sudah_gabung ? 'Gabung Ulang Sekarang' : 'Gabung Sekarang')
+                                                                : reg.status_akses_gabung === 'ditutup'
+                                                                ? 'Akses Gabung Ditutup'
+                                                                : (reg.waktu_buka_gabung_wib ? `Dibuka ${reg.waktu_buka_gabung_wib} WIB` : 'Belum Dibuka')}
+                                                        </span>
                                                     </button>
                                                 </div>
                                             )}
@@ -404,6 +523,102 @@ export default function KegiatanSaya({
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Meeting Credentials Modal */}
+                {meetingModal.open && meetingModal.data && (
+                    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-5">
+                            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-10 h-10 rounded-xl bg-teal-600/20 text-teal-400 flex items-center justify-center border border-teal-500/30">
+                                        <span className="material-symbols-outlined text-xl">videocam</span>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-black text-white">Ruang Pertemuan Daring</h3>
+                                        <p className="text-xs text-teal-400 font-semibold uppercase">{meetingModal.data.platform || 'Online'}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setMeetingModal({ open: false, data: null, error: null })}
+                                    className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                                >
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+
+                            <div className="space-y-3 text-xs">
+                                <div className="p-3.5 rounded-2xl bg-teal-950/40 border border-teal-800/50 text-teal-200">
+                                    <p className="font-semibold leading-relaxed">
+                                        Tautan rapat telah dibuka di tab baru peramban Anda. Anda dapat menggunakan informasi kredensial di bawah bila aplikasi rapat meminta verifikasi manual:
+                                    </p>
+                                </div>
+
+                                {meetingModal.data.meeting_id && (
+                                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3">
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 uppercase font-bold">Meeting ID</div>
+                                            <div className="font-mono font-bold text-white text-sm select-all">
+                                                {meetingModal.data.meeting_id}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => copyText(meetingModal.data.meeting_id, 'id')}
+                                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-teal-400 font-bold text-xs flex items-center gap-1 border border-slate-700"
+                                        >
+                                            <span className="material-symbols-outlined text-xs">
+                                                {copiedKey === 'id' ? 'check' : 'content_copy'}
+                                            </span>
+                                            <span>{copiedKey === 'id' ? 'Tersalin' : 'Salin'}</span>
+                                        </button>
+                                    </div>
+                                )}
+
+                                {meetingModal.data.passcode && (
+                                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3">
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 uppercase font-bold">Passcode / Kata Sandi</div>
+                                            <div className="font-mono font-bold text-white text-sm select-all">
+                                                {meetingModal.data.passcode}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => copyText(meetingModal.data.passcode, 'passcode')}
+                                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-teal-400 font-bold text-xs flex items-center gap-1 border border-slate-700"
+                                        >
+                                            <span className="material-symbols-outlined text-xs">
+                                                {copiedKey === 'passcode' ? 'check' : 'content_copy'}
+                                            </span>
+                                            <span>{copiedKey === 'passcode' ? 'Tersalin' : 'Salin'}</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="pt-2 flex flex-col gap-2">
+                                {meetingModal.data.join_url && (
+                                    <a
+                                        href={meetingModal.data.join_url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-teal-600/25 transition-all text-center"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">open_in_new</span>
+                                        Buka Ulang Tautan Rapat
+                                    </a>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setMeetingModal({ open: false, data: null, error: null })}
+                                    className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors"
+                                >
+                                    Tutup
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}

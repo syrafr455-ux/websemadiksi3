@@ -39,4 +39,12 @@ final class Wib
     {
         return Carbon::now(self::ZONA);
     }
+
+    /**
+     * Format waktu tersimpan (UTC) menjadi string format WIB.
+     */
+    public static function format(?CarbonInterface $waktu, string $format = 'd M Y, H:i'): ?string
+    {
+        return $waktu === null ? null : self::dari($waktu)?->translatedFormat($format);
+    }
 }

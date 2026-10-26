@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\KegiatanStatus;
 use App\Enums\UserRole;
 use App\Support\Wib;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -68,11 +69,28 @@ class Kegiatan extends Model
         'is_submission_active',
         'submission_instructions',
         'status',
+        'catatan_penolakan',
+        'platform_daring',
+        'tautan_rapat',
+        'meeting_id',
+        'passcode_rapat',
+        'join_button_mode',
+        'menit_buka_gabung',
+        'batas_tutup_gabung',
+        'is_gabung_manual_open',
+        'izin_tautan_presensi_akhir',
+        'wajib_tangkapan_layar',
         'presensi_akhir_dibuka',
         'presensi_akhir_mulai',
         'presensi_akhir_selesai',
         'legacy_activity_id',
         'created_by',
+    ];
+
+    protected $hidden = [
+        'tautan_rapat',
+        'meeting_id',
+        'passcode_rapat',
     ];
 
     protected $appends = ['file_panduan_url', 'certificate_template_url'];
@@ -86,6 +104,13 @@ class Kegiatan extends Model
             'submission_deadline' => 'datetime',
             'booking_opens_at' => 'datetime',
             'booking_closes_at' => 'datetime',
+            'batas_tutup_gabung' => 'datetime',
+            'tautan_rapat' => 'encrypted',
+            'passcode_rapat' => 'encrypted',
+            'menit_buka_gabung' => 'integer',
+            'is_gabung_manual_open' => 'boolean',
+            'izin_tautan_presensi_akhir' => 'boolean',
+            'wajib_tangkapan_layar' => 'boolean',
             'presensi_akhir_dibuka' => 'boolean',
             'presensi_akhir_mulai' => 'datetime',
             'presensi_akhir_selesai' => 'datetime',
@@ -195,6 +220,97 @@ class Kegiatan extends Model
     public function persetujuan(): HasMany
     {
         return $this->hasMany(KegiatanPersetujuan::class, 'kegiatan_id');
+    }
+
+    public function gabungs(): HasMany
+    {
+        return $this->hasMany(KegiatanGabung::class, 'kegiatan_id');
+    }
+
+    public function isOnline(): bool
+    {
+        return $this->metode_pelaksanaan === 'online' || $this->lokasi_type === 'online';
+    }
+
+    public function isHybrid(): bool
+    {
+        return $this->metode_pelaksanaan === 'hybrid';
+    }
+
+    public function isDaringOrHybrid(): bool
+    {
+        return $this->isOnline() || $this->isHybrid();
+    }
+
+    public function waktuBukaGabung(): ?CarbonInterface
+    {
+        if (! $this->tanggal_mulai) {
+            return null;
+        }
+        $menit = (int) ($this->menit_buka_gabung ?? 15);
+
+        return $this->tanggal_mulai->copy()->subMinutes($menit);
+    }
+
+    public function waktuTutupGabung(): ?CarbonInterface
+    {
+        if ($this->batas_tutup_gabung) {
+            return $this->batas_tutup_gabung;
+        }
+
+        return $this->tanggal_selesai ?? ($this->tanggal_mulai ? $this->tanggal_mulai->copy()->addHours(2) : null);
+    }
+
+    public function isJoinWindowOpen(): bool
+    {
+        if ($this->status !== KegiatanStatus::Published && $this->status !== KegiatanStatus::Ongoing) {
+            return false;
+        }
+
+        // Override manual jika disetel
+        if ($this->is_gabung_manual_open === true) {
+            return true;
+        }
+        if ($this->is_gabung_manual_open === false && $this->join_button_mode === 'manual') {
+            return false;
+        }
+        if ($this->is_gabung_manual_open === false && $this->join_button_mode === 'otomatis') {
+            return false;
+        }
+
+        // Mode manual tanpa override true -> tertutup
+        if ($this->join_button_mode === 'manual') {
+            return false;
+        }
+
+        // Mode otomatis (is_gabung_manual_open null) -> cek jadwal
+        $now = now();
+        $buka = $this->waktuBukaGabung();
+        $tutup = $this->waktuTutupGabung();
+
+        if ($buka && $now->lt($buka)) {
+            return false;
+        }
+        if ($tutup && $now->gt($tutup)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function statusAksesGabung(): string
+    {
+        if ($this->isJoinWindowOpen()) {
+            return 'dibuka';
+        }
+
+        $now = now();
+        $buka = $this->waktuBukaGabung();
+        if ($buka && $now->lt($buka) && ($this->join_button_mode === 'otomatis' || $this->is_gabung_manual_open === null)) {
+            return 'belum_dibuka';
+        }
+
+        return 'ditutup';
     }
 
     /**

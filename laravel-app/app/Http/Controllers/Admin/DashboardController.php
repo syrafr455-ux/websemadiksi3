@@ -17,6 +17,7 @@ use App\Models\Sertifikat;
 use App\Models\User;
 use App\Services\CertificateGeneratorService;
 use App\Services\EmailProtectionService;
+use App\Support\MenuAdmin;
 use App\Support\Wib;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -94,8 +95,9 @@ class DashboardController extends Controller
         $recentPresensi = KegiatanPresensi::with('kegiatan')->latest('check_in_at')->latest('id')->take(5)->get();
         $recentDocs = KipkDocument::latest('id')->take(5)->get();
         $emailQuotaStatus = app(EmailProtectionService::class)->getQuotaStatus();
+        $menungguPersetujuanAnda = MenuAdmin::hitungMenungguPersetujuan($user);
 
-        return view('admin.dashboard', compact('stats', 'recentStudents', 'recentPresensi', 'recentDocs', 'emailQuotaStatus'));
+        return view('admin.dashboard', compact('stats', 'recentStudents', 'recentPresensi', 'recentDocs', 'emailQuotaStatus', 'menungguPersetujuanAnda'));
     }
 
     /**
@@ -364,6 +366,7 @@ class DashboardController extends Controller
             'phase1_checked_in' => 0,
             'phase2_present' => 0,
             'certificates_issued' => 0,
+            'total_gabung' => 0,
         ];
 
         if ($selectedKegiatan) {
@@ -372,6 +375,7 @@ class DashboardController extends Controller
             $stats['phase1_checked_in'] = $allParticipants->where('is_phase1', true)->count();
             $stats['phase2_present'] = $allParticipants->where('is_phase2', true)->count();
             $stats['certificates_issued'] = $allParticipants->where('is_certificate', true)->count();
+            $stats['total_gabung'] = $allParticipants->where('is_gabung', true)->count();
 
             $participants = $this->getAttendanceParticipants($selectedKegiatan, $request);
         }
@@ -479,7 +483,7 @@ class DashboardController extends Controller
      */
     protected function getAttendanceParticipants(Kegiatan $selectedKegiatan, Request $request)
     {
-        $registrations = KegiatanRegistration::with(['participantUser', 'bookerUser', 'seat'])
+        $registrations = KegiatanRegistration::with(['participantUser', 'bookerUser', 'seat', 'gabung'])
             ->where('kegiatan_id', $selectedKegiatan->id)
             ->get();
 
@@ -535,6 +539,11 @@ class DashboardController extends Controller
                 ? Wib::dari($presensi->check_in_at)->translatedFormat('d M Y, H:i').' WIB'
                 : null;
 
+            $gabung = $reg->gabung;
+            $isGabung = $gabung !== null;
+            $gabungTime = $gabung?->pertama_pada ? Wib::dari($gabung->pertama_pada)->translatedFormat('d M Y, H:i').' WIB' : null;
+            $gabungCount = (int) ($gabung?->jumlah ?? 0);
+
             $participants->push((object) [
                 'id' => 'reg-'.$reg->id,
                 'registration_id' => $reg->id,
@@ -551,8 +560,12 @@ class DashboardController extends Controller
                 'phase2_status' => $isPhase2Present ? 'Sudah Presensi Akhir' : 'Belum Presensi',
                 'is_phase2' => $isPhase2Present,
                 'phase2_time' => $phase2Time,
+                'is_gabung' => $isGabung,
+                'gabung_time' => $gabungTime,
+                'gabung_count' => $gabungCount,
                 'presensi' => $presensi,
                 'signature_url' => $presensi ? route('admin.attendances.signature', $presensi->id) : null,
+                'screenshot_url' => ($presensi && $presensi->tangkapan_layar_path) ? route('admin.attendances.screenshot', $presensi->id) : null,
                 'certificate_status' => $isCertificateIssued ? 'Sudah Terbit' : 'Belum Terbit',
                 'is_certificate' => $isCertificateIssued,
                 'certificate_number' => $sertifikat?->nomor_sertifikat,
@@ -588,8 +601,12 @@ class DashboardController extends Controller
                 'phase2_status' => 'Sudah Presensi Akhir',
                 'is_phase2' => true,
                 'phase2_time' => $phase2Time,
+                'is_gabung' => false,
+                'gabung_time' => null,
+                'gabung_count' => 0,
                 'presensi' => $p,
                 'signature_url' => route('admin.attendances.signature', $p->id),
+                'screenshot_url' => $p->tangkapan_layar_path ? route('admin.attendances.screenshot', $p->id) : null,
                 'certificate_status' => $sertifikat ? 'Sudah Terbit' : 'Belum Terbit',
                 'is_certificate' => $sertifikat !== null,
                 'certificate_number' => $sertifikat?->nomor_sertifikat,
