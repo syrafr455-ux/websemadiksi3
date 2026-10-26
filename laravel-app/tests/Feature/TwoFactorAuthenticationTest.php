@@ -247,8 +247,16 @@ class TwoFactorAuthenticationTest extends TestCase
             'two_factor_recovery_codes' => $totp->generateRecoveryCodes(8)['hashed'],
         ]);
 
-        // Non-admin tidak boleh mereset
+        // Non-admin (mahasiswa, verifikator, penilai) tidak boleh mereset
         $this->actingAs($this->createMahasiswaKipk())
+            ->postJson(route('admin.users.reset-2fa', $userUmum->id), ['reason' => 'Reset permintaan'])
+            ->assertForbidden();
+
+        $this->actingAs($this->createVerifikatorBerkas())
+            ->postJson(route('admin.users.reset-2fa', $userUmum->id), ['reason' => 'Reset permintaan'])
+            ->assertForbidden();
+
+        $this->actingAs($this->createPenilaiKarya())
             ->postJson(route('admin.users.reset-2fa', $userUmum->id), ['reason' => 'Reset permintaan'])
             ->assertForbidden();
 
@@ -257,7 +265,26 @@ class TwoFactorAuthenticationTest extends TestCase
             ->post(route('admin.users.reset-2fa', $userUmum->id), ['reason' => ''])
             ->assertSessionHasErrors(['reason']);
 
-        // Super admin dengan alasan valid
+        // Alasan kurang dari 5 karakter harus ditolak dengan pesan bahasa Indonesia
+        $resKurang = $this->actingAs($admin)
+            ->post(route('admin.users.reset-2fa', $userUmum->id), ['reason' => 'abc']);
+        $resKurang->assertSessionHasErrors(['reason' => 'Alasan reset minimal 5 karakter.']);
+
+        // Super admin tidak boleh mereset 2FA untuk akun sendiri
+        $admin->update([
+            'two_factor_secret' => $totp->generateSecret(),
+            'two_factor_confirmed_at' => now(),
+            'two_factor_recovery_codes' => $totp->generateRecoveryCodes(8)['hashed'],
+        ]);
+        $resSelf = $this->actingAs($admin)
+            ->post(route('admin.users.reset-2fa', $admin->id), [
+                'reason' => 'Mereset akun sendiri',
+            ]);
+        $resSelf->assertSessionHas('error', 'Anda tidak dapat mereset 2FA untuk akun Anda sendiri.');
+        $admin->refresh();
+        $this->assertNotNull($admin->two_factor_secret);
+
+        // Super admin dengan alasan valid (>= 5 karakter) untuk akun pengguna lain
         $response = $this->actingAs($admin)
             ->post(route('admin.users.reset-2fa', $userUmum->id), [
                 'reason' => 'Pengguna kehilangan ponsel dan kunci pemulihan.',
@@ -270,11 +297,48 @@ class TwoFactorAuthenticationTest extends TestCase
         $this->assertNull($userUmum->two_factor_confirmed_at);
         $this->assertNull($userUmum->two_factor_recovery_codes);
 
-        // Verifikasi pencatatan audit log
+        // Verifikasi pencatatan audit log beserta alasannya
         $this->assertDatabaseHas('audit_logs', [
             'user_id' => $admin->id,
             'action' => 'reset_two_factor',
         ]);
+    }
+
+    public function test_inertia_user_list_payload_contains_two_factor_enabled_and_no_secrets(): void
+    {
+        $admin = $this->createSuperAdmin();
+        $totp = new TotpService;
+
+        // User A: 2FA aktif
+        $userAktif2Fa = $this->createUserUmum();
+        $userAktif2Fa->update([
+            'two_factor_secret' => $totp->generateSecret(),
+            'two_factor_confirmed_at' => now(),
+            'two_factor_recovery_codes' => $totp->generateRecoveryCodes(8)['hashed'],
+        ]);
+
+        // User B: 2FA belum aktif
+        $userNon2Fa = $this->createMahasiswaKipk();
+
+        $html = $this->actingAs($admin)->get(route('admin.users'))->assertOk()->getContent();
+        preg_match('#<script data-page="app" type="application/json">(.*?)</script>#s', $html, $m);
+        $props = json_decode($m[1], true)['props'];
+
+        $users = collect($props['users']['data']);
+
+        $itemA = $users->firstWhere('id', $userAktif2Fa->id);
+        $this->assertNotNull($itemA);
+        $this->assertTrue($itemA['two_factor_enabled']);
+        $this->assertArrayNotHasKey('two_factor_secret', $itemA);
+        $this->assertArrayNotHasKey('two_factor_recovery_codes', $itemA);
+        $this->assertArrayNotHasKey('password', $itemA);
+
+        $itemB = $users->firstWhere('id', $userNon2Fa->id);
+        $this->assertNotNull($itemB);
+        $this->assertFalse($itemB['two_factor_enabled']);
+        $this->assertArrayNotHasKey('two_factor_secret', $itemB);
+        $this->assertArrayNotHasKey('two_factor_recovery_codes', $itemB);
+        $this->assertArrayNotHasKey('password', $itemB);
     }
 
     public function test_replaying_same_totp_code_is_rejected(): void

@@ -465,7 +465,7 @@ Status pelacakan pengerjaan bertahap:
     - Seluruh rangkaian pengujian sistem `php artisan test` (**451 tes, 3579 assertions**) lulus 100% tanpa ada kegagalan.
     - Build aset Vite `npm run build` dan linter gaya kode `php vendor/bin/pint` lulus sempurna.
 
-- [/] **Bagian 21: Perbaikan Login SSO Menolak Akun Terdaftar & Tombol Reset 2FA di Data Pengguna**
+- [x] **Bagian 21: Perbaikan Login SSO Menolak Akun Terdaftar & Tombol Reset 2FA di Data Pengguna**
   - **BAGIAN 1. TEMUAN AKAR MASALAH (Ditulis Sebelum Mengubah Kode)**:
     - **Gejala & Bukti Log**:
       - Terdata 4 baris log serupa di `laravel-app/storage/logs/laravel.log` pada 26 Okt 2026 (03:32:02 UTC dan 04:45:27 UTC / sekitar 10:32 & 11:45 WIB):
@@ -570,6 +570,39 @@ Status pelacakan pengerjaan bertahap:
         7. Pencegahan kebocoran kata sandi dan remember token.
     - **Dokumentasi Manual**:
       - Panduan pengujian manual dan tabel parameter telah ditambahkan ke `docs/panduan-uji-manual.md` pada Seksi 8.
+
+  - **BAGIAN 4. TOMBOL RESET 2FA DI DATA PENGGUNA**:
+    - **Model `App\Models\User`**:
+      - Menambahkan atribut ter-append `$appends = ['two_factor_enabled']` dengan accessor `getTwoFactorEnabledAttribute(): bool`.
+      - Menjamin privasi data sensitif: `two_factor_secret`, `two_factor_recovery_codes`, dan `password` tetap terlindungi di `$hidden` sehingga tidak pernah bocor ke Inertia frontend.
+    - **Backend Protection di `UserManagementController::resetTwoFactor`**:
+      - Route: `POST /admin/pengguna/{id}/reset-2fa` (`admin.users.reset-2fa`).
+      - Otorisasi: `Gate::authorize('update', $user)` (khusus `super_admin`).
+      - Proteksi Akun Sendiri: Menolak aksi jika Super Admin mencoba mereset akunnya sendiri (`$user->id === auth()->id()`) dengan pesan error flash: *"Anda tidak dapat mereset 2FA untuk akun Anda sendiri."*.
+      - Validasi: `reason` wajib minimal 5 karakter, maksimal 500 karakter dengan pesan galat bahasa Indonesia.
+      - Menghapus rahasia 2FA (`two_factor_secret = null`, `two_factor_confirmed_at = null`, `two_factor_recovery_codes = null`).
+      - Mencatat `audit_logs` aksi `reset_two_factor` beserta alasannya.
+    - **Frontend di `resources/js/Pages/Admin/Pengguna/Index.jsx`**:
+      - Tombol ikon `"Reset 2FA"` (`lock_reset`) pada baris tabel pengguna:
+        - Hanya tampil bila pengguna yang login adalah Super Admin (`auth.user.is_super_admin`).
+        - Hanya tampil bila akun target memiliki 2FA aktif (`u.two_factor_enabled`).
+        - Tidak tampil untuk akun Super Admin itu sendiri (`auth.user.id !== u.id`).
+      - Modal konfirmasi interaktif `"Reset 2FA: [Nama Pengguna]"`:
+        - Teks penjelasan: *"Pengguna harus mengatur ulang 2FA saat login berikutnya. Masukkan alasan pengaturan ulang (minimal 5 karakter)."*
+        - Kolom textarea alasan wajib dengan `minLength={5}` dan validasi realtime galat Indonesia (`formReset2Fa.errors.reason`).
+        - Tombol Batal untuk menutup modal dan membersihkan input.
+        - Status tombol memproses (`formReset2Fa.processing`, teks *"Memproses..."* dan disabled) agar tidak terkirim dua kali.
+        - Notifikasi hasil sukses lewat mekanisme flash banner `AdminLayout`.
+    - **Pengujian & Verifikasi Fitur**:
+      - Suite `Tests\Feature\TwoFactorAuthenticationTest` diperluas (10 tes, 65 assertions) lulus 100%:
+        1. Role non-super_admin (mahasiswa, verifikator, penilai) ditolak 403.
+        2. Alasan kosong dan alasan < 5 karakter ditolak dengan pesan validasi Indonesia.
+        3. Super admin dilarang mereset 2FA akunnya sendiri.
+        4. Reset berhasil menghapus rahasia, stempel konfirmasi, kode pemulihan, dan mencatat audit log.
+        5. Payload Inertia `admin.users` memuat boolean `two_factor_enabled` dan tidak memuat `two_factor_secret` maupun `two_factor_recovery_codes`.
+    - **Dokumentasi Manual**:
+      - Panduan uji manual di `docs/panduan-uji-manual.md` diperbarui mencakup alur tombol UI dan modal reset 2FA, serta status pada Matriks Rekapitulasi diubah menjadi **Tersedia di UI**.
+
 
 
 

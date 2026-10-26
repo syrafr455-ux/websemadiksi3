@@ -304,6 +304,10 @@ class UserManagementController extends Controller
         $user = User::findOrFail($id);
         Gate::authorize('update', $user);
 
+        if ($user->id === auth()->id()) {
+            return back()->with('error', 'Anda tidak dapat mereset 2FA untuk akun Anda sendiri.');
+        }
+
         $validated = $request->validate([
             'reason' => ['required', 'string', 'min:5', 'max:500'],
         ], [

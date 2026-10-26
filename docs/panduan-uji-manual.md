@@ -202,34 +202,34 @@ Berdasarkan `config('unusa.two_factor_roles')` dan method `User::requiresTwoFact
 ---
 
 ### Reset 2FA oleh Super Admin
-> [!IMPORTANT]
-> **STATUS FITUR PADA KODE**: Fitur reset 2FA oleh Super Admin saat ini **TIDAK MEMILIKI TOMBOL DI UI** (pada halaman Data Pengguna `/admin/pengguna` belum disematkan tombol/modal UI untuk memanggil rute ini). Fitur ini telah selesai secara penuh di tingkat **backend API / Controller** dan siap dipanggil melalui permintaan HTTP POST.
+> [!NOTE]
+> **STATUS FITUR PADA KODE: TERSEDIA PENUH DI UI & BACKEND**  
+> Tombol ikon *"Reset 2FA"* (`lock_reset`) dan modal konfirmasi interaktif kini tersedia langsung pada tabel **Data Pengguna** (`/admin/pengguna`).
 
-- **Endpoint Backend**: `POST /admin/pengguna/{id}/reset-2fa` (Route: `admin.users.reset-2fa`)
-- **Hak Akses**: Hanya role `super_admin` (`EnsureRole`).
-- **Prasyarat Payload Request**:
-  - `reason` (Wajib, string minimal 5 karakter, maksimal 500 karakter).
-- **Prosedur Pengujian (via browser console / Postman / Fetch API)**:
-  ```javascript
-  // Jalankan di Console browser saat login sebagai Super Admin di halaman /admin/pengguna
-  fetch('/admin/pengguna/ID_PENGGUNA/reset-2fa', {
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-          'Accept': 'application/json'
-      },
-      body: JSON.stringify({ reason: 'Permintaan reset perangkat gawai hilang oleh juri' })
-  }).then(r => r.json()).then(console.log);
-  ```
-- **Hasil Sukses Backend**:
-  - Data 2FA pada database direset: `two_factor_secret = null`, `two_factor_confirmed_at = null`, `two_factor_recovery_codes = null`.
-  - Tercatat di tabel `audit_logs` dengan aksi `'reset_two_factor'`.
-  - Pesan sukses session: `"Autentikasi dua faktor (2FA) akun '{name}' berhasil diatur ulang."`
-- **Pesan Galat Kasus Negatif**:
-  - Alasan kosong: `"Alasan reset 2FA wajib diisi."`
-  - Alasan < 5 karakter: `"Alasan reset minimal 5 karakter."`
-  - Dipanggil tanpa hak akses Super Admin: HTTP 403 Forbidden.
+- **Hak Akses & Kondisi Tampil Tombol**:
+  - Hanya muncul bila yang login adalah **Super Administrator** (`auth.user.is_super_admin === true`).
+  - Hanya muncul pada baris pengguna yang **memiliki 2FA aktif** (`u.two_factor_enabled === true`).
+  - **Tidak muncul** pada baris akun Super Admin itu sendiri (`auth.user.id !== u.id`), karena sistem melarang Super Admin mereset 2FA untuk akunnya sendiri.
+- **Navigasi & Langkah Pengujian di UI**:
+  1. Login sebagai `super_admin` di `/admin/masuk`.
+  2. Buka menu **"Data Pengguna"** (`/admin/pengguna`).
+  3. Cari baris pengguna yang memiliki 2FA aktif (misal juri atau user umum).
+  4. Pada kolom **Aksi** di ujung kanan baris, klik tombol ikon gembok berputar berlatar kuning/amber: **"Reset 2FA"** (ikon `lock_reset`).
+  5. Modal konfirmasi **"Reset 2FA: [Nama Pengguna]"** akan terbuka di tengah layar.
+  6. Perhatikan teks penjelasan: *"Pengguna harus mengatur ulang 2FA saat login berikutnya. Masukkan alasan pengaturan ulang (minimal 5 karakter)."*
+  7. **Uji Kasus Negatif**:
+     - Bila alasan dikosongkan atau diisi kurang dari 5 karakter (misal `"abc"`), form dicegah kirim dan pesan galat *"Alasan reset minimal 5 karakter."* tampil di bawah kolom textarea.
+  8. **Uji Kasus Positif**:
+     - Masukkan alasan valid minimal 5 karakter, contoh: `"Pengguna kehilangan perangkat autentikator dan kode pemulihan"`.
+     - Klik tombol **"Reset 2FA"**.
+     - Tombol berubah status menjadi memproses (*disabled* dan animasi indikator putar) untuk mencegah pengiriman ganda.
+     - Modal otomatis tertutup, dan banner notifikasi hijau muncul di atas halaman:  
+       `"Autentikasi dua faktor (2FA) akun '[Nama]' berhasil diatur ulang."`
+  9. **Verifikasi Hasil**:
+     - Kunci rahasia 2FA, stempel konfirmasi, dan kode pemulihan pengguna tersebut telah dihapus di backend (`two_factor_secret = null`, `two_factor_confirmed_at = null`, `two_factor_recovery_codes = null`).
+     - Tombol ikon *"Reset 2FA"* pada baris pengguna tersebut otomatis menghilang karena status `two_factor_enabled` telah menjadi `false`.
+     - Tindakan tercatat rapi di tabel `audit_logs` dengan aksi `'reset_two_factor'` beserta alasan yang dimasukkan.
+     - Saat pengguna tersebut login berikutnya, sistem akan mewajibkan pengguna untuk melakukan pengaturan 2FA dari awal.
 
 ---
 
@@ -592,7 +592,7 @@ php artisan semadiksi:diagnosa-sso 4330024012
 | **Impor Penilaian Excel** | Penilaian Karya | `/admin/penilaian` | `"Impor Nilai (.xlsx / .csv)"` &rarr; `"Unggah & Perbarui Nilai"` | **Tersedia di UI** |
 | **Aktivasi 2FA** | Halaman Masuk | `/two-factor/setup` | `"Konfirmasi & Aktifkan 2FA"` | **Tersedia di UI** |
 | **Tantangan 2FA** | Halaman Masuk | `/two-factor/challenge` | `"Verifikasi Masuk"` | **Tersedia di UI** |
-| **Reset 2FA oleh Admin** | Data Pengguna | `/admin/pengguna/{id}/reset-2fa` | *(Tidak ada tombol)* | **HANYA ENDPOINT BACKEND** *(Belum ada tombol di UI)* |
+| **Reset 2FA oleh Admin** | Data Pengguna | `/admin/pengguna` | Tombol `"Reset 2FA"` (ikon `lock_reset`) &rarr; Modal `"Reset 2FA"` | **Tersedia di UI** |
 | **Ajukan Persetujuan Kegiatan** | Kelola Kegiatan | `/admin/kegiatan/{id}` | `"Ajukan Persetujuan"` | **Tersedia di UI** |
 | **Setujui Kegiatan** | Kelola Kegiatan | `/admin/kegiatan/{id}` | `"Setujui Kegiatan"` | **Tersedia di UI** |
 | **Tolak Kegiatan** | Kelola Kegiatan | `/admin/kegiatan/{id}` | `"Tolak Kegiatan"` &rarr; `"Konfirmasi Penolakan"` | **Tersedia di UI** |

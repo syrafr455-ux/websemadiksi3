@@ -87,6 +87,23 @@ class User extends Authenticatable implements MustVerifyEmail
     ];
 
     /**
+     * The accessors to append to the model's array form.
+     *
+     * @var list<string>
+     */
+    protected $appends = [
+        'two_factor_enabled',
+    ];
+
+    /**
+     * Penanda apakah 2FA aktif untuk serialisasi array/JSON.
+     */
+    public function getTwoFactorEnabledAttribute(): bool
+    {
+        return $this->hasEnabledTwoFactor();
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

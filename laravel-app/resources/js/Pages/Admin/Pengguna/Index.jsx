@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { router, useForm } from '@inertiajs/react';
+import { router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { formatWib } from '@/lib/waktuWib';
 import {
@@ -137,6 +137,7 @@ export default function PenggunaIndex({
     lombaOptions = [],
     verifikatorEmailDomains = ['unusa.ac.id'],
 }) {
+    const { auth = {} } = usePage().props;
     const [search, setSearch] = useState(filters.q || '');
     const [roleFilter, setRoleFilter] = useState(filters.role || '');
     const [modalOpen, setModalOpen] = useState(false);
@@ -145,6 +146,34 @@ export default function PenggunaIndex({
     const [nomorTerbuka, setNomorTerbuka] = useState({});
     const [ubahKip, setUbahKip] = useState(null);
     const [alasanKip, setAlasanKip] = useState('');
+
+    const [reset2FaUser, setReset2FaUser] = useState(null);
+    const formReset2Fa = useForm({
+        reason: '',
+    });
+
+    const bukaModalReset2Fa = (u) => {
+        formReset2Fa.setData('reason', '');
+        formReset2Fa.clearErrors();
+        setReset2FaUser(u);
+    };
+
+    const tutupModalReset2Fa = () => {
+        setReset2FaUser(null);
+        formReset2Fa.reset();
+        formReset2Fa.clearErrors();
+    };
+
+    const simpanReset2Fa = (e) => {
+        e.preventDefault();
+        if (!reset2FaUser) return;
+        formReset2Fa.post(`/admin/pengguna/${reset2FaUser.id}/reset-2fa`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                tutupModalReset2Fa();
+            },
+        });
+    };
 
     // Nomor lengkap hanya diambil saat diminta (tercatat di audit log) dan tidak ikut di props halaman.
     const bukaNomor = async (penerimaId) => {
@@ -433,6 +462,18 @@ export default function PenggunaIndex({
                                                             <span className="material-symbols-outlined text-sm">verified</span>
                                                         </button>
                                                     )}
+                                                    {Boolean(auth?.user?.is_super_admin) && Boolean(u.two_factor_enabled) && auth?.user?.id !== u.id && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => bukaModalReset2Fa(u)}
+                                                            className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400"
+                                                            title="Reset 2FA"
+                                                            aria-label={`Reset 2FA ${u.name}`}
+                                                            data-reset-2fa={u.id}
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">lock_reset</span>
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => handleToggleBlock(u.id, u.name, u.is_blocked)}
                                                         className={`p-1.5 rounded-lg ${
@@ -514,6 +555,71 @@ export default function PenggunaIndex({
                             <div className="flex justify-end gap-2">
                                 <button type="button" onClick={() => setUbahKip(null)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold">Batal</button>
                                 <button type="submit" className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold">Simpan</button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+
+                {/* Modal Reset 2FA Pengguna */}
+                {reset2FaUser && (
+                    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+                        <form onSubmit={simpanReset2Fa} className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 space-y-4 text-xs" data-modal-reset-2fa>
+                            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-amber-400 text-lg">lock_reset</span>
+                                    <h3 className="text-base font-black text-white">Reset 2FA: {reset2FaUser.name}</h3>
+                                </div>
+                                <button type="button" onClick={tutupModalReset2Fa} className="p-1 rounded-lg text-slate-400 hover:text-white" aria-label="Tutup">
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+                            <p className="text-slate-300">
+                                Pengguna harus mengatur ulang 2FA saat login berikutnya. Masukkan alasan pengaturan ulang (minimal 5 karakter).
+                            </p>
+                            <div>
+                                <label htmlFor="alasan-reset-2fa" className="block font-bold text-slate-300 mb-1">
+                                    Alasan Reset 2FA <span className="text-rose-400">*</span>
+                                </label>
+                                <textarea
+                                    id="alasan-reset-2fa"
+                                    value={formReset2Fa.data.reason}
+                                    onChange={(e) => formReset2Fa.setData('reason', e.target.value)}
+                                    required
+                                    minLength={5}
+                                    rows={3}
+                                    placeholder="Contoh: Pengguna kehilangan perangkat autentikator dan kode pemulihan"
+                                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-amber-500"
+                                />
+                                {formReset2Fa.errors.reason && (
+                                    <p className="text-[10px] text-rose-400 mt-1">{formReset2Fa.errors.reason}</p>
+                                )}
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                                <button
+                                    type="button"
+                                    onClick={tutupModalReset2Fa}
+                                    disabled={formReset2Fa.processing}
+                                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white font-bold disabled:opacity-50"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={formReset2Fa.processing}
+                                    className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold flex items-center gap-2 disabled:opacity-50"
+                                >
+                                    {formReset2Fa.processing ? (
+                                        <>
+                                            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                            <span>Memproses...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="material-symbols-outlined text-sm">lock_reset</span>
+                                            <span>Reset 2FA</span>
+                                        </>
+                                    )}
+                                </button>
                             </div>
                         </form>
                     </div>
