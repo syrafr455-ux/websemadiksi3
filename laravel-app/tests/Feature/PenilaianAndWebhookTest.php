@@ -22,6 +22,7 @@ use Tests\TestCase;
 class PenilaianAndWebhookTest extends TestCase
 {
     use RefreshDatabase;
+
     protected function getSuperAdmin(): User
     {
         return User::where('role', UserRole::SuperAdmin->value)->first()

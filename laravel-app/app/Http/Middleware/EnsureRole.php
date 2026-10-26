@@ -12,12 +12,10 @@ class EnsureRole
 {
     /**
      * Handle an incoming request.
-     *
-     * @param  string  ...$roles
      */
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             if ($request->expectsJson() || $request->header('X-Inertia')) {
                 return response()->json(['message' => 'Unauthenticated.'], 401);
             }
@@ -66,7 +64,7 @@ class EnsureRole
         };
 
         // Cegah redirect loop jika rute saat ini sama dengan rute tujuan
-        if ($request->routeIs($targetRoute) || $request->routeIs($targetRoute . '.*')) {
+        if ($request->routeIs($targetRoute) || $request->routeIs($targetRoute.'.*')) {
             abort(403, 'Akses ditolak: Anda tidak memiliki hak akses untuk halaman ini.');
         }
 

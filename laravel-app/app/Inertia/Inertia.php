@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static LazyProp lazy(Closure $callback)
  * @method static HttpResponse location(string|RedirectResponse $url)
  *
- * @see \Inertia\ResponseFactory
+ * @see ResponseFactory
  */
 class Inertia extends Facade
 {

@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
 class MigrateLegacyActivitiesCommand extends Command
 {
     protected $signature = 'semadiksi:migrate-legacy-activities';
+
     protected $description = 'Migrasikan data tabel lama activities ke tabel kegiatan terstandarisasi';
 
     public function handle(): int
@@ -97,6 +98,7 @@ class MigrateLegacyActivitiesCommand extends Command
         }
 
         $this->info("Berhasil memigrasikan {$count} kegiatan ke sistem baru.");
+
         return Command::SUCCESS;
     }
 }

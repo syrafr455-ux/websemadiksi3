@@ -12,6 +12,7 @@ class KegiatanUpdatedEvent
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public Kegiatan $kegiatan;
+
     public array $changedAttributes;
 
     public function __construct(Kegiatan $kegiatan, array $changedAttributes = [])

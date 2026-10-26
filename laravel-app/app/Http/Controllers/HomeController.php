@@ -46,7 +46,7 @@ class HomeController extends Controller
                     'description' => $k->deskripsi,
                     'location' => $k->lokasi_nama ?: 'Kampus UNUSA',
                     'price' => (float) $k->biaya > 0 ? 'Rp '.number_format($k->biaya, 0, ',', '.') : 'Gratis',
-                    'image_url' => 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
+                    'image_url' => null,
                     'is_kegiatan' => true,
                 ];
             });

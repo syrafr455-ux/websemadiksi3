@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Enums\KegiatanStatus;
 use App\Enums\PeranSertifikat;
 use App\Enums\UserRole;
-use App\Models\Certificate;
 use App\Models\Kegiatan;
 use App\Models\Sertifikat;
 use App\Models\User;
@@ -31,7 +30,7 @@ class CertificateModuleFpdiAndPortalTest extends TestCase
      */
     protected function createDummyPdf(string $filename = 'template.pdf'): UploadedFile
     {
-        $fpdf = new Fpdi();
+        $fpdf = new Fpdi;
         $fpdf->AddPage('L', 'A4');
         $fpdf->SetFont('Arial', 'B', 16);
         $fpdf->Cell(0, 10, 'OFFICIAL TEST CERTIFICATE TEMPLATE', 0, 1, 'C');
@@ -162,7 +161,7 @@ class CertificateModuleFpdiAndPortalTest extends TestCase
         $kegiatan = $this->createKegiatan(['nama_kegiatan' => 'Seminar Kewirausahaan']);
         $user = User::factory()->create(['name' => 'Dewi Lestari']);
 
-        $service = new CertificateGeneratorService();
+        $service = new CertificateGeneratorService;
         $sertifikat = $service->generate($kegiatan, $user, PeranSertifikat::Peserta);
 
         $response = $this->get(route('verifikasi.sertifikat', ['code' => $sertifikat->nomor_sertifikat]));
@@ -213,7 +212,7 @@ class CertificateModuleFpdiAndPortalTest extends TestCase
         ]);
         $kegiatan = $this->createKegiatan(['nama_kegiatan' => 'Workshop UI/UX Design']);
 
-        $service = new CertificateGeneratorService();
+        $service = new CertificateGeneratorService;
         $sertifikat = $service->generate($kegiatan, $student);
 
         $response = $this->actingAs($student)->get(route('dashboard.sertifikat'));

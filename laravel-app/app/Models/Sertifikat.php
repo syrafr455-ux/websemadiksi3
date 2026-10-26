@@ -93,6 +93,7 @@ class Sertifikat extends Model
         }
 
         $realPath = Storage::disk('public')->path($this->file_pdf_path);
+
         return hash_file('sha256', $realPath) === $this->document_hash;
     }
 
@@ -117,7 +118,7 @@ class Sertifikat extends Model
     public static function generateCertificateNumber(Kegiatan|int|string $kegiatan, ?int $year = null): string
     {
         $code = $kegiatan instanceof Kegiatan
-            ? ($kegiatan->kategori ?: 'SMD') . $kegiatan->id
+            ? ($kegiatan->kategori ?: 'SMD').$kegiatan->id
             : (string) $kegiatan;
 
         return static::generateNomorSertifikat($code, $year);

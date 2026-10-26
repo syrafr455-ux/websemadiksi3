@@ -136,3 +136,17 @@ Ringkasan rancangan dari pemilik proyek. Ini target fitur, bukan deskripsi kode 
 ### Pembayaran otomatis
 - Gateway yang direkomendasikan: Tripay / Midtrans (QRIS dan Virtual Account).
 - Webhook otomatis mengonfirmasi tiket dan mengirim notifikasi email.
+
+## Skills Aktif
+- Referensi desain UI: .claude/skills/anti-slop-ui.md
+- Protokol validasi eksekusi: .claude/skills/anti-hallucination.md
+
+<!-- antislop:start -->
+## antislop
+Untuk pengerjaan UI, teks/copy, aksesibilitas, layout responsif, atau komentar kode, baca `DESIGN.md` (arah visual), `.agents/skills/antislop/SKILL.md` (core filter), dan skill spesifik terkait:
+- UI / visual: `.agents/skills/antislop-ui/SKILL.md`
+- Copy & teks: `.agents/skills/antislop-copywriting/SKILL.md`
+- Aksesibilitas & kontras: `.agents/skills/antislop-human/SKILL.md`
+- Layout mobile: `.agents/skills/antislop-layoutmobile/SKILL.md`
+- Kebersihan komentar kode: `.agents/skills/antislop-code/SKILL.md`
+<!-- antislop:end -->

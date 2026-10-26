@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -9,16 +10,17 @@ use Tests\TestCase;
 class AdminPenggunaTest extends TestCase
 {
     use RefreshDatabase;
+
     protected function getSuperAdmin(): User
     {
-        return User::where('role', \App\Enums\UserRole::SuperAdmin->value)->first()
-            ?? User::factory()->create(['role' => \App\Enums\UserRole::SuperAdmin]);
+        return User::where('role', UserRole::SuperAdmin->value)->first()
+            ?? User::factory()->create(['role' => UserRole::SuperAdmin]);
     }
 
     protected function getStudent(): User
     {
-        return User::where('role', \App\Enums\UserRole::MahasiswaKipk->value)->first()
-            ?? User::factory()->create(['role' => \App\Enums\UserRole::MahasiswaKipk]);
+        return User::where('role', UserRole::MahasiswaKipk->value)->first()
+            ?? User::factory()->create(['role' => UserRole::MahasiswaKipk]);
     }
 
     public function test_admin_can_access_admin_pengguna_route(): void
@@ -28,7 +30,7 @@ class AdminPenggunaTest extends TestCase
 
         // Access via route name 'admin.users' and URL '/admin/pengguna'
         $response = $this->actingAs($admin)->get(route('admin.users'));
-        
+
         $response->assertStatus(200);
         $response->assertSee('Data Pengguna');
     }

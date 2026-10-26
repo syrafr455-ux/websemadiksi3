@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\UserRole;
 use App\Models\Activity;
 use App\Models\ActivityRegistration;
 use App\Models\Attendance;
@@ -97,7 +98,7 @@ class DatabaseSeeder extends Seeder
                 'university' => 'Universitas Nahdlatul Ulama Surabaya',
                 'kip_status' => 'Umum',
                 'verification_status' => 'Verified',
-                'role' => \App\Enums\UserRole::SuperAdmin,
+                'role' => UserRole::SuperAdmin,
                 'is_blocked' => false,
             ],
             config('seeding.admin_password'),
@@ -115,7 +116,7 @@ class DatabaseSeeder extends Seeder
                 'university' => 'Universitas Nahdlatul Ulama Surabaya',
                 'kip_status' => 'KIP UNUSA',
                 'verification_status' => 'Verified',
-                'role' => \App\Enums\UserRole::MahasiswaKipk,
+                'role' => UserRole::MahasiswaKipk,
                 'is_blocked' => false,
             ],
             config('seeding.mahasiswa_password'),
@@ -133,7 +134,7 @@ class DatabaseSeeder extends Seeder
                 'university' => 'Universitas Nahdlatul Ulama Surabaya',
                 'kip_status' => 'KIP UNUSA',
                 'verification_status' => 'Verified',
-                'role' => \App\Enums\UserRole::MahasiswaKipk,
+                'role' => UserRole::MahasiswaKipk,
                 'is_blocked' => false,
             ],
             config('seeding.mahasiswa_password'),
@@ -249,7 +250,7 @@ class DatabaseSeeder extends Seeder
             'issued_date' => '2026-11-16',
             'signatories' => [
                 ['name' => 'Dr. H. Ahmad Zainuddin, M.Pd', 'title' => 'Direktur Kemahasiswaan UNUSA'],
-                ['name' => 'Muhammad Rifqi Ramadhani', 'title' => 'Ketua Umum SEMADIKSI UNUSA']
+                ['name' => 'Muhammad Rifqi Ramadhani', 'title' => 'Ketua Umum SEMADIKSI UNUSA'],
             ],
             'file_url' => 'https://drive.google.com/file/d/1_Sertifikat_LKMB/view',
         ]);
@@ -283,7 +284,7 @@ class DatabaseSeeder extends Seeder
                 'Warga Negara Indonesia terdaftar di DTKS Kemensos RI.',
                 'Memiliki Kartu KIP Kuliah / KKS / Bukti SKTM dari kelurahan resmi.',
                 'Mahasiswa aktif UNUSA berstatus registrasi valid.',
-                'Mempertahankan IPK minimal 3.00 setiap semester evaluasi.'
+                'Mempertahankan IPK minimal 3.00 setiap semester evaluasi.',
             ],
             'description' => 'Program bantuan biaya pendidikan dari pemerintah bagi lulusan SMA/SMK sederajat yang memiliki potensi akademik baik namun memiliki keterbatasan ekonomi untuk menempuh pendidikan tinggi.',
             'banner_img' => 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=800&auto=format&fit=crop&q=80',

@@ -15,7 +15,6 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use setasign\Fpdi\Fpdi;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
@@ -24,11 +23,6 @@ class CertificateGeneratorService
     /**
      * Stamping template PDF resmi menggunakan FPDI dan vector QR matrix.
      *
-     * @param  string  $templatePdfPathOrContent
-     * @param  string  $nomorSertifikat
-     * @param  string  $namaPenerima
-     * @param  string|null  $kegiatanTitle
-     * @param  array|null  $schemaConfig
      * @return string Konten PDF hasil stamping
      */
     public function stampPdfTemplateContent(
@@ -40,14 +34,14 @@ class CertificateGeneratorService
     ): string {
         $isRawContent = ! @is_file($templatePdfPathOrContent);
         if ($isRawContent) {
-            $tmpFile = tempnam(sys_get_temp_dir(), 'tpl_cert_') . '.pdf';
+            $tmpFile = tempnam(sys_get_temp_dir(), 'tpl_cert_').'.pdf';
             file_put_contents($tmpFile, $templatePdfPathOrContent);
             $sourceFile = $tmpFile;
         } else {
             $sourceFile = $templatePdfPathOrContent;
         }
 
-        $pdf = new Fpdi();
+        $pdf = new Fpdi;
         $pageCount = $pdf->setSourceFile($sourceFile);
 
         for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
@@ -63,7 +57,6 @@ class CertificateGeneratorService
 
                 // 1. Nomor Seri Sertifikat: Dihapus dari tampilan kasat mata dokumen
                 // Nomor seri tetap tersimpan di database dan tertanam di dalam URL QR Code validasi.
-
 
                 // 2. Nama Lengkap Penerima di area tengah dokumen
                 $nameY = $schemaConfig['name_pos_y'] ?? ($h * 0.45);
@@ -140,7 +133,7 @@ class CertificateGeneratorService
         // 1. Tentukan nomor sertifikat format CERT-
         $nomorSertifikat = $customNomor ? trim($customNomor) : Sertifikat::generateCertificateNumber($kegiatan);
         if (! str_starts_with($nomorSertifikat, 'CERT-')) {
-            $nomorSertifikat = 'CERT-' . ltrim($nomorSertifikat, '-');
+            $nomorSertifikat = 'CERT-'.ltrim($nomorSertifikat, '-');
         }
 
         // 2. Tentukan berkas template PDF
@@ -174,15 +167,15 @@ class CertificateGeneratorService
                 'namaLengkap' => $namaPenerima,
                 'nim' => $user?->nim ?? '-',
                 'prodi' => $user?->prodi ?? '-',
-                'qrCodeBase64' => 'data:image/svg+xml;base64,' . base64_encode(
+                'qrCodeBase64' => 'data:image/svg+xml;base64,'.base64_encode(
                     QrCode::format('svg')->size(130)->margin(1)->generate(url("/verifikasi?code={$nomorSertifikat}"))
                 ),
                 'backgroundBase64' => null,
                 'tanggalTerbit' => Wib::sekarang()->translatedFormat('d F Y'),
                 'tanggalKegiatan' => $kegiatan->tanggal_mulai ? Wib::dari($kegiatan->tanggal_mulai)->translatedFormat('d F Y') : Wib::sekarang()->translatedFormat('d F Y'),
             ])->setPaper('a4', 'landscape')
-              ->setOption('isRemoteEnabled', true)
-              ->setOption('isHtml5ParserEnabled', true);
+                ->setOption('isRemoteEnabled', true)
+                ->setOption('isHtml5ParserEnabled', true);
             $pdfContent = $pdf->output();
         }
 
@@ -213,12 +206,6 @@ class CertificateGeneratorService
 
     /**
      * Generate sertifikat dinamis untuk satu penerima (alur presensi mandiri / registrasi).
-     *
-     * @param  Kegiatan  $kegiatan
-     * @param  KegiatanPresensi|KegiatanRegistration|User|array  $recipient
-     * @param  PeranSertifikat|string|null  $peran
-     * @param  int|null  $presensiId
-     * @return Sertifikat
      */
     public function generate(
         Kegiatan $kegiatan,
@@ -273,7 +260,7 @@ class CertificateGeneratorService
                 ->margin(1)
                 ->generate($verificationUrl);
 
-            $qrCodeBase64 = 'data:image/svg+xml;base64,' . base64_encode($qrSvg);
+            $qrCodeBase64 = 'data:image/svg+xml;base64,'.base64_encode($qrSvg);
 
             // Background template gambar kustom jika ada
             $backgroundBase64 = null;
@@ -281,7 +268,7 @@ class CertificateGeneratorService
                 $mime = mime_content_type($templatePath) ?: 'image/png';
                 $bgData = file_get_contents($templatePath);
                 if ($bgData !== false) {
-                    $backgroundBase64 = 'data:' . $mime . ';base64,' . base64_encode($bgData);
+                    $backgroundBase64 = 'data:'.$mime.';base64,'.base64_encode($bgData);
                 }
             }
 
@@ -363,7 +350,6 @@ class CertificateGeneratorService
     /**
      * Generate sertifikat secara massal untuk seluruh peserta yang telah presensi pada kegiatan tertentu.
      *
-     * @param  Kegiatan  $kegiatan
      * @return int Jumlah sertifikat berhasil dibuat
      */
     public function generateForKegiatan(Kegiatan $kegiatan): int
@@ -396,6 +382,7 @@ class CertificateGeneratorService
 
         if ($recipient instanceof KegiatanRegistration) {
             $user = $recipient->participantUser ?? $recipient->bookerUser;
+
             return [
                 'user_id' => $recipient->participant_user_id ?? $recipient->booker_user_id,
                 'nama_lengkap' => $recipient->ticket_holder_name ?: ($user?->name ?? 'Peserta Kegiatan'),

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Contracts\UnusaAcademicProvider;
 use App\Enums\UserRole;
 use App\Models\Fakultas;
+use App\Models\MasterMahasiswaUnusa;
 use App\Models\ProgramStudi;
 use App\Models\User;
 use App\Services\Academic\DatabaseUnusaAcademicProvider;
@@ -81,7 +82,7 @@ class ReferensiAkademikTest extends TestCase
 
         // cariMahasiswaByNim membaca master_mahasiswa_unusa (bukan tabel users).
         $this->assertNull($provider->cariMahasiswaByNim('2241010001'));
-        \App\Models\MasterMahasiswaUnusa::create([
+        MasterMahasiswaUnusa::create([
             'nim' => '2241010001', 'nama_lengkap' => 'Mahasiswa Keperawatan', 'email_kampus' => 'kep@student.unusa.ac.id',
             'program_studi_id' => $prodi->id, 'angkatan' => '2024',
         ]);

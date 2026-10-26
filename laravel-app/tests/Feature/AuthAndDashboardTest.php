@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class AuthAndDashboardTest extends TestCase
 {
     use RefreshDatabase;
+
     public function test_unauthenticated_user_redirected_to_login(): void
     {
         $response = $this->get(route('dashboard.index'));
@@ -17,9 +20,9 @@ class AuthAndDashboardTest extends TestCase
 
     public function test_student_can_login_and_access_dashboard(): void
     {
-        $student = User::where('role', \App\Enums\UserRole::MahasiswaKipk->value)->first()
-            ?? User::factory()->create(['role' => \App\Enums\UserRole::MahasiswaKipk]);
-        $student->update(['password' => \Illuminate\Support\Facades\Hash::make('Mahasiswa2026!')]);
+        $student = User::where('role', UserRole::MahasiswaKipk->value)->first()
+            ?? User::factory()->create(['role' => UserRole::MahasiswaKipk]);
+        $student->update(['password' => Hash::make('Mahasiswa2026!')]);
         $this->assertNotNull($student);
 
         $loginResponse = $this->post(route('login.post'), [
@@ -37,9 +40,9 @@ class AuthAndDashboardTest extends TestCase
 
     public function test_admin_can_login_and_access_admin_dashboard(): void
     {
-        $admin = User::where('role', \App\Enums\UserRole::SuperAdmin->value)->first()
-            ?? User::factory()->create(['role' => \App\Enums\UserRole::SuperAdmin]);
-        $admin->update(['password' => \Illuminate\Support\Facades\Hash::make('AdminSemadiksi2026!')]);
+        $admin = User::where('role', UserRole::SuperAdmin->value)->first()
+            ?? User::factory()->create(['role' => UserRole::SuperAdmin]);
+        $admin->update(['password' => Hash::make('AdminSemadiksi2026!')]);
         $this->assertNotNull($admin);
 
         $loginResponse = $this->post(route('admin.login.post'), [
@@ -57,10 +60,10 @@ class AuthAndDashboardTest extends TestCase
 
     public function test_student_cannot_access_admin_dashboard(): void
     {
-        $student = User::where('role', \App\Enums\UserRole::MahasiswaKipk->value)->where('is_blocked', false)->first()
-            ?? User::factory()->create(['role' => \App\Enums\UserRole::MahasiswaKipk, 'is_blocked' => false]);
+        $student = User::where('role', UserRole::MahasiswaKipk->value)->where('is_blocked', false)->first()
+            ?? User::factory()->create(['role' => UserRole::MahasiswaKipk, 'is_blocked' => false]);
         $response = $this->actingAs($student)->get(route('admin.dashboard'));
-        
+
         $response->assertRedirect(route('admin.login'));
     }
 }

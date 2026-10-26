@@ -9,7 +9,6 @@ use App\Enums\UserRole;
 use App\Events\KegiatanUpdatedEvent;
 use App\Models\Kegiatan;
 use App\Models\KegiatanRegistration;
-use App\Models\KegiatanSeat;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;

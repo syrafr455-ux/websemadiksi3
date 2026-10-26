@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\KegiatanStatus;
+use App\Enums\RegistrationPaymentStatus;
 use App\Enums\SeatStatus;
 use App\Enums\UserRole;
 use App\Models\Activity;
@@ -29,7 +30,7 @@ class KegiatanDraftTest extends TestCase
     protected function createKegiatan(KegiatanStatus $status, bool $withSeat = true): Kegiatan
     {
         $kegiatan = Kegiatan::create([
-            'nama_kegiatan' => 'Kegiatan Status ' . $status->value,
+            'nama_kegiatan' => 'Kegiatan Status '.$status->value,
             'kategori' => 'seminar',
             'metode_pelaksanaan' => 'offline',
             'sasaran_peserta' => 'umum',
@@ -133,7 +134,7 @@ class KegiatanDraftTest extends TestCase
             'participant_user_id' => $peserta->id,
             'nomor_tiket' => 'TIK-DRAFT-001',
             'participant_name' => $peserta->name,
-            'status_pembayaran' => \App\Enums\RegistrationPaymentStatus::Free,
+            'status_pembayaran' => RegistrationPaymentStatus::Free,
             'needs_seat_reselection' => true,
         ]);
 

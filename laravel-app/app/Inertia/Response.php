@@ -3,16 +3,11 @@
 namespace Inertia;
 
 use Closure;
-use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Http\Response as HttpResponse;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Response as ResponseFactory;
-use Illuminate\Support\Facades\View;
 
 class Response implements Responsable
 {
@@ -30,6 +25,7 @@ class Response implements Responsable
     public function rootView(string $rootView): self
     {
         $this->rootView = $rootView;
+
         return $this;
     }
 
@@ -46,20 +42,22 @@ class Response implements Responsable
         $isPartial = $request->header('X-Inertia-Partial-Component') === $this->component;
 
         foreach ($props as $key => $value) {
-            if ($isPartial && !empty($only)) {
-                if (!in_array($key, $only, true)) {
+            if ($isPartial && ! empty($only)) {
+                if (! in_array($key, $only, true)) {
                     unset($props[$key]);
+
                     continue;
                 }
             } elseif ($value instanceof LazyProp) {
                 unset($props[$key]);
+
                 continue;
             }
 
             $props[$key] = $this->resolveProp($value);
         }
 
-        $url = $request->getBaseUrl() . $request->getRequestUri();
+        $url = $request->getBaseUrl().$request->getRequestUri();
 
         $page = [
             'component' => $this->component,

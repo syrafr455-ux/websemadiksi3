@@ -18,9 +18,13 @@ use Illuminate\Support\Str;
 class PaymentGatewayService
 {
     protected string $merchantCode;
+
     protected string $apiKey;
+
     protected string $privateKey;
+
     protected bool $isSandbox;
+
     protected string $baseUrl;
 
     public function __construct()
@@ -37,10 +41,8 @@ class PaymentGatewayService
     /**
      * Membuat closed transaction di Tripay untuk pendaftaran berbayar.
      *
-     * @param  User  $payer
      * @param  array<int, KegiatanRegistration>  $registrations
      * @param  string  $methodCode  Kode channel Tripay (e.g. QRIS, BRIVA, BNIVA, BCAVA)
-     * @return Payment
      */
     public function createPaymentTransaction(User $payer, array $registrations, string $methodCode = 'QRIS'): Payment
     {
@@ -162,13 +164,13 @@ class PaymentGatewayService
         }
 
         $calculated = hash_hmac('sha256', $rawContent, $key);
+
         return hash_equals($calculated, $incomingSignature);
     }
 
     /**
      * Memproses notifikasi callback webhook Tripay.
      *
-     * @param  array  $payload
      * @return array{success: bool, message: string}
      */
     public function processWebhook(array $payload): array

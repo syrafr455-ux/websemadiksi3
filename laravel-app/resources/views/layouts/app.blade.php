@@ -26,7 +26,7 @@
             <div class="flex items-center justify-between h-20">
                 {{-- Logo & Brand --}}
                 <a href="{{ route('home') }}" class="flex items-center gap-3 group">
-                    <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-primary to-primary-container flex items-center justify-center text-white shadow-md shadow-primary/20 group-hover:scale-105 transition-transform duration-300">
+                    <div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-sm transition-transform duration-200">
                         <span class="material-symbols-outlined text-2xl">school</span>
                     </div>
                     <div>
@@ -52,12 +52,12 @@
                 <div class="hidden md:flex items-center gap-3">
                     @auth
                         @if(Auth::user()->isStaff())
-                            <a href="{{ \App\Support\MenuAdmin::beranda(Auth::user()) }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm shadow-md transition-all">
+                            <a href="{{ \App\Support\MenuAdmin::beranda(Auth::user()) }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm shadow-sm transition-all">
                                 <span class="material-symbols-outlined text-lg">admin_panel_settings</span>
                                 Panel Admin
                             </a>
                         @else
-                            <a href="{{ route('dashboard.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-white font-semibold text-sm shadow-md shadow-primary/20 transition-all">
+                            <a href="{{ route('dashboard.index') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-white font-semibold text-sm shadow-sm transition-all">
                                 <span class="material-symbols-outlined text-lg">dashboard</span>
                                 Dashboard Mahasiswa
                             </a>
@@ -66,7 +66,7 @@
                         <a href="{{ route('login') }}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-primary hover:bg-primary/10 transition-colors">
                             Masuk
                         </a>
-                        <a href="{{ route('register') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-white font-semibold text-sm shadow-md shadow-primary/20 transition-all hover:scale-105 active:scale-95">
+                        <a href="{{ route('register') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-white font-semibold text-sm shadow-sm transition-all hover:scale-105 active:scale-95">
                             Daftar Akun
                             <span class="material-symbols-outlined text-base">arrow_forward</span>
                         </a>

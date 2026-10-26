@@ -34,8 +34,8 @@ class AuditLog extends Model
         return static::create([
             'user_id' => $userId,
             'action' => $action,
-            'subject_type' => $subject instanceof \Illuminate\Database\Eloquent\Model ? get_class($subject) : (is_string($subject) ? $subject : null),
-            'subject_id' => $subject instanceof \Illuminate\Database\Eloquent\Model ? $subject->getKey() : null,
+            'subject_type' => $subject instanceof Model ? get_class($subject) : (is_string($subject) ? $subject : null),
+            'subject_id' => $subject instanceof Model ? $subject->getKey() : null,
             'description' => $description,
             'metadata' => $metadata,
             'ip_address' => request()?->ip(),

@@ -3,13 +3,10 @@
 namespace Inertia;
 
 use Closure;
-use Illuminate\Contracts\Support\Arrayable;
 
 class LazyProp
 {
-    public function __construct(protected Closure $callback)
-    {
-    }
+    public function __construct(protected Closure $callback) {}
 
     public function __invoke(): mixed
     {

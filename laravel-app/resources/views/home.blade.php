@@ -4,8 +4,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
                 <div class="lg:col-span-7 space-y-5">
-                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold">
-                        <span class="w-2 h-2 rounded-full bg-primary"></span>
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary text-xs font-semibold tracking-wide">
                         Sentra Komunikasi Mahasiswa KIP-K UNUSA
                     </div>
 
@@ -35,58 +34,65 @@
                     </div>
                 </div>
 
-                {{-- Hero Visual Service Info Card (Static) --}}
+                {{-- Layanan Cepat Mahasiswa (Interaktif & Berfungsi Penuh) --}}
                 <div class="lg:col-span-5 relative">
                     <div class="relative mx-auto max-w-md bg-surface border border-surface-variant rounded-2xl p-6 sm:p-7 shadow-sm space-y-5">
                         <div class="flex items-center justify-between pb-4 border-b border-surface-variant/40">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-                                    <span class="material-symbols-outlined text-xl">verified_user</span>
+                                    <span class="material-symbols-outlined text-xl">hub</span>
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-bold text-on-surface">Layanan Terpadu Mahasiswa</h4>
-                                    <p class="text-xs text-outline">Portal Resmi KIP-Kuliah UNUSA</p>
+                                    <h2 class="text-sm font-bold text-on-surface">Layanan Terpadu Mahasiswa</h2>
+                                    <p class="text-xs text-outline">Akses cepat portal mahasiswa UNUSA</p>
                                 </div>
                             </div>
-                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
-                                Resmi
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                Aktif
                             </span>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="p-4 rounded-2xl bg-surface-container border border-surface-variant/30">
-                                <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-2">
+                        <div class="grid grid-cols-2 gap-3.5">
+                            <a href="{{ route('dashboard.index') }}" class="p-3.5 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-variant/40 transition-colors group block">
+                                <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-2 group-hover:bg-primary group-hover:text-white transition-colors">
                                     <span class="material-symbols-outlined text-lg">folder_shared</span>
                                 </div>
-                                <span class="text-xs font-bold text-on-surface block">Pelaporan KIP-K</span>
+                                <span class="text-xs font-bold text-on-surface group-hover:text-primary transition-colors block">Pelaporan KIP-K</span>
                                 <span class="text-[11px] text-outline mt-0.5 block">Monev & Berkas Berkala</span>
-                            </div>
-                            <div class="p-4 rounded-2xl bg-surface-container border border-surface-variant/30">
-                                <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center mb-2">
+                            </a>
+
+                            <a href="{{ route('dashboard.kegiatan') }}" class="p-3.5 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-variant/40 transition-colors group block">
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-700 flex items-center justify-center mb-2 group-hover:bg-amber-600 group-hover:text-white transition-colors">
                                     <span class="material-symbols-outlined text-lg">event</span>
                                 </div>
-                                <span class="text-xs font-bold text-on-surface block">Agenda Kegiatan</span>
-                                <span class="text-[11px] text-outline mt-0.5 block">Seminar, Workshop & Lomba</span>
-                            </div>
-                            <div class="p-4 rounded-2xl bg-surface-container border border-surface-variant/30">
-                                <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center mb-2">
+                                <span class="text-xs font-bold text-on-surface group-hover:text-amber-700 transition-colors block">Agenda Kegiatan</span>
+                                <span class="text-[11px] text-outline mt-0.5 block">Daftar & E-Tiket Kursi</span>
+                            </a>
+
+                            <a href="{{ route('verifikasi.sertifikat') }}" class="p-3.5 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-variant/40 transition-colors group block">
+                                <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-700 flex items-center justify-center mb-2 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                                     <span class="material-symbols-outlined text-lg">workspace_premium</span>
                                 </div>
-                                <span class="text-xs font-bold text-on-surface block">E-Sertifikat Digital</span>
-                                <span class="text-[11px] text-outline mt-0.5 block">Terverifikasi Resmi</span>
-                            </div>
-                            <div class="p-4 rounded-2xl bg-surface-container border border-surface-variant/30">
-                                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-2">
+                                <span class="text-xs font-bold text-on-surface group-hover:text-blue-700 transition-colors block">E-Sertifikat Digital</span>
+                                <span class="text-[11px] text-outline mt-0.5 block">Pengecekan Seri & TTE</span>
+                            </a>
+
+                            <a href="{{ route('absensi.public') }}" class="p-3.5 rounded-xl bg-surface-container hover:bg-surface-container-high border border-surface-variant/40 transition-colors group block">
+                                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-700 flex items-center justify-center mb-2 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                                     <span class="material-symbols-outlined text-lg">how_to_reg</span>
                                 </div>
-                                <span class="text-xs font-bold text-on-surface block">Presensi Mandiri</span>
+                                <span class="text-xs font-bold text-on-surface group-hover:text-emerald-700 transition-colors block">Presensi Mandiri</span>
                                 <span class="text-[11px] text-outline mt-0.5 block">Kehadiran Kegiatan Terpadu</span>
-                            </div>
+                            </a>
                         </div>
 
-                        <div class="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 flex items-center justify-between text-xs">
-                            <span class="font-medium text-on-surface">Pusat Layanan Mahasiswa:</span>
-                            <span class="font-bold text-primary">SEMADIKSI UNUSA</span>
+                        <div class="pt-3 border-t border-surface-variant/40 flex items-center justify-between text-xs">
+                            <span class="text-outline">Semboyan Organisasi:</span>
+                            <a href="{{ route('profil.semadiksi') }}" class="font-bold text-primary hover:underline inline-flex items-center gap-1">
+                                #SeduluranSelawase
+                                <span class="material-symbols-outlined text-xs">arrow_forward</span>
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -112,15 +118,27 @@
                 @forelse($activities as $act)
                     <div class="bg-surface rounded-2xl border border-surface-variant overflow-hidden shadow-sm hover:border-primary/40 transition-all flex flex-col justify-between">
                         <div>
-                            <div class="h-48 overflow-hidden relative">
-                                <img src="{{ $act->image_url }}" alt="{{ $act->title }}" class="w-full h-full object-cover">
-                                <div class="absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface/95 text-primary shadow-sm">
-                                    {{ $act->category }}
+                            @if(!empty($act->image_url))
+                                <div class="h-44 overflow-hidden relative border-b border-surface-variant/40">
+                                    <img src="{{ $act->image_url }}" alt="{{ $act->title }}" class="w-full h-full object-cover">
+                                    <div class="absolute top-3 right-3 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-surface/95 text-primary shadow-sm">
+                                        {{ $act->category }}
+                                    </div>
+                                    <div class="absolute bottom-3 left-3 px-2 py-0.5 rounded text-[11px] font-medium bg-black/75 text-white">
+                                        {{ $act->date_text }}
+                                    </div>
                                 </div>
-                                <div class="absolute bottom-3 left-3 px-2 py-0.5 rounded text-[11px] font-medium bg-black/70 text-white">
-                                    {{ $act->date_text }}
+                            @else
+                                <div class="p-6 pb-2 border-b border-surface-variant/40 bg-surface-container-low flex items-center justify-between">
+                                    <span class="px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-primary/10 text-primary">
+                                        {{ $act->category }}
+                                    </span>
+                                    <span class="inline-flex items-center gap-1.5 text-xs font-medium text-outline">
+                                        <span class="material-symbols-outlined text-sm text-primary">calendar_today</span>
+                                        {{ $act->date_text }}
+                                    </span>
                                 </div>
-                            </div>
+                            @endif
                             <div class="p-6 space-y-3">
                                 <h3 class="text-base font-bold text-on-surface line-clamp-2">{{ $act->title }}</h3>
                                 <p class="text-xs text-outline line-clamp-3 leading-relaxed">{{ $act->description }}</p>

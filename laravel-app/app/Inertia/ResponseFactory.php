@@ -11,7 +11,9 @@ use Illuminate\Support\Arr;
 class ResponseFactory
 {
     protected string $rootView = 'app';
+
     protected array $sharedProps = [];
+
     protected string|Closure|null $version = null;
 
     public function setRootView(string $name): void
@@ -49,6 +51,7 @@ class ResponseFactory
         }
 
         $this->version = $version;
+
         return null;
     }
 

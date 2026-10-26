@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\PeranSertifikat;
 use App\Models\Certificate;
 use App\Models\Kegiatan;
-use App\Models\KegiatanPresensi;
 use App\Models\Sertifikat;
 use App\Services\CertificateGeneratorService;
+use App\Support\Wib;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -78,7 +78,7 @@ class CertificateController extends Controller
             $uploadedFile = $request->file('document_file');
             if ($uploadedFile->isValid()) {
                 $uploadedHash = hash_file('sha256', $uploadedFile->getRealPath());
-                
+
                 // Cari sertifikat berdasarkan hash dokumen
                 $sertifikat = Sertifikat::with(['kegiatan', 'user', 'presensi'])
                     ->where('document_hash', $uploadedHash)
@@ -106,7 +106,7 @@ class CertificateController extends Controller
 
         // Jika kode diinputkan (dan belum dicocokkan via file hash)
         if ($code && ! $sertifikat && ! $mockCertificate) {
-            $likeOp = \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $likeOp = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
             $sertifikat = Sertifikat::with(['kegiatan', 'user', 'presensi'])
                 ->where('nomor_sertifikat', $code)
                 ->orWhere('nomor_sertifikat', $likeOp, $code)
@@ -132,7 +132,7 @@ class CertificateController extends Controller
         $documentData = null;
         if ($sertifikat) {
             $formattedDate = $sertifikat->issued_at
-                ? \App\Support\Wib::dari($sertifikat->issued_at)->translatedFormat('d F Y, H:i') . ' WIB'
+                ? Wib::dari($sertifikat->issued_at)->translatedFormat('d F Y, H:i').' WIB'
                 : '-';
 
             $documentData = [
@@ -151,7 +151,7 @@ class CertificateController extends Controller
             ];
         } elseif ($legacyCertificate) {
             $formattedDate = $legacyCertificate->issued_date
-                ? \App\Support\Wib::dari($legacyCertificate->issued_date)->translatedFormat('d F Y, H:i') . ' WIB'
+                ? Wib::dari($legacyCertificate->issued_date)->translatedFormat('d F Y, H:i').' WIB'
                 : '-';
 
             $documentData = [
@@ -160,7 +160,7 @@ class CertificateController extends Controller
                 'title' => $legacyCertificate->activity_title,
                 'recipient_name' => $legacyCertificate->user_name,
                 'author' => 'SEMADIKSI Divisi Kemahasiswaan',
-                'hash' => hash('sha256', $legacyCertificate->code . $legacyCertificate->user_name),
+                'hash' => hash('sha256', $legacyCertificate->code.$legacyCertificate->user_name),
                 'date' => $formattedDate,
                 'download_url' => null,
                 'signatories' => [
