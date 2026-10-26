@@ -603,6 +603,73 @@ Status pelacakan pengerjaan bertahap:
     - **Dokumentasi Manual**:
       - Panduan uji manual di `docs/panduan-uji-manual.md` diperbarui mencakup alur tombol UI dan modal reset 2FA, serta status pada Matriks Rekapitulasi diubah menjadi **Tersedia di UI**.
 
+- [x] **Bagian 22: Perapian Kebijakan SSO, Aktivasi Akun, Keamanan Reset 2FA, dan Audit .claude**
+  - **BAGIAN A. PEMULIHAN KEBIJAKAN SSO LAMA UNTUK MAHASISWA NON-KIP-K**:
+    - **Bukti Riwayat Git**:
+      - Commit sebelum perubahan: `48d1b09^` yaitu commit `74e33ce8dccb350cdff8556ad8f69ae72fe06a2b` (short: `74e33ce`).
+      - Pembuktian via `git show 74e33ce:laravel-app/app/Services/Auth/KeycloakService.php` dan `git show 74e33ce:laravel-app/tests/Feature/KeycloakSsoAndSecurityTest.php`.
+    - **Perilaku Lama yang Tepat (Terbukti Dari Kode 74e33ce)**:
+      - Bila NIM ada di data master mahasiswa UNUSA tetapi bukan penerima KIP-K:
+        - Jika akun belum ada di tabel `users`: akun dibuat otomatis lewat SSO (identitas sudah dibuktikan IdP Keycloak).
+        - Peran akun yang dibuat: `UserRole::UserUmum` (`role = 'user_umum'`), `kip_status = 'Umum'`, `is_unusa = true`, `jalur_pendaftaran = User::JALUR_UNUSA`.
+        - Status verifikasi: `verification_status = 'Verified'`, `email_verified_at = now()`.
+        - Penautan keycloak_sub: ditautkan langsung ke `$sub` (`keycloak_sub = $sub`).
+        - Kata sandi: diisi hash acak (`Hash::make(Str::random(32))`).
+        - Audit log: **TIDAK** mencatat audit log `sso_activation` (aksi `sso_activation` hanya diperuntukkan bagi aktivasi mahasiswa KIP-K). Log info aplikasi mencatat: `Keycloak SSO: buat akun user umum via SSO [NIM: {nimTersamar}]`.
+        - Respon callback: Login sukses dan diarahkan ke `route('dashboard.index')`.
+    - **Pemulihan pada KeycloakService**:
+      - Logika evaluasi di `KeycloakService::evaluasiLoginSso` memulihkan pembuatan akun baru `UserUmum` bagi mahasiswa non-KIP-K (`kodeAlasan: 'buat akun baru via SSO'`, `pesan: 'Siap dibuat sebagai User Umum via SSO'`, `perluDibuat: true`).
+      - Pada `KeycloakService::matchOrCreateUser`, akun non-KIP-K dibuat sebagai `UserRole::UserUmum` dengan `email_verified_at = now()` dan `keycloak_sub = $sub`.
+      - Mempertahankan seluruh perbaikan lain: aktivasi mahasiswa KIP-K tertunda yang dibuat admin, normalisasi NIM satu pintu (`NormalisasiNim::bersihkan`), deteksi sub bentrok & akun ganda ber-kode referensi `SSO-XXXX`, logging tersamar (`Masking::nim`), dan urutan pengecekan aman.
+    - **Pengembalian Ekspektasi Tes Lama di `KeycloakSsoAndSecurityTest`**:
+      - `test_callback_sukses_membuat_mahasiswa_umum_bila_bukan_penerima_kipk`: menguji pendaftaran otomatis mahasiswa non-KIP-K ke peran `UserUmum` terverifikasi.
+      - `test_role_tidak_bisa_naik_lewat_sso`: menguji bahwa klaim peran dari IdP diabaikan dan akun tetap dibuat sebagai `UserRole::UserUmum`.
+      - `test_logging_alasan_kegagalan_sso_pengguna_belum_teraktivasi_tanpa_data_pribadi`: menguji pencatatan log alasan saat akun di users belum teraktivasi (`email_verified_at === null`).
+    - **Penyelarasan Alat Diagnosa (`semadiksi:diagnosa-sso`)**:
+      - Prediksi untuk NIM non-KIP-K yang ada di master dan belum memiliki akun diselaraskan menjadi: `Dapat Login (Akun Baru User Umum)`.
+      - Diuji pada `DiagnosaSsoCommandTest::test_diagnosa_kasus_mahasiswa_non_kipk_dapat_login_sebagai_user_umum`.
+
+  - **BAGIAN B. PERJELAS AKTIVASI AKUN user_umum DAN PERAN LAIN LEWAT SSO**:
+    - **Jawaban Poin 1 (Terbukti dari Kode Baris demi Baris)**:
+      - *Apakah perannya berubah?* **TIDAK**. Pada `KeycloakService.php` baris 519-526, akun yang sudah ada hanya diperbarui `keycloak_sub`-nya (`forceFill(['keycloak_sub' => $sub])->saveQuietly()`). Baris penetapan peran lama telah dibersihkan sehingga peran akun `user_umum` tidak pernah diubah menjadi `mahasiswa_kipk` lewat klaim SSO.
+      - *Apakah email_verified_at diisi?*
+        - Jika akun `user_umum` sudah terverifikasi: tetap utuh.
+        - Jika akun `user_umum` belum terverifikasi (`email_verified_at === null`): login SSO **DITOLAK** di baris 270-276 dan baris 380-388 dengan kode alasan `pengguna belum teraktivasi` dan pesan *"Akun belum teraktivasi. Hubungi admin SEMADIKSI."*. Nilai `email_verified_at` **TIDAK** diisi.
+      - *Apakah kata sandi ditimpa hash acak?* **TIDAK**. Penimpaan kata sandi (`Hash::make(Str::random(40))`) di baris 491-493 secara eksklusif hanya berjalan untuk akun `UserRole::MahasiswaKipk` yang tertunda (`$evaluasi->perluAktivasi`). Kata sandi akun `user_umum` utuh 100%.
+      - *Apakah 2FA yang sudah aktif dinonaktifkan?* **TIDAK**. Kolom `two_factor_secret`, `two_factor_confirmed_at`, dan `two_factor_recovery_codes` sama sekali tidak dimodifikasi oleh SSO.
+      - *Apakah keycloak_sub ditautkan?* **YA**, jika akun terverifikasi dan belum memiliki `keycloak_sub` (atau cocok), ditautkan secara aman tanpa menimpa data lain.
+    - **Penegasan dan Pembuktian dengan Tes**:
+      - (a) Peran akun tidak pernah berubah oleh SSO: Diuji di `SsoAktivasiAkunTerdaftarTest::test_peran_akun_user_umum_tidak_pernah_berubah_oleh_sso_meskipun_nim_ada_di_penerima_kipk`.
+      - (b) Staf ditolak dan data tidak berubah sedikit pun: Diuji di `SsoAktivasiAkunTerdaftarTest::test_staf_ditolak_sso_dan_data_akun_tidak_berubah_sedikitpun` untuk `SuperAdmin`, `VerifikatorBerkas`, dan `PenilaiKarya`.
+      - (c) Keputusan dan alasan aktivasi `user_umum`: Akun `user_umum` tertunda tidak diaktivasi otomatis lewat SSO karena peran umum tidak memiliki hak istimewa KIP-K. Jika admin keliru membuat akun mahasiswa KIP-K sebagai `user_umum`, admin harus mengoreksi perannya melalui menu Data Pengguna atau impor KIP-K.
+    - **Peningkatan Diagnosa SSO (`semadiksi:diagnosa-sso`)**:
+      - Menampilkan parameter `Peran Akun` (`$user?->role?->value ?? '-'`).
+      - Menampilkan kalimat `Petunjuk` untuk kasus yang ditolak SSO:
+        - `role tidak diizinkan SSO`: *"gunakan login kata sandi (atau ubah peran lewat Data Pengguna jika akun mahasiswa)"*.
+        - `pengguna belum teraktivasi`: *"ubah peran lewat Data Pengguna jika mahasiswa KIP-K, atau hubungi admin"*.
+        - `akun diblokir`: *"hubungi admin untuk membuka blokir akun di Data Pengguna"*.
+        - `NIM tidak ada di data master`: *"pastikan NIM terdaftar di data master atau ubah peran lewat Data Pengguna"*.
+      - Diuji di `DiagnosaSsoCommandTest::test_diagnosa_menampilkan_petunjuk_untuk_staf_dan_role_yang_ditolak_sso`.
+
+  - **BAGIAN C. PEMERIKSAAN KEAMANAN TOMBOL RESET 2FA**:
+    - **Bukti Kode**:
+      - `User.php`: Properti `$hidden` menyembunyikan `password`, `remember_token`, `two_factor_secret`, dan `two_factor_recovery_codes`. Properti `$appends = ['two_factor_enabled']` menyediakan accessor `getTwoFactorEnabledAttribute(): bool` (`hasEnabledTwoFactor()`). Payload Inertia hanya membawa boolean `two_factor_enabled` dan bersih dari secret atau kode recovery.
+      - `UserManagementController::resetTwoFactor`: Dilindungi `Gate::authorize('update', $user)` yang diverifikasi oleh `UserPolicy::update` (`$user->isSuperAdmin()`). Role non-super_admin mendapatkan HTTP 403 Forbidden.
+      - Proteksi Akun Sendiri: `if ($user->id === auth()->id())` menolak tindakan dan mengembalikan error: *"Anda tidak dapat mereset 2FA untuk akun Anda sendiri."*. Di `Pengguna/Index.jsx`, tombol reset 2FA tidak dirender untuk `auth?.user?.id === u.id`.
+    - **Pengujian Fitur**:
+      - `TwoFactorAuthenticationTest::test_super_admin_can_reset_user_2fa_with_mandatory_reason` menguji 403 untuk `mahasiswa_kipk`, `user_umum`, `verifikator_berkas`, dan `penilai_karya`, penolakan reset akun sendiri, validasi alasan min 5 karakter, pembersihan secret/confirmed_at/recovery_codes, dan audit log.
+      - `TwoFactorAuthenticationTest::test_inertia_user_list_payload_contains_two_factor_enabled_and_no_secrets` memvalidasi payload Inertia bebas dari secret dan recovery codes.
+
+  - **BAGIAN D. PEMERIKSAAN COMMIT .claude (74e33ce)**:
+    - **Daftar Berkas Terdeteksi**:
+      - `git show --stat 74e33ce` & `git ls-files .claude`:
+        - `.claude/skills/anti-hallucination.md` (16 baris, 763 bytes)
+        - `.claude/skills/anti-slop-ui.md` (16 baris, 993 bytes)
+    - **Hasil Audit**: Tidak ditemukan berkas lokal atau sensitif (tidak ada `settings.local.json`, kredensial, token, izin, atau riwayat). Folder hanya memuat berkas skill murni.
+    - **Tindakan Pengamanan**: Pola `.claude/*.local.*` dan `.claude/settings.local.json` ditambahkan ke `.gitignore` di root repositori untuk mencegah kebocoran konfigurasi lokal Claude di masa mendatang.
+    - **Catatan Git**: Riwayat commit `74e33ce` tidak ditulis ulang dan tidak ada force push. Sesuai instruksi, perubahan belum boleh di-push sebelum persetujuan pemilik proyek.
+
+
 
 
 
