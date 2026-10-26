@@ -551,4 +551,25 @@ Status pelacakan pengerjaan bertahap:
       - Suite pengujian `Tests\Feature\KeycloakSsoAndSecurityTest` (32 tes, 178 assertions) diperbarui agar selaras dengan kode alasan baru dan kebijakan pembatasan penerima KIP-K.
       - Suite `PendaftaranMahasiswaTest` (27 tes) dan `PenggunaFormPerRoleTest` (14 tes) tetap lulus 100%.
 
+  - **BAGIAN 3. ALAT DIAGNOSA READ-ONLY (`semadiksi:diagnosa-sso`)**:
+    - **Implementasi Command (`App\Console\Commands\DiagnosaSsoCommand`)**:
+      - Signature: `semadiksi:diagnosa-sso {nim}`.
+      - 100% read-only tanpa manipulasi database (`SELECT` only) dan tanpa panggilan HTTP eksternal.
+      - Normalisasi NIM satu pintu via `NormalisasiNim::bersihkan`.
+      - Menampilkan penyamaran data pribadi: NIM tersamar (`Masking::nim`), tanpa mencetak kata sandi (*hash*), token aktivasi, atau token sesi.
+      - Memanfaatkan logika evaluasi tunggal `KeycloakService::evaluasiLoginSso` sehingga hasil diagnosa identik dengan callback SSO asli.
+      - Menyajikan parameter lengkap: status keberadaan akun, peran, status aktif (blokir), verifikasi email, penautan `keycloak_sub`, keberadaan di master mahasiswa UNUSA, status penerima KIP-K, kode alasan evaluasi, pesan ramah ke pengguna, dan prediksi kelayakan login SSO.
+    - **Pengujian & Verifikasi Fitur**:
+      - Suite pengujian baru `Tests\Feature\DiagnosaSsoCommandTest` (7 tes, 24 assertions) lulus 100%:
+        1. Kasus akun tertunda (terdeteksi `aktivasi via SSO` & pesan ramah).
+        2. Kasus staf (terdeteksi `role tidak diizinkan SSO`).
+        3. Kasus akun diblokir (terdeteksi `akun diblokir`).
+        4. Kasus akun tidak ada tapi ada di master & penerima KIP-K (terdeteksi `aktivasi via SSO` untuk pembuatan akun baru).
+        5. Kasus NIM tidak ada di master (terdeteksi `NIM tidak ada di data master`).
+        6. Kasus NIM dengan spasi (terbukti dinormalisasi).
+        7. Pencegahan kebocoran kata sandi dan remember token.
+    - **Dokumentasi Manual**:
+      - Panduan pengujian manual dan tabel parameter telah ditambahkan ke `docs/panduan-uji-manual.md` pada Seksi 8.
+
+
 

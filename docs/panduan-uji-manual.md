@@ -545,6 +545,45 @@ Selain form admin di atas, sistem menyediakan *engine* otomatis `CertificateGene
 
 ---
 
+## 8. Alat Diagnosa SSO Read-Only (`semadiksi:diagnosa-sso`)
+
+Perintah CLI ini digunakan oleh Administrator / Pengembang untuk mendiagnosa alasan mengapa suatu akun ditolak saat login SSO UNUSA atau memeriksa kesiapan aktivasi akun tanpa mengubah database sama sekali (*strictly read-only*).
+
+### Perintah Eksekusi
+```bash
+php artisan semadiksi:diagnosa-sso {nim}
+```
+
+Contoh:
+```bash
+php artisan semadiksi:diagnosa-sso 4330024012
+```
+
+### Karakteristik & Keamanan
+1. **Read-Only**: Tidak ada penulisan atau manipulasi ke database, tidak ada pemanggilan jaringan luar (menggunakan data master dan provider lokal/mock).
+2. **Penyamaran Data (*Masked*)**:
+   - NIM disamarkan (contoh: `4330XXXX12` via `App\Support\Masking::nim`).
+   - Tidak mencetak kata sandi (*hash*), token aktivasi, token sesi, atau klaim OIDC mentah.
+3. **Logika Evaluasi Tunggal**: Menggunakan fungsi evaluasi `KeycloakService::evaluasiLoginSso` yang sama persis dengan alur callback SSO nyata, sehingga hasil diagnosa selalu akurat 100%.
+
+### Parameter yang Ditampilkan
+| Parameter | Keterangan |
+| :--- | :--- |
+| **NIM (Tersamar)** | NIM target dalam format aman |
+| **Akun di SEMADIKSI** | Status keberadaan akun di tabel `users` (Ada / Tidak Ada / Akun Ganda) |
+| **Peran Akun** | Peran akun (`mahasiswa_kipk`, `user_umum`, `super_admin`, dll.) |
+| **Status Aktif** | Status blokir akun (`Aktif` / `Diblokir`) |
+| **Email Terverifikasi** | Status verifikasi email (`Terverifikasi` / `Belum terverifikasi`) |
+| **keycloak_sub Tertaut** | Status penautan ID SSO Keycloak (`Tertaut` / `Tidak tertaut`) |
+| **Data Master Mahasiswa** | Keberadaan NIM di master mahasiswa UNUSA (`Ada` / `Tidak Ada`) |
+| **Penerima KIP-K** | Status NIM pada daftar penerima beasiswa KIP-K (`Terdaftar` / `Tidak Terdaftar`) |
+| **Kode Alasan Evaluasi** | Kode alasan internal (`aktivasi via SSO`, `bukan penerima KIP-K`, `role tidak diizinkan SSO`, `akun diblokir`, dll.) |
+| **Pesan ke Pengguna** | Pesan ramah yang akan tampil di layar login pengguna |
+| **Prediksi Kelayakan SSO** | Kesimpulan kelayakan login SSO |
+
+---
+
+
 ## Matriks Rekapitulasi Jalur Klik & Ketersediaan UI
 
 | Fitur | Lokasi Menu | URL Awal | Label Tombol Utama | Status UI |
