@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 repomix-context.xml
+
+# claude local & sensitive files
+.claude/*.local.*
+.claude/settings.local.json
