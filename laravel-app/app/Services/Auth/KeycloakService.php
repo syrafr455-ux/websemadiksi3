@@ -254,30 +254,8 @@ class KeycloakService
             $nimCek = $nimBersih !== '' ? $nimBersih : ($userBySub->nim ? NormalisasiNim::bersihkan($userBySub->nim) : '');
             $penerima = $nimCek !== '' ? $this->kipProvider->cariByNim($nimCek) : null;
 
-            if ($userBySub->role === UserRole::UserUmum) {
-                if ($penerima) {
-                    return new SsoEvaluasi(
-                        dapatLogin: true,
-                        kodeAlasan: 'aktivasi via SSO',
-                        pesan: 'Siap diaktivasi sebagai Mahasiswa KIP-K',
-                        kodeRef: $kodeRef,
-                        user: $userBySub,
-                        penerimaKipk: $penerima,
-                        perluAktivasi: true
-                    );
-                }
-
-                return new SsoEvaluasi(
-                    dapatLogin: false,
-                    kodeAlasan: 'bukan penerima KIP-K',
-                    pesan: 'NIM Anda belum terdaftar sebagai penerima KIP-K, hubungi admin',
-                    kodeRef: $kodeRef,
-                    user: $userBySub
-                );
-            }
-
-            if ($userBySub->role === UserRole::MahasiswaKipk) {
-                if ($userBySub->email_verified_at === null) {
+            if ($userBySub->email_verified_at === null) {
+                if ($userBySub->role === UserRole::MahasiswaKipk) {
                     return new SsoEvaluasi(
                         dapatLogin: true,
                         kodeAlasan: 'aktivasi via SSO',
@@ -290,14 +268,22 @@ class KeycloakService
                 }
 
                 return new SsoEvaluasi(
-                    dapatLogin: true,
-                    kodeAlasan: 'siap login',
-                    pesan: 'Siap login',
+                    dapatLogin: false,
+                    kodeAlasan: 'pengguna belum teraktivasi',
+                    pesan: 'Akun belum teraktivasi. Hubungi admin SEMADIKSI.',
                     kodeRef: $kodeRef,
-                    user: $userBySub,
-                    penerimaKipk: $penerima
+                    user: $userBySub
                 );
             }
+
+            return new SsoEvaluasi(
+                dapatLogin: true,
+                kodeAlasan: 'siap login',
+                pesan: 'Siap login',
+                kodeRef: $kodeRef,
+                user: $userBySub,
+                penerimaKipk: $penerima
+            );
         }
 
         // 2. Jika belum tertaut keycloak_sub, lakukan pencocokan via NIM master:
@@ -377,33 +363,8 @@ class KeycloakService
                 );
             }
 
-            if ($existing->role === UserRole::UserUmum) {
-                // Bila user_umum tetapi terdaftar di master KIP-K: aktivasi sebagai mahasiswa KIP-K
-                if ($penerima) {
-                    return new SsoEvaluasi(
-                        dapatLogin: true,
-                        kodeAlasan: 'aktivasi via SSO',
-                        pesan: 'Siap diaktivasi sebagai Mahasiswa KIP-K',
-                        kodeRef: $kodeRef,
-                        user: $existing,
-                        masterMahasiswa: $mahasiswa,
-                        penerimaKipk: $penerima,
-                        perluAktivasi: true
-                    );
-                }
-
-                return new SsoEvaluasi(
-                    dapatLogin: false,
-                    kodeAlasan: 'bukan penerima KIP-K',
-                    pesan: 'NIM Anda belum terdaftar sebagai penerima KIP-K, hubungi admin',
-                    kodeRef: $kodeRef,
-                    user: $existing,
-                    masterMahasiswa: $mahasiswa
-                );
-            }
-
-            if ($existing->role === UserRole::MahasiswaKipk) {
-                if ($existing->email_verified_at === null || $existing->keycloak_sub === null) {
+            if ($existing->email_verified_at === null) {
+                if ($existing->role === UserRole::MahasiswaKipk) {
                     return new SsoEvaluasi(
                         dapatLogin: true,
                         kodeAlasan: 'aktivasi via SSO',
@@ -417,35 +378,50 @@ class KeycloakService
                 }
 
                 return new SsoEvaluasi(
-                    dapatLogin: true,
-                    kodeAlasan: 'siap login',
-                    pesan: 'Siap login',
+                    dapatLogin: false,
+                    kodeAlasan: 'pengguna belum teraktivasi',
+                    pesan: 'Akun belum teraktivasi. Hubungi admin SEMADIKSI.',
                     kodeRef: $kodeRef,
                     user: $existing,
                     masterMahasiswa: $mahasiswa,
                     penerimaKipk: $penerima
                 );
             }
-        }
 
-        // 3. Jika user belum ada di users
-        if (! $penerima) {
             return new SsoEvaluasi(
-                dapatLogin: false,
-                kodeAlasan: 'bukan penerima KIP-K',
-                pesan: 'NIM Anda belum terdaftar sebagai penerima KIP-K, hubungi admin',
+                dapatLogin: true,
+                kodeAlasan: 'siap login',
+                pesan: 'Siap login',
                 kodeRef: $kodeRef,
-                masterMahasiswa: $mahasiswa
+                user: $existing,
+                masterMahasiswa: $mahasiswa,
+                penerimaKipk: $penerima
             );
         }
 
+        // 3. Jika user belum ada di users tetapi NIM ada di data master:
+        // Jika terdaftar sebagai penerima KIP-K bebas, buat akun mahasiswa KIP-K
+        if ($penerima && ! $penerima->user_id) {
+            return new SsoEvaluasi(
+                dapatLogin: true,
+                kodeAlasan: 'aktivasi via SSO',
+                pesan: 'Siap dibuat dan diaktivasi via SSO',
+                kodeRef: $kodeRef,
+                masterMahasiswa: $mahasiswa,
+                penerimaKipk: $penerima,
+                perluDibuat: true
+            );
+        }
+
+        // Mahasiswa ada di master tetapi bukan penerima KIP-K:
+        // Dibuatkan akun user_umum otomatis lewat SSO (kebijakan SSO lama dipulihkan)
         return new SsoEvaluasi(
             dapatLogin: true,
-            kodeAlasan: 'aktivasi via SSO',
-            pesan: 'Siap dibuat dan diaktivasi via SSO',
+            kodeAlasan: 'buat akun baru via SSO',
+            pesan: 'Siap dibuat sebagai User Umum via SSO',
             kodeRef: $kodeRef,
             masterMahasiswa: $mahasiswa,
-            penerimaKipk: $penerima,
+            penerimaKipk: null,
             perluDibuat: true
         );
     }
@@ -455,12 +431,13 @@ class KeycloakService
      *
      * Aturan ketat:
      * - Pencocokan akun hanya lewat keycloak_sub lalu NIM master.
-     * - Role TIDAK PERNAH diambil dari klaim SSO.
-     * - Staf (super_admin, user_umum, verifikator_berkas, penilai_karya) tidak tertaut lewat SSO.
+     * - Role TIDAK PERNAH diambil atau diubah dari klaim SSO.
+     * - Staf (super_admin, verifikator_berkas, penilai_karya) tidak tertaut lewat SSO dan data akun tidak diubah.
      * - Email tidak dipakai untuk mencocokkan.
      * - Akun mahasiswa_kipk tertunda diaktivasi otomatis saat SSO pertama.
      * - Akun diblokir sengaja tetap ditolak.
      * - Sub bentrok atau akun ganda ditolak dengan kode referensi SSO-XXXX.
+     * - Mahasiswa non-KIP-K yang ada di master dibuatkan akun user_umum otomatis.
      *
      * @param  array<string, mixed>  $claims
      *
@@ -501,11 +478,10 @@ class KeycloakService
             throw new Exception($evaluasi->pesan);
         }
 
-        // Aktivasi otomatis akun yang ada
+        // Aktivasi otomatis akun mahasiswa KIP-K yang ada
         if ($evaluasi->perluAktivasi && $evaluasi->user) {
             $user = $evaluasi->user;
             $attributes = [
-                'role' => UserRole::MahasiswaKipk,
                 'email_verified_at' => now(),
                 'verification_status' => 'Verified',
                 'keycloak_sub' => $sub,
@@ -539,6 +515,7 @@ class KeycloakService
         }
 
         // Akun sudah ada dan siap login
+        // ATURAN BAKU: Peran akun TIDAK PERNAH diubah oleh SSO, kata sandi & 2FA utuh
         if ($evaluasi->user) {
             $user = $evaluasi->user;
             if ($user->keycloak_sub !== $sub) {
@@ -548,9 +525,54 @@ class KeycloakService
             return $user;
         }
 
-        // Akun baru dibuat dan diaktivasi (khusus mahasiswa penerima KIP-K yang ada di master)
+        // Akun baru dibuat (identitas sudah dibuktikan IdP)
         if ($evaluasi->perluDibuat && $evaluasi->masterMahasiswa) {
             $mahasiswa = $evaluasi->masterMahasiswa;
+
+            // Jika penerima KIP-K:
+            if ($evaluasi->penerimaKipk && ! $evaluasi->penerimaKipk->user_id) {
+                $newUser = new User([
+                    'name' => $mahasiswa['nama_lengkap'] ?? ($claims['name'] ?? 'Mahasiswa UNUSA'),
+                    'email' => strtolower($mahasiswa['email_kampus']),
+                    'nim' => $mahasiswa['nim'],
+                    'phone' => $mahasiswa['no_telepon'] ?? null,
+                    'angkatan' => $mahasiswa['angkatan'] ?? null,
+                    'prodi' => $mahasiswa['program_studi'] ?? ($mahasiswa['program_studi_teks'] ?? 'Umum'),
+                    'university' => 'Universitas Nahdlatul Ulama Surabaya',
+                    'asal_kampus' => 'Universitas Nahdlatul Ulama Surabaya',
+                    'program_studi_teks' => $mahasiswa['program_studi'] ?? ($mahasiswa['program_studi_teks'] ?? 'Umum'),
+                    'program_studi_id' => $mahasiswa['program_studi_id'] ?? null,
+                    'fakultas_id' => $mahasiswa['fakultas_id'] ?? null,
+                    'kip_status' => 'KIP UNUSA',
+                    'password' => Hash::make(Str::random(32)),
+                ]);
+
+                $newUser->forceFill([
+                    'role' => UserRole::MahasiswaKipk,
+                    'verification_status' => 'Verified',
+                    'is_blocked' => false,
+                    'jalur_pendaftaran' => User::JALUR_UNUSA,
+                    'is_unusa' => true,
+                    'email_verified_at' => now(),
+                    'keycloak_sub' => $sub,
+                ])->save();
+
+                $this->statusKip->hubungkan($evaluasi->penerimaKipk, $newUser, StatusKipService::CARA_NIM_SAAT_DAFTAR, beriNotifikasi: false);
+
+                AuditLog::record(
+                    $newUser->id,
+                    'sso_activation',
+                    'Aktivasi akun mahasiswa KIP-K via SSO',
+                    $newUser
+                );
+
+                Log::info("Keycloak SSO: aktivasi via SSO [NIM: {$nimTersamar}]");
+
+                return $newUser;
+            }
+
+            // Bukan penerima KIP-K (perilaku lama dipulihkan):
+            // Dibuat sebagai akun UserUmum
             $newUser = new User([
                 'name' => $mahasiswa['nama_lengkap'] ?? ($claims['name'] ?? 'Mahasiswa UNUSA'),
                 'email' => strtolower($mahasiswa['email_kampus']),
@@ -563,12 +585,12 @@ class KeycloakService
                 'program_studi_teks' => $mahasiswa['program_studi'] ?? ($mahasiswa['program_studi_teks'] ?? 'Umum'),
                 'program_studi_id' => $mahasiswa['program_studi_id'] ?? null,
                 'fakultas_id' => $mahasiswa['fakultas_id'] ?? null,
-                'kip_status' => 'KIP UNUSA',
+                'kip_status' => 'Umum',
                 'password' => Hash::make(Str::random(32)),
             ]);
 
             $newUser->forceFill([
-                'role' => UserRole::MahasiswaKipk,
+                'role' => UserRole::UserUmum,
                 'verification_status' => 'Verified',
                 'is_blocked' => false,
                 'jalur_pendaftaran' => User::JALUR_UNUSA,
@@ -577,18 +599,7 @@ class KeycloakService
                 'keycloak_sub' => $sub,
             ])->save();
 
-            if ($evaluasi->penerimaKipk && ! $evaluasi->penerimaKipk->user_id) {
-                $this->statusKip->hubungkan($evaluasi->penerimaKipk, $newUser, StatusKipService::CARA_NIM_SAAT_DAFTAR, beriNotifikasi: false);
-            }
-
-            AuditLog::record(
-                $newUser->id,
-                'sso_activation',
-                'Aktivasi akun mahasiswa KIP-K via SSO',
-                $newUser
-            );
-
-            Log::info("Keycloak SSO: aktivasi via SSO [NIM: {$nimTersamar}]");
+            Log::info("Keycloak SSO: buat akun user umum via SSO [NIM: {$nimTersamar}]");
 
             return $newUser;
         }

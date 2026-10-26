@@ -65,6 +65,30 @@ class DiagnosaSsoCommand extends Command
         $sub = $user?->keycloak_sub;
         $evaluasi = $keycloak->evaluasiLoginSso($nim, $sub);
 
+        // Prediksi kelayakan SSO
+        $prediksi = 'Ditolak';
+        if ($evaluasi->dapatLogin) {
+            if ($evaluasi->perluDibuat) {
+                $prediksi = $evaluasi->penerimaKipk ? 'Dapat Login (Akun Baru Mahasiswa KIP-K)' : 'Dapat Login (Akun Baru User Umum)';
+            } elseif ($evaluasi->perluAktivasi) {
+                $prediksi = 'Dapat Login (Akan diaktivasi via SSO)';
+            } else {
+                $prediksi = 'Dapat Login (Akun Aktif)';
+            }
+        }
+
+        // Petunjuk untuk peran dan kasus yang ditolak SSO
+        $petunjuk = '-';
+        if ($evaluasi->kodeAlasan === 'role tidak diizinkan SSO') {
+            $petunjuk = 'gunakan login kata sandi (atau ubah peran lewat Data Pengguna jika akun mahasiswa)';
+        } elseif ($evaluasi->kodeAlasan === 'pengguna belum teraktivasi') {
+            $petunjuk = 'ubah peran lewat Data Pengguna jika mahasiswa KIP-K, atau hubungi admin';
+        } elseif ($evaluasi->kodeAlasan === 'akun diblokir') {
+            $petunjuk = 'hubungi admin untuk membuka blokir akun di Data Pengguna';
+        } elseif ($evaluasi->kodeAlasan === 'NIM tidak ada di data master') {
+            $petunjuk = 'pastikan NIM terdaftar di data master atau ubah peran lewat Data Pengguna';
+        }
+
         // Susun baris diagnosa
         $rows = [
             ['NIM (Tersamar)', $nimTersamar],
@@ -77,7 +101,8 @@ class DiagnosaSsoCommand extends Command
             ['Penerima KIP-K', $penerima ? 'Terdaftar' : 'Tidak Terdaftar'],
             ['Kode Alasan Evaluasi', $evaluasi->kodeAlasan],
             ['Pesan ke Pengguna', $evaluasi->pesan],
-            ['Prediksi Kelayakan SSO', $evaluasi->dapatLogin ? ($evaluasi->perluAktivasi ? 'Dapat Login (Akan diaktivasi via SSO)' : 'Dapat Login (Akun Aktif)') : 'Ditolak'],
+            ['Prediksi Kelayakan SSO', $prediksi],
+            ['Petunjuk', $petunjuk],
         ];
 
         $this->table(['Parameter', 'Status / Nilai'], $rows);
@@ -87,6 +112,9 @@ class DiagnosaSsoCommand extends Command
             $this->info("HASIL: Akun memenuhi syarat untuk login SSO ({$evaluasi->kodeAlasan}).");
         } else {
             $this->warn("HASIL: Login SSO akan DITOLAK dengan alasan: {$evaluasi->kodeAlasan}.");
+            if ($petunjuk !== '-') {
+                $this->line("PETUNJUK: {$petunjuk}");
+            }
         }
         $this->newLine();
 
