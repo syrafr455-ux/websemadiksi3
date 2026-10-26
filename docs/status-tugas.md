@@ -464,3 +464,56 @@ Status pelacakan pengerjaan bertahap:
     - Suite `Tests\Feature\MekanismeKegiatanDaringDanHybridTest` (9 tes, 65 assertions) lulus 100%.
     - Seluruh rangkaian pengujian sistem `php artisan test` (**451 tes, 3579 assertions**) lulus 100% tanpa ada kegagalan.
     - Build aset Vite `npm run build` dan linter gaya kode `php vendor/bin/pint` lulus sempurna.
+
+- [/] **Bagian 21: Perbaikan Login SSO Menolak Akun Terdaftar & Tombol Reset 2FA di Data Pengguna**
+  - **BAGIAN 1. TEMUAN AKAR MASALAH (Ditulis Sebelum Mengubah Kode)**:
+    - **Gejala & Bukti Log**:
+      - Terdata 4 baris log serupa di `laravel-app/storage/logs/laravel.log` pada 26 Okt 2026 (03:32:02 UTC dan 04:45:27 UTC / sekitar 10:32 & 11:45 WIB):
+        `local.WARNING: Keycloak SSO gagal: pengguna belum teraktivasi`
+      - Mahasiswa dengan NIM `4330024012` telah dibuat oleh Admin lewat menu Data Pengguna (`/admin/pengguna`), autentikasi SSO UNUSA berhasil (OTP lolos di IdP), namun aplikasi SEMADIKSI menolak masuk dengan pesan *"Akun belum terdaftar/teraktivasi"*.
+    - **Pemetaan SEMUA Jalur Callback SSO**:
+      1. `KeycloakController@callback` baris 58-61:
+         - **Kode alasan**: `state tidak cocok`
+         - **Kondisi**: `$storedState === null || $storedState === '' || !hash_equals($storedState, $state)`
+         - **Respon**: Abort HTTP 403 `Sesi autentikasi tidak valid atau telah kedaluwarsa.`
+      2. `KeycloakController@callback` baris 72-89:
+         - **Kode alasan**: `kode penukaran gagal`
+         - **Kondisi**: Query param `code === ''` atau `$codeVerifier` hilang dari sesi, ATAU `$tokenData['access_token']` kosong/gagal diperoleh dari IdP.
+         - **Respon**: Redirect `route('login')` dengan flash error `sso`: *"Otorisasi gagal. Silakan coba kembali."* atau *"Gagal memperoleh token akses dari server SSO UNUSA."*.
+      3. `KeycloakController@callback` baris 91-99 & `KeycloakService@matchOrCreateUser` baris 211-215 / 235-240:
+         - **Kode alasan**: `klaim wajib hilang`
+         - **Kondisi**: Klaim `sub` kosong/hilang dari respon `userinfo`, ATAU pada login pertama kali klaim NIM (`preferred_username`) kosong setelah di-`trim`.
+         - **Respon**: Redirect `route('login')` dengan flash error `sso`: *"Gagal membaca profil pengguna dari server SSO UNUSA."* / *"Klaim subjek IdP tidak valid."* / *"Akun belum terdaftar. Hubungi admin."*.
+      4. `KeycloakService@matchOrCreateUser` baris 242-247:
+         - **Kode alasan**: `NIM tidak ada di data master`
+         - **Kondisi**: Login pertama kali (belum ada user dengan `keycloak_sub = $sub`), klaim NIM ada tetapi `$academicProvider->cariMahasiswaByNim($nim)` menghasilkan `null` atau `empty($mahasiswa['nim'])`.
+         - **Respon**: Redirect `route('login')` dengan flash error `sso`: *"Akun belum terdaftar. Hubungi admin."*.
+      5. `KeycloakService@matchOrCreateUser` baris 219-223 & 259-262:
+         - **Kode alasan**: `akun diblokir`
+         - **Kondisi**: User ditemukan (baik lewat `keycloak_sub` maupun pencarian NIM `is_unusa`), dan kolom `is_blocked == true`.
+         - **Respon**: Redirect `route('login')` dengan flash error `sso`: *"Akun Anda dinonaktifkan oleh administrator. Hubungi admin SEMADIKSI."*.
+      6. `KeycloakService@matchOrCreateUser` baris 254-257:
+         - **Kode alasan**: `role tidak diizinkan SSO`
+         - **Kondisi**: Akun ditemukan lewat NIM master, tetapi peran adalah staf: `$existing->isStaff() || in_array($existing->role, [SuperAdmin, VerifikatorBerkas, PenilaiKarya], true)`.
+         - **Respon**: Redirect `route('login')` dengan flash error `sso`: *"Staf wajib masuk menggunakan kata sandi."*.
+      7. `KeycloakService@matchOrCreateUser` (Dua Jalur Menghasilkan Kode Alasan `pengguna belum teraktivasi`):
+         - **Jalur 7A (Pencocokan via `keycloak_sub`, baris 218-228)**:
+           - **Kondisi**: `User::where('keycloak_sub', $sub)->first()` ditemukan, `is_blocked == false`, TETAPI `email_verified_at === null`.
+           - **Kode log**: `Keycloak SSO gagal: pengguna belum teraktivasi`
+           - **Respon**: Redirect `route('login')` dengan flash error `sso`: *"Akun belum teraktivasi. Hubungi admin SEMADIKSI."*.
+         - **Jalur 7B (Pencocokan via NIM Master, baris 249-301)**:
+           - **Kondisi**: Belum ada `keycloak_sub`, NIM ada di master akademik, `$existing = User::where('nim', $nim)->where('is_unusa', true)->first()` DITEMUKAN, `is_blocked == false`, bukan staf, `email_verified_at === null`, TETAPI `$existing->role !== UserRole::MahasiswaKipk`.
+           - **Kode log**: `Keycloak SSO gagal: pengguna belum teraktivasi`
+           - **Respon**: Redirect `route('login')` dengan flash error `sso`: *"Akun belum teraktivasi. Hubungi admin SEMADIKSI."*.
+    - **Hasil Pengujian Kelima Hipotesis**:
+      - **Hipotesis a (Peran Selain mahasiswa_kipk)**: **TERBUKTI**. Di `resources/js/lib/penggunaForm.js`, nilai bawaan form tambah pengguna adalah `role = 'user_umum'`. Bila Admin membuat akun mahasiswa dengan role `user_umum` (atau akun belum diubah status KIP-nya ke `mahasiswa_kipk`), akun disimpan dengan `role = UserRole::UserUmum`, `verification_status = 'Verified'`, namun `email_verified_at = null`. Saat login SSO, akun lolos dari filter staf (karena `isStaff()` bernilai false), masuk ke blok `email_verified_at === null`, namun karena perbaikan lama hanya mengecek `if ($existing->role === UserRole::MahasiswaKipk)`, blok aktivasi terlewati dan eksekusi jatuh langsung ke baris 299 melempar `pengguna belum teraktivasi`.
+      - **Hipotesis b (Kondisi Akun Tidak Dicakup Aturan Aktivasi)**: **TERBUKTI**. Form Admin di `UserManagementController@store` (`MahasiswaKipkRequest` / `UserUmumRequest`) membuat akun dengan `password` ter-hash dan `verification_status = 'Verified'`, namun `email_verified_at` dibiarkan `null`. Model `User` tidak memiliki kolom `is_active` atau `status` (hanya `verification_status` dan `is_blocked`) serta tidak menggunakan `SoftDeletes`.
+      - **Hipotesis c (Pencocokan NIM)**: **TERBUKTI SEBAGAI FAKTOR KONSISTENSI**. Belum ada normalisasi NIM satu pintu di sistem. Form Data Pengguna hanya melakukan `trim()`, master CSV melakukan regex `^[A-Za-z0-9.\-]+$`, dan SSO melakukan `trim((string)$claims['preferred_username'])`. Bila format NIM berbeda karakter/spasi atau `is_unusa` bernilai false, akun tidak cocok di query `$existing = User::where('nim', $nim)->where('is_unusa', true)->first()` dan jatuh ke blok pembuatan akun baru yang melempar Integrity Constraint Violation jika email bertabrakan.
+      - **Hipotesis d (Sub Tertaut ke Akun Lama / Bentrok)**: **TERBUKTI**. Bila `keycloak_sub` mahasiswa pernah tertaut ke baris akun lain/lama yang belum terverifikasi (`email_verified_at = null`), SSO berhenti di langkah 1 (Jalur 7A) tanpa pernah memeriksa baris akun mahasiswa yang baru. Sistem sebelumnya juga menautkan `keycloak_sub` secara diam-diam tanpa mengecek apakah sub sudah dipakai akun lain.
+      - **Hipotesis e (Urutan Pengecekan di Callback)**: **TERBUKTI KRUSIAL**. Pada langkah 1 (pencocokan `keycloak_sub` baris 218-231), pemeriksaan `if ($user->email_verified_at === null)` dilakukan SEBELUM blok aktivasi otomatis langkah 4. Akibatnya, jika akun tertunda sudah sempat memiliki `keycloak_sub` (misal login pertama gagal parsial sesudah `keycloak_sub` disimpan atau tertaut sebelum aktivasi), seluruh percobaan login berikutnya (termasuk 4 percobaan berturut-turut pada log 26 Okt) PASTI terantuk di langkah 1 dan tidak pernah mencapai blok aktivasi langkah 4!
+    - **Mengapa Perbaikan Sebelumnya (`4a510f2`) Tidak Mencakup Kasus Ini?**:
+      1. Perbaikan sebelumnya HANYA meletakkan logika aktivasi pada langkah 4 (pencocokan NIM) dan secara ketat hanya mengevaluasi `if ($existing->role === UserRole::MahasiswaKipk)`. Akun tertunda yang dibuat admin sebagai `user_umum` (atau belum diubah ke KIP-K) langsung jatuh ke `Log::warning('Keycloak SSO gagal: pengguna belum teraktivasi')`.
+      2. Langkah 1 (pencocokan `keycloak_sub`) sama sekali TIDAK memiliki blok aktivasi otomatis untuk akun mahasiswa KIP-K tertunda yang sudah memiliki `keycloak_sub`.
+      3. Belum ada penolakan tegas untuk role `user_umum` dan staf dengan pesan informatif, sehingga alur salah menganggap akun `user_umum` sebagai akun belum aktif daripada memberi tahu bahwa akun tersebut tidak terdaftar sebagai penerima KIP-K.
+      4. Belum ada kode referensi kegagalan `SSO-XXXX` dan pencatatan log dengan NIM tersamar.
+
