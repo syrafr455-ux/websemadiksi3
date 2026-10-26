@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Pengguna;
 
+use App\Support\NormalisasiNim;
+
 /**
  * Mahasiswa Umum (user_umum). Aturan yang SAMA dipakai form admin dan pendaftaran publik /daftar.
  *
@@ -60,7 +62,7 @@ class UserUmumRequest extends PenggunaRequest
             'name' => trim($data['name']),
             'email' => $data['email'],
             'asal_kampus' => $asalKampus,
-            'nim' => trim($data['nim']),
+            'nim' => NormalisasiNim::bersihkan($data['nim']),
             'program_studi_teks' => $prodi,
             'phone' => $data['phone'],
             'is_unusa' => $this->akunUnusa(),

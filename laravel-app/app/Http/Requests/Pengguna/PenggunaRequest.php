@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Pengguna;
 
 use App\Models\User;
+use App\Support\NormalisasiNim;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -51,6 +52,9 @@ abstract class PenggunaRequest extends FormRequest
         }
         if ($this->filled('phone')) {
             $merge['phone'] = static::normalisasiNomorHp((string) $this->input('phone'));
+        }
+        if ($this->has('nim')) {
+            $merge['nim'] = NormalisasiNim::bersihkan((string) $this->input('nim'));
         }
 
         $this->merge($merge);

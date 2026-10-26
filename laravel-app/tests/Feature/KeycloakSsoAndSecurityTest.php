@@ -220,7 +220,7 @@ class KeycloakSsoAndSecurityTest extends TestCase
         $this->assertSame($user->id, $penerima->user_id);
     }
 
-    public function test_callback_sukses_membuat_mahasiswa_umum_bila_bukan_penerima_kipk(): void
+    public function test_callback_menolak_mahasiswa_bila_bukan_penerima_kipk(): void
     {
         $this->setKeycloakConfig(true);
 
@@ -255,14 +255,12 @@ class KeycloakSsoAndSecurityTest extends TestCase
             'keycloak_code_verifier' => 'dummy_verifier',
         ])->get('/auth/login/callback?state=valid_state&code=test_code');
 
-        $response->assertRedirect(route('dashboard.index'));
-        $this->assertAuthenticated();
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors(['sso' => 'NIM Anda belum terdaftar sebagai penerima KIP-K, hubungi admin']);
+        $this->assertGuest();
 
         $user = User::where('keycloak_sub', 'keycloak-sub-budi')->first();
-        $this->assertNotNull($user);
-        $this->assertSame(UserRole::UserUmum, $user->role);
-        $this->assertTrue($user->is_unusa);
-        $this->assertNotNull($user->email_verified_at);
+        $this->assertNull($user);
     }
 
     public function test_callback_menautkan_keycloak_sub_pada_akun_mahasiswa_yang_sudah_ada(): void
@@ -385,6 +383,19 @@ class KeycloakSsoAndSecurityTest extends TestCase
             'status_aktif' => 'AKTIF',
         ]);
 
+        $penerima = new PenerimaKipk([
+            'nim' => '2241010006',
+            'nama_lengkap' => 'Percobaan Hacker',
+            'program_studi_teks' => 'Umum',
+            'angkatan' => 2022,
+            'status_penetapan' => 'ditetapkan',
+            'sumber' => 'impor_unusa',
+            'diimpor_pada' => now(),
+            'status_tinjau' => PenerimaKipk::TINJAU_NORMAL,
+        ]);
+        $penerima->aturNomor('KIPK-2241010006-HACK');
+        $penerima->save();
+
         // Klaim menyertakan role super_admin dalam payload
         Http::fake([
             'https://sso.unusa.ac.id/realms/UNUSA/protocol/openid-connect/token' => Http::response([
@@ -413,7 +424,7 @@ class KeycloakSsoAndSecurityTest extends TestCase
         $this->assertNotNull($user);
         // Pastikan TIDAK PERNAH jadi super_admin
         $this->assertNotSame(UserRole::SuperAdmin, $user->role);
-        $this->assertSame(UserRole::UserUmum, $user->role);
+        $this->assertSame(UserRole::MahasiswaKipk, $user->role);
     }
 
     public function test_staf_tidak_bisa_tertaut_lewat_sso_pertama_kali(): void
@@ -652,7 +663,7 @@ class KeycloakSsoAndSecurityTest extends TestCase
             });
     }
 
-    public function test_logging_alasan_kegagalan_sso_pengguna_belum_teraktivasi_tanpa_data_pribadi(): void
+    public function test_logging_alasan_kegagalan_sso_bukan_penerima_kipk_tanpa_data_pribadi(): void
     {
         Log::spy();
         $this->setKeycloakConfig(true);
@@ -663,12 +674,12 @@ class KeycloakSsoAndSecurityTest extends TestCase
         // Akun ada di master mahasiswa
         MasterMahasiswaUnusa::create([
             'nim' => $nim,
-            'nama_lengkap' => 'Mahasiswa Belum Aktivasi',
+            'nama_lengkap' => 'Mahasiswa Bukan KIP',
             'email_kampus' => $email,
             'status_aktif' => 'AKTIF',
         ]);
 
-        // Akun ada di tabel users tetapi belum teraktivasi (email_verified_at null)
+        // Akun ada di tabel users sebagai user_umum dan bukan penerima KIP-K
         User::factory()->create([
             'nim' => $nim,
             'email' => $email,
@@ -695,12 +706,12 @@ class KeycloakSsoAndSecurityTest extends TestCase
         ])->get('/auth/login/callback?state=valid_state&code=test_code');
 
         $response->assertRedirect(route('login'));
-        $response->assertSessionHasErrors('sso');
+        $response->assertSessionHasErrors(['sso' => 'NIM Anda belum terdaftar sebagai penerima KIP-K, hubungi admin']);
 
         Log::shouldHaveReceived('warning')
             ->once()
             ->withArgs(function (string $message) use ($nim, $email) {
-                return str_contains($message, 'pengguna belum teraktivasi')
+                return str_contains($message, 'bukan penerima KIP-K')
                     && ! str_contains($message, $nim)
                     && ! str_contains($message, $email)
                     && ! str_contains($message, 'secret_token_unverified');

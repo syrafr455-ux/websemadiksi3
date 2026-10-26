@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Pengguna;
 
+use App\Support\NormalisasiNim;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 
@@ -13,7 +14,9 @@ class MahasiswaKipkRequest extends PenggunaRequest
 {
     protected function prepareForValidation(): void
     {
-        // Tanpa normalisasi tambahan: perilaku lama dipertahankan.
+        if ($this->has('nim')) {
+            $this->merge(['nim' => NormalisasiNim::bersihkan((string) $this->input('nim'))]);
+        }
     }
 
     public function rules(): array
@@ -39,11 +42,12 @@ class MahasiswaKipkRequest extends PenggunaRequest
     public function atributPengguna(): array
     {
         $data = $this->validated();
+        $nim = ! empty($data['nim']) ? NormalisasiNim::bersihkan($data['nim']) : null;
 
         return [
             'name' => trim($data['name']),
             'email' => strtolower(trim($data['email'])),
-            'nim' => ! empty($data['nim']) ? trim($data['nim']) : null,
+            'nim' => $nim ?: null,
             'phone' => ! empty($data['phone']) ? trim($data['phone']) : null,
             'angkatan' => $data['angkatan'] ?? null,
             'prodi' => $data['prodi'] ?? null,

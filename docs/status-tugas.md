@@ -517,3 +517,38 @@ Status pelacakan pengerjaan bertahap:
       3. Belum ada penolakan tegas untuk role `user_umum` dan staf dengan pesan informatif, sehingga alur salah menganggap akun `user_umum` sebagai akun belum aktif daripada memberi tahu bahwa akun tersebut tidak terdaftar sebagai penerima KIP-K.
       4. Belum ada kode referensi kegagalan `SSO-XXXX` dan pencatatan log dengan NIM tersamar.
 
+  - **BAGIAN 2. PERBAIKAN (Mulai Dari Tes Yang Gagal)**:
+    - **Normalisasi NIM Satu Pintu (`App\Support\NormalisasiNim`)**:
+      - Dibuat class helper `NormalisasiNim` dengan method `bersihkan(?string $nim): string`.
+      - Menghapus invisible whitespace, control characters, karakter zero-width, trim, dan uppercase.
+      - Dipakai konsisten pada:
+        - Pencocokan SSO di `KeycloakService::evaluasiLoginSso`
+        - Formulir Data Pengguna di `PenggunaRequest`, `MahasiswaKipkRequest`, `UserUmumRequest`
+        - Formulir Pendaftaran di `PendaftaranController::lookupNim`
+    - **Struktur Evaluasi Bersih (`App\Services\Auth\SsoEvaluasi`)**:
+      - Dibuat DTO immutable `SsoEvaluasi` yang memuat hasil evaluasi SSO: status kelulusan, instance `User`, kode alasan, pesan ramah pengguna, kode referensi `SSO-XXXX`, log context tersamar (NIM tersamar via `App\Support\Masking`), dan flag `harus_diaktivasi`.
+      - Dipakai bersama oleh callback `KeycloakService` dan perintah diagnosa CLI `semadiksi:diagnosa-sso`.
+    - **Perbaikan Alur di `KeycloakService`**:
+      - **Aktivasi Mahasiswa KIP-K Otomatis**:
+        - Bekerja baik pada pencocokan via `keycloak_sub` maupun pencocokan via `NIM master`.
+        - Menyetel `email_verified_at = now()`, `verification_status = 'Verified'`, menautkan `keycloak_sub = $sub`.
+        - Mengganti kata sandi dengan hash acak (`Hash::make(Str::random(40))`) sehingga kata sandi lama tidak dapat digunakan lagi.
+        - Membatalkan token aktivasi tertunda di `AktivasiMahasiswa`.
+        - Menautkan `PenerimaKipk` bila belum tertaut.
+        - Mencatat audit log aksi `sso_activation` tanpa data pribadi.
+      - **Pencegahan Sub Bentrok & Akun Ganda**:
+        - Bila `keycloak_sub` sudah tertaut ke akun lain dengan NIM berbeda, sistem menolak dan mengembalikan kode alasan `sub bentrok` dengan kode referensi `SSO-XXXX`.
+        - Bila akun dengan NIM tersebut sudah ada tetapi memiliki `keycloak_sub` berbeda dari klaim SSO, sistem menolak dan mengembalikan kode alasan `sub bentrok` dengan kode referensi.
+      - **Penolakan Staf dan Akun Non-KIP-K**:
+        - Staf (`super_admin`, `verifikator_berkas`, `penilai_karya`, dll.) ditolak dengan pesan: *"Akun staf masuk lewat halaman login kata sandi."* (kode alasan: `role tidak diizinkan SSO`).
+        - Akun `user_umum` / mahasiswa yang bukan penerima KIP-K ditolak dengan pesan: *"NIM Anda belum terdaftar sebagai penerima KIP-K, hubungi admin."* (kode alasan: `bukan penerima KIP-K`).
+        - Akun diblokir ditolak dengan pesan: *"Akun Anda dinonaktifkan, hubungi admin."* (kode alasan: `akun diblokir`).
+        - Kasus tidak terduga ditolak dengan pesan: *"Login SSO gagal. Sebutkan kode SSO-XXXX kepada admin."*.
+      - **Logging Bersih & Masking Data**:
+        - Seluruh log kegagalan SSO mencatat `warning` yang memuat kode alasan, kode referensi `SSO-XXXX`, waktu, dan NIM tersamar via `Masking::maskNim()`, tanpa membocorkan token, kode otorisasi, atau klaim lengkap.
+    - **Pengujian & Verifikasi Fitur**:
+      - Suite pengujian baru `Tests\Feature\SsoAktivasiAkunTerdaftarTest` (7 tes, 48 assertions) mereproduksi kasus nyata NIM 4330024012 (dibuat admin tertunda), akun mahasiswa tertunda dengan sub, penolakan akun user umum/bukan KIP-K, penolakan staf, penolakan akun diblokir, penolakan sub bentrok, dan uji normalisasi NIM satu pintu.
+      - Suite pengujian `Tests\Feature\KeycloakSsoAndSecurityTest` (32 tes, 178 assertions) diperbarui agar selaras dengan kode alasan baru dan kebijakan pembatasan penerima KIP-K.
+      - Suite `PendaftaranMahasiswaTest` (27 tes) dan `PenggunaFormPerRoleTest` (14 tes) tetap lulus 100%.
+
+

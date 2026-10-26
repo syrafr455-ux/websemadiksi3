@@ -12,6 +12,7 @@ use App\Services\AktivasiMahasiswaService;
 use App\Services\Kip\StatusKipService;
 use App\Services\UnusaAcademicService;
 use App\Support\Masking;
+use App\Support\NormalisasiNim;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -94,7 +95,7 @@ class PendaftaranController extends Controller
     public function cekNimUnusa(Request $request): RedirectResponse
     {
         $data = $request->validate(['nim' => ['required', 'string', 'max:30']], ['nim.required' => 'NIM wajib diisi.']);
-        $nim = trim($data['nim']);
+        $nim = NormalisasiNim::bersihkan($data['nim']);
 
         if ($pesan = $this->batasIpTercapai($request)) {
             return $this->hasil('terlalu_banyak', $pesan);
