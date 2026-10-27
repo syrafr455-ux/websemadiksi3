@@ -895,3 +895,30 @@ Status pelacakan pengerjaan bertahap:
   - **Bagian 7: konfigurasi tes PostgreSQL (selesai; tes PostgreSQL BELUM dijalankan)**: `phpunit.pgsql.xml` (koneksi `pgsql`, database `semadiksi_test`, kredensial dari lingkungan) dengan `tests/bootstrap-pgsql.php` dan `Tests\Support\PenjagaDatabaseUji`, yang melempar exception bila driver bukan pgsql, nama database tidak berakhiran `_test`, atau sama dengan `DB_DATABASE_DEV`. Penjaga kedua di `Tests\TestCase::setUpTraits()` berjalan sebelum `RefreshDatabase`. `Tests\Unit\PenjagaDatabaseUjiTest` (3 tes). Percobaan menjalankan `--configuration=phpunit.pgsql.xml` berakhir `database "semadiksi_test" does not exist` (tidak ada database yang dibuat atau disentuh), jadi jumlah kegagalan PostgreSQL tidak diketahui. Cara pemilik membuat database dan menjalankannya ada di `docs/panduan-uji-manual.md` bagian 9E.
   - **Langkah uji manual**: `docs/panduan-uji-manual.md` bagian 9.
 
+- [x] **Tugas Kecil: Perbaikan Error 500 saat Menekan "Ajukan" Kegiatan (POST /admin/kegiatan/{id}/ajukan)**
+  - **Temuan Log & Identifikasi Akar Masalah**:
+    - **Pengecualian**: `Illuminate\Database\QueryException` (code 23514) membungkus `PDOException(code: 23514)`: `SQLSTATE[23514]: Check violation: 7 ERROR: new row for relation "kegiatan" violates check constraint "kegiatan_status_check" DETAIL: Failing row contains (29, Lomba Essay, ..., diajukan, ...)`.
+    - **File dan Baris Awal di Kode Aplikasi**: `app/Http/Controllers/Admin/KegiatanController.php:650` pada pemanggilan `$kegiatan->save()`.
+    - **Akar Masalah**: Pada migrasi awal `2026_10_13_000002_create_kegiatan_table.php`, kolom `status` didefinisikan sebagai `$table->enum('status', ['draft', 'published', 'ongoing', 'completed', 'cancelled'])`. Di PostgreSQL, ini menghasilkan batasan `CONSTRAINT kegiatan_status_check CHECK (status IN ('draft', 'published', 'ongoing', 'completed', 'cancelled'))`. Saat status `diajukan` (`KegiatanStatus::Diajukan`) ditambahkan ke enum PHP pada commit alur persetujuan sebelumnya, migrasi perubahan check constraint PostgreSQL tidak pernah dibuat. Akibatnya, setiap query pembaruan ke `status = 'diajukan'` gagal dan melempar pengecualian 500 di PostgreSQL.
+    - **Mengapa Tes Lama Tidak Menangkapnya**: SQLite in-memory bawaan PHPUnit tidak menegakkan check constraint untuk deklarasi `$table->enum()` Laravel, sehingga operasi penyimpanan nilai `diajukan` berhasil tanpa galat pada lingkungan pengujian SQLite.
+  - **Pengujian Hipotesis**:
+    - *(a) Pengiriman email melempar galat*: Email sebelumnya dipanggil langsung di alur controller. Jika driver email/antrean gagal, error melempar 500 dan membatalkan alur. Prinsip baru: mutasi data dilakukan dalam transaksi DB, sedangkan pengiriman email dilakukan *setelah* transaksi berhasil di dalam blok `try-catch`. Bila email gagal, pengajuan tetap tersimpan (`diajukan`), kegagalan dicatat di log tanpa PII, dan admin menerima pesan peringatan: *"Pengajuan tersimpan, tetapi email pemberitahuan ke penyetuju gagal dikirim. Beri tahu penyetuju secara langsung."*.
+    - *(b) Kolom query tidak ada di PostgreSQL*: Diaudit menggunakan trait `MengauditKolomSql`. Seluruh query pada alur persetujuan (`ajukan`, `tarikDraft`, `setujui`, `tolak`) diverifikasi terhadap skema database dan terbukti valid.
+    - *(c) Validasi/pembacaan kolom daring (tautan rapat, jendela gabung)*: Kolom daring aman, akses mutator/accessor bernilai null-safe.
+    - *(d) Relasi atau batasan unik pada `kegiatan_persetujuan`*: Baris persetujuan lama dihapus bersih saat pengajuan ulang dan dibuat baru saat disetujui tanpa konflik unique constraint.
+    - *(e) Check constraint status kegiatan*: Terbukti menjadi akar masalah utama.
+  - **Perbaikan yang Diterapkan**:
+    1. Dibuat migrasi baru `database/migrations/2026_10_28_000002_update_kegiatan_status_check_constraint.php` yang menjatuhkan constraint lama `kegiatan_status_check` dan membuat constraint baru yang mencakup seluruh nilai `KegiatanStatus::values()` (`draft`, `diajukan`, `published`, `ongoing`, `completed`, `cancelled`).
+    2. Menambahkan `'diajukan'` pada migrasi dasar `2026_10_13_000002_create_kegiatan_table.php` untuk instalasi baru.
+    3. Membungkus mutasi database pada `KegiatanController@ajukan`, `@tarikDraft`, `@setujui`, dan `@tolak` ke dalam `DB::transaction()`.
+    4. Pengiriman email penyetuju pada `ajukan()` dipindahkan setelah transaksi `commit` dan dibungkus `try-catch (\Throwable $e)`. Bila email gagal: dicatat ke log peringatan tanpa PII, dan dialihkan dengan flash session `warning`: *"Pengajuan tersimpan, tetapi email pemberitahuan ke penyetuju gagal dikirim. Beri tahu penyetuju secara langsung."*.
+    5. Menambahkan dukungan flash message jenis `warning` pada `app/Inertia/Middleware.php`, toast amber di `resources/js/Layouts/AdminLayout.jsx`, dan banner alert di `resources/views/layouts/admin.blade.php`.
+  - **Pengujian & Verifikasi**:
+    - Tes reproduksi awal gagal terbukti melempar 500 saat email gagal, kini lolos di `test_ajukan_kegiatan_daring_tetap_tersimpan_saat_email_gagal`.
+    - Ditambahkan `test_audit_semua_metode_kegiatan_offline_daring_hybrid_alur_persetujuan_lengkap_dan_kolom_sql` yang menguji alur penuh (ajukan, tarik ke draft, setujui, tolak, terbit) untuk ketiga jenis kegiatan (offline, online, hybrid) dengan simulasi email berhasil maupun gagal, lengkap dengan pemeriksaan `MengauditKolomSql`.
+    - Ditambahkan `test_migrasi_dan_skema_status_kegiatan_dapat_menyimpan_semua_nilai_enum` memvalidasi persistensi seluruh kasus enum `KegiatanStatus`.
+    - Seluruh suite uji `php artisan test` (**581 tes, 5483 assertions**) lulus 100%.
+    - `node --test tests/js` (32 tes) lulus 100%.
+    - `npm run build` sukses 100%.
+    - Format kode rapi via `php vendor/bin/pint`.
+

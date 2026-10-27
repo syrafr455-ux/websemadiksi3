@@ -96,6 +96,15 @@
             </div>
         @endif
 
+        @if(session('warning'))
+            <div class="px-6 mt-4">
+                <div class="p-4 rounded-2xl bg-amber-950 border border-amber-800 text-amber-200 text-xs font-medium flex items-center gap-3">
+                    <span class="material-symbols-outlined text-amber-400">warning</span>
+                    {{ session('warning') }}
+                </div>
+            </div>
+        @endif
+
         @if(session('error'))
             <div class="px-6 mt-4">
                 <div class="p-4 rounded-2xl bg-rose-950 border border-rose-800 text-rose-200 text-xs font-medium flex items-center gap-3">

@@ -47,7 +47,7 @@ return new class extends Migration
             $table->boolean('is_submission_active')->default(false);
             $table->text('submission_instructions')->nullable();
 
-            $table->enum('status', ['draft', 'published', 'ongoing', 'completed', 'cancelled'])->default('draft');
+            $table->enum('status', ['draft', 'diajukan', 'published', 'ongoing', 'completed', 'cancelled'])->default('draft');
 
             // Jejak migrasi dari tabel lama `activities` (idempoten untuk command migrasi).
             $table->unsignedBigInteger('legacy_activity_id')->nullable()->unique();

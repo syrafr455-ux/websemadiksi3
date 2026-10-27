@@ -7,14 +7,16 @@ use App\Enums\UserRole;
 use App\Mail\KegiatanDiajukanMail;
 use App\Models\Kegiatan;
 use App\Models\User;
+use App\Services\EmailProtectionService;
 use App\Support\Wib;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Tests\Concerns\MengauditKolomSql;
 use Tests\TestCase;
 
 class KegiatanApprovalTest extends TestCase
 {
-    use RefreshDatabase;
+    use MengauditKolomSql, RefreshDatabase;
 
     protected function setUp(): void
     {
@@ -288,5 +290,127 @@ class KegiatanApprovalTest extends TestCase
 
         $this->assertSame('Deskripsi diperbarui tanpa menyentuh field kritis.', $kegiatan->fresh()->deskripsi);
         $this->assertCount(1, $kegiatan->fresh()->narasumber);
+    }
+
+    public function test_ajukan_kegiatan_daring_tetap_tersimpan_saat_email_gagal(): void
+    {
+        $creator = $this->createSuperAdmin(['name' => 'Creator Daring']);
+        $approver = $this->createSuperAdmin(['name' => 'Approver Daring']);
+
+        $kegiatan = $this->createDraftKegiatan($creator, [
+            'nama_kegiatan' => 'Lomba Essay Nasional',
+            'kategori' => 'lomba',
+            'metode_pelaksanaan' => 'online',
+            'platform_daring' => 'zoom',
+            'tautan_rapat' => 'https://zoom.us/j/999888777',
+        ]);
+
+        // Simulasikan kegagalan pada pengiriman email
+        $protectionMock = $this->createMock(EmailProtectionService::class);
+        $protectionMock->expects($this->once())
+            ->method('kirim')
+            ->willThrowException(new \RuntimeException('Koneksi relay email terputus'));
+        $this->app->instance(EmailProtectionService::class, $protectionMock);
+
+        $response = $this->actingAs($creator)->post(route('admin.kegiatan.ajukan', $kegiatan->id));
+
+        $response->assertRedirect()
+            ->assertSessionHas('warning', 'Pengajuan tersimpan, tetapi email pemberitahuan ke penyetuju gagal dikirim. Beri tahu penyetuju secara langsung.');
+
+        $this->assertSame(KegiatanStatus::Diajukan, $kegiatan->fresh()->status);
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $creator->id,
+            'action' => 'submit_kegiatan',
+        ]);
+    }
+
+    public function test_audit_semua_metode_kegiatan_offline_daring_hybrid_alur_persetujuan_lengkap_dan_kolom_sql(): void
+    {
+        $creator = $this->createSuperAdmin(['name' => 'Creator Audit']);
+        $approver1 = $this->createSuperAdmin(['name' => 'Approver 1 Audit']);
+        $approver2 = $this->createSuperAdmin(['name' => 'Approver 2 Audit']);
+
+        $metodeList = [
+            'offline' => [
+                'nama_kegiatan' => 'Seminar Offline Kampus',
+                'metode_pelaksanaan' => 'offline',
+                'lokasi_type' => 'unusa_campus',
+                'lokasi_nama' => 'Auditorium Tower UNUSA',
+            ],
+            'online' => [
+                'nama_kegiatan' => 'Webinar Daring Nasional',
+                'metode_pelaksanaan' => 'online',
+                'lokasi_type' => 'online',
+                'lokasi_nama' => 'Daring (Zoom)',
+                'platform_daring' => 'zoom',
+                'tautan_rapat' => 'https://zoom.us/j/123456789',
+            ],
+            'hybrid' => [
+                'nama_kegiatan' => 'Konferensi Hybrid UNUSA',
+                'metode_pelaksanaan' => 'hybrid',
+                'lokasi_type' => 'unusa_campus',
+                'lokasi_nama' => 'Auditorium Lt 9 & Zoom',
+                'platform_daring' => 'zoom',
+                'tautan_rapat' => 'https://zoom.us/j/987654321',
+            ],
+        ];
+
+        foreach ($metodeList as $metode => $attrs) {
+            $kegiatan = $this->createDraftKegiatan($creator, $attrs);
+
+            $this->mulaiAuditKolom();
+
+            // 1. Aksi: Ajukan
+            $resAjukan = $this->actingAs($creator)->post(route('admin.kegiatan.ajukan', $kegiatan->id));
+            $resAjukan->assertRedirect()->assertSessionHas('success');
+            $this->assertSame(KegiatanStatus::Diajukan, $kegiatan->fresh()->status);
+            $this->assertTidakAdaKolomTidakDikenal("Aksi ajukan metode {$metode}");
+
+            // 2. Aksi: Approver 1 menyetujui
+            $resSetujui1 = $this->actingAs($approver1)->post(route('admin.kegiatan.setujui', $kegiatan->id));
+            $resSetujui1->assertRedirect()->assertSessionHas('success');
+            $this->assertDatabaseHas('kegiatan_persetujuan', [
+                'kegiatan_id' => $kegiatan->id,
+                'user_id' => $approver1->id,
+                'keputusan' => 'setuju',
+            ]);
+            $this->assertTidakAdaKolomTidakDikenal("Aksi setujui 1 metode {$metode}");
+
+            // 3. Aksi: Tarik kembali ke draft
+            $resTarik = $this->actingAs($creator)->post(route('admin.kegiatan.tarik-draft', $kegiatan->id));
+            $resTarik->assertRedirect()->assertSessionHas('success');
+            $this->assertSame(KegiatanStatus::Draft, $kegiatan->fresh()->status);
+            $this->assertSame(0, $kegiatan->persetujuan()->count());
+            $this->assertTidakAdaKolomTidakDikenal("Aksi tarik-draft metode {$metode}");
+
+            // 4. Aksi: Ajukan ulang lalu tolak dengan catatan
+            $this->actingAs($creator)->post(route('admin.kegiatan.ajukan', $kegiatan->id))->assertRedirect();
+            $resTolak = $this->actingAs($approver2)->post(route('admin.kegiatan.tolak', $kegiatan->id), [
+                'catatan' => 'Perbaiki jadwal agar tidak bentrok dengan perkuliahan.',
+            ]);
+            $resTolak->assertRedirect()->assertSessionHas('success');
+            $this->assertSame(KegiatanStatus::Draft, $kegiatan->fresh()->status);
+            $this->assertSame('Perbaiki jadwal agar tidak bentrok dengan perkuliahan.', $kegiatan->fresh()->catatan_penolakan);
+            $this->assertTidakAdaKolomTidakDikenal("Aksi tolak metode {$metode}");
+
+            // 5. Aksi: Ajukan ulang dan setujui hingga terbit otomatis
+            $this->actingAs($creator)->post(route('admin.kegiatan.ajukan', $kegiatan->id))->assertRedirect();
+            $this->actingAs($approver1)->post(route('admin.kegiatan.setujui', $kegiatan->id))->assertRedirect();
+            $this->actingAs($approver2)->post(route('admin.kegiatan.setujui', $kegiatan->id))->assertRedirect();
+            $this->assertSame(KegiatanStatus::Published, $kegiatan->fresh()->status);
+            $this->assertTidakAdaKolomTidakDikenal("Aksi terbit otomatis metode {$metode}");
+        }
+    }
+
+    public function test_migrasi_dan_skema_status_kegiatan_dapat_menyimpan_semua_nilai_enum(): void
+    {
+        $creator = $this->createSuperAdmin();
+        $kegiatan = $this->createDraftKegiatan($creator);
+
+        foreach (KegiatanStatus::cases() as $status) {
+            $kegiatan->status = $status;
+            $kegiatan->save();
+            $this->assertSame($status, $kegiatan->fresh()->status);
+        }
     }
 }

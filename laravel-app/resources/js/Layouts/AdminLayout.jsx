@@ -141,8 +141,8 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
                 </header>
 
                 {/* Flash Messages */}
-                {flashVisible && (flash.success || flash.error || flash.info) && (
-                    <div className="p-4 px-6">
+                {flashVisible && (flash.success || flash.error || flash.info || flash.warning) && (
+                    <div className="p-4 px-6 space-y-3">
                         {flash.success && (
                             <div className="flex items-center justify-between p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-medium shadow-md">
                                 <div className="flex items-center gap-2">
@@ -150,6 +150,17 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
                                     <span>{flash.success}</span>
                                 </div>
                                 <button onClick={() => setFlashVisible(false)} className="text-emerald-400 hover:text-white">
+                                    <span className="material-symbols-outlined text-sm">close</span>
+                                </button>
+                            </div>
+                        )}
+                        {flash.warning && (
+                            <div className="flex items-center justify-between p-4 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-medium shadow-md">
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-amber-400">warning</span>
+                                    <span>{flash.warning}</span>
+                                </div>
+                                <button onClick={() => setFlashVisible(false)} className="text-amber-400 hover:text-white">
                                     <span className="material-symbols-outlined text-sm">close</span>
                                 </button>
                             </div>

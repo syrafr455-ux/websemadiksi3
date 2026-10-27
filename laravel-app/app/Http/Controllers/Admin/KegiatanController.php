@@ -27,6 +27,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -645,25 +646,49 @@ class KegiatanController extends Controller
             return back()->with('error', 'Tautan rapat daring wajib diisi sebelum kegiatan dapat diajukan.');
         }
 
-        $kegiatan->status = KegiatanStatus::Diajukan;
-        $kegiatan->catatan_penolakan = null;
-        $kegiatan->save();
+        try {
+            DB::transaction(function () use ($kegiatan) {
+                $kegiatan->status = KegiatanStatus::Diajukan;
+                $kegiatan->catatan_penolakan = null;
+                $kegiatan->save();
 
-        // Hapus persetujuan lama bila ada bekas penolakan sebelumnya
-        $kegiatan->persetujuan()->delete();
+                // Hapus persetujuan lama bila ada bekas penolakan sebelumnya
+                $kegiatan->persetujuan()->delete();
 
-        // Kirim email notifikasi ke semua penyetuju wajib lewat antrean pengamanan email
-        $penyetujuWajib = $kegiatan->penyetujuWajib();
-        foreach ($penyetujuWajib as $penyetuju) {
-            EmailProtectionService::send($penyetuju->email, new KegiatanDiajukanMail($kegiatan, $penyetuju));
+                AuditLog::record(
+                    auth()->id(),
+                    'submit_kegiatan',
+                    "Mengajukan kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id}) untuk persetujuan seluruh super admin",
+                    $kegiatan
+                );
+            });
+        } catch (\Throwable $e) {
+            Log::error('Gagal mengajukan kegiatan dalam transaksi basis data: '.$e->getMessage(), [
+                'kegiatan_id' => $kegiatan->id,
+            ]);
+
+            return back()->with('error', 'Gagal mengajukan kegiatan: kendala penyimpanan basis data.');
         }
 
-        AuditLog::record(
-            auth()->id(),
-            'submit_kegiatan',
-            "Mengajukan kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id}) untuk persetujuan seluruh super admin",
-            $kegiatan
-        );
+        // Pengiriman email dilakukan SETELAH transaksi berhasil
+        $emailGagal = false;
+        try {
+            $penyetujuWajib = $kegiatan->penyetujuWajib();
+            foreach ($penyetujuWajib as $penyetuju) {
+                if (! empty($penyetuju->email)) {
+                    EmailProtectionService::send($penyetuju->email, new KegiatanDiajukanMail($kegiatan, $penyetuju));
+                }
+            }
+        } catch (\Throwable $e) {
+            $emailGagal = true;
+            Log::warning('Pengiriman email pemberitahuan pengajuan kegiatan gagal: '.$e->getMessage(), [
+                'kegiatan_id' => $kegiatan->id,
+            ]);
+        }
+
+        if ($emailGagal) {
+            return back()->with('warning', 'Pengajuan tersimpan, tetapi email pemberitahuan ke penyetuju gagal dikirim. Beri tahu penyetuju secara langsung.');
+        }
 
         return back()->with('success', 'Kegiatan berhasil diajukan untuk persetujuan seluruh Super Admin.');
     }
@@ -684,18 +709,28 @@ class KegiatanController extends Controller
             return back()->with('error', 'Hanya kegiatan berstatus diajukan yang dapat ditarik kembali ke draft.');
         }
 
-        $kegiatan->status = KegiatanStatus::Draft;
-        $kegiatan->save();
+        try {
+            DB::transaction(function () use ($kegiatan) {
+                $kegiatan->status = KegiatanStatus::Draft;
+                $kegiatan->save();
 
-        // Hapus suara persetujuan yang sudah masuk
-        $kegiatan->persetujuan()->delete();
+                // Hapus suara persetujuan yang sudah masuk
+                $kegiatan->persetujuan()->delete();
 
-        AuditLog::record(
-            auth()->id(),
-            'withdraw_kegiatan',
-            "Menarik kembali kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id}) ke status draft",
-            $kegiatan
-        );
+                AuditLog::record(
+                    auth()->id(),
+                    'withdraw_kegiatan',
+                    "Menarik kembali kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id}) ke status draft",
+                    $kegiatan
+                );
+            });
+        } catch (\Throwable $e) {
+            Log::error('Gagal menarik kembali kegiatan ke status draft: '.$e->getMessage(), [
+                'kegiatan_id' => $kegiatan->id,
+            ]);
+
+            return back()->with('error', 'Gagal menarik kembali kegiatan ke status draft.');
+        }
 
         return back()->with('success', 'Kegiatan berhasil ditarik kembali ke status draft.');
     }
@@ -716,24 +751,35 @@ class KegiatanController extends Controller
             return back()->with('error', 'Hanya kegiatan berstatus diajukan yang dapat disetujui.');
         }
 
-        KegiatanPersetujuan::updateOrCreate(
-            ['kegiatan_id' => $kegiatan->id, 'user_id' => auth()->id()],
-            [
-                'keputusan' => 'setuju',
-                'catatan' => null,
-                'data_version' => $kegiatan->sidikJariData(),
-                'ip_address' => $request->ip(),
-            ]
-        );
+        $terbit = false;
+        try {
+            DB::transaction(function () use ($kegiatan, $request, &$terbit) {
+                KegiatanPersetujuan::updateOrCreate(
+                    ['kegiatan_id' => $kegiatan->id, 'user_id' => auth()->id()],
+                    [
+                        'keputusan' => 'setuju',
+                        'catatan' => null,
+                        'data_version' => $kegiatan->sidikJariData(),
+                        'ip_address' => $request->ip(),
+                    ]
+                );
 
-        AuditLog::record(
-            auth()->id(),
-            'approve_kegiatan',
-            "Menyetujui permohonan penerbitan kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id})",
-            $kegiatan
-        );
+                AuditLog::record(
+                    auth()->id(),
+                    'approve_kegiatan',
+                    "Menyetujui permohonan penerbitan kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id})",
+                    $kegiatan
+                );
 
-        $terbit = $kegiatan->cekDanPerbaruiStatusPersetujuan();
+                $terbit = $kegiatan->cekDanPerbaruiStatusPersetujuan();
+            });
+        } catch (\Throwable $e) {
+            Log::error('Gagal mencatat persetujuan kegiatan: '.$e->getMessage(), [
+                'kegiatan_id' => $kegiatan->id,
+            ]);
+
+            return back()->with('error', 'Gagal mencatat persetujuan kegiatan.');
+        }
 
         return back()->with(
             'success',
@@ -768,18 +814,28 @@ class KegiatanController extends Controller
 
         $catatan = trim($validated['catatan']);
 
-        // Satu penolakan (catatan wajib) mengembalikan kegiatan ke draft dan menghapus semua persetujuan
-        $kegiatan->persetujuan()->delete();
-        $kegiatan->status = KegiatanStatus::Draft;
-        $kegiatan->catatan_penolakan = $catatan;
-        $kegiatan->save();
+        try {
+            DB::transaction(function () use ($kegiatan, $catatan) {
+                // Satu penolakan (catatan wajib) mengembalikan kegiatan ke draft dan menghapus semua persetujuan
+                $kegiatan->persetujuan()->delete();
+                $kegiatan->status = KegiatanStatus::Draft;
+                $kegiatan->catatan_penolakan = $catatan;
+                $kegiatan->save();
 
-        AuditLog::record(
-            auth()->id(),
-            'reject_kegiatan',
-            "Menolak pengajuan kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id}). Catatan: {$catatan}",
-            $kegiatan
-        );
+                AuditLog::record(
+                    auth()->id(),
+                    'reject_kegiatan',
+                    "Menolak pengajuan kegiatan '{$kegiatan->nama_kegiatan}' (ID: {$kegiatan->id}). Catatan: {$catatan}",
+                    $kegiatan
+                );
+            });
+        } catch (\Throwable $e) {
+            Log::error('Gagal menolak pengajuan kegiatan: '.$e->getMessage(), [
+                'kegiatan_id' => $kegiatan->id,
+            ]);
+
+            return back()->with('error', 'Gagal menolak pengajuan kegiatan.');
+        }
 
         return back()->with('success', 'Kegiatan ditolak dan dikembalikan ke status draft.');
     }
