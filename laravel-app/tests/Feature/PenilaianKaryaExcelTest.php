@@ -217,7 +217,7 @@ class PenilaianKaryaExcelTest extends TestCase
         $response->assertSessionHas('error');
         $this->assertDatabaseMissing('kegiatan_submissions', [
             'id' => $submissionB->id,
-            'final_score' => 80,
+            'nilai' => 80,
         ]);
 
         @unlink($tempPath);

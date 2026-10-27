@@ -46,10 +46,8 @@ class SertifikatDigitalController extends Controller
             $tab = 'terbitkan';
         }
 
-        $kegiatans = Kegiatan::with([
-            'presensis:id,kegiatan_id,user_id,nama_lengkap,email',
-            'registrations' => fn ($q) => $q->active()->select('id', 'kegiatan_id', 'participant_user_id', 'participant_name', 'participant_identity', 'status_pembayaran', 'status'),
-        ])->latest('tanggal_mulai')->get();
+        // View hanya memakai id, nama, kategori, dan jadwal untuk dropdown; relasi registrations/presensis tidak dipakai.
+        $kegiatans = Kegiatan::latest('tanggal_mulai')->get(['id', 'nama_kegiatan', 'kategori', 'tanggal_mulai', 'status']);
 
         $students = User::whereIn('role', [UserRole::MahasiswaKipk->value, UserRole::UserUmum->value])
             ->orderBy('name')
@@ -59,6 +57,8 @@ class SertifikatDigitalController extends Controller
             'activeTab' => $tab,
             'kegiatans' => $kegiatans,
             'students' => $students,
+            // Modal terbit manual/impor di view dipakai di semua tab; tab selain Terbitkan tidak memilih kegiatan sendiri.
+            'selectedKegiatan' => $request->filled('kegiatan_id') ? Kegiatan::find((int) $request->input('kegiatan_id')) : null,
         ];
 
         if ($tab === 'terbitkan') {

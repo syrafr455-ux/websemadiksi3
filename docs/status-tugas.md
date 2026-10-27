@@ -872,6 +872,10 @@ Status pelacakan pengerjaan bertahap:
         6. Pencegahan kebocoran PII internal.
         7. Integritas dan kompatibilitas sertifikat lama format historis.
 
-
-
+- [ ] **Bagian 24: Tugas T2b (error 500 Sertifikat Digital, menu ke Kelola Kegiatan, editor templat, PDF dari templat)**
+  - **Bagian 1: error 500 `/admin/sertifikat` (selesai)**
+    - Akar masalah: `Admin\SertifikatDigitalController::index()` memuat `registrations` dengan `->select(..., 'status_pembayaran', 'status')`, padahal `kegiatan_registrations` tidak punya kolom `status` (kolomnya `status_pembayaran` dan `status_kehadiran`, dibuktikan dari migrasi `2026_10_13_000005`). PostgreSQL menolaknya (`SQLSTATE[42703]`); SQLite menganggap `"status"` sebagai teks literal sehingga tes hijau. Pemuatan itu (dan `presensis`) ternyata tidak dipakai view `admin.certificates.index` yang hanya memakai id, nama, kategori, dan jadwal; keduanya dihapus, daftar kegiatan memilih kolom yang ada.
+    - Temuan kedua (500 di SQLite dan PostgreSQL): tab Arsip, Penandatangan, dan Pengaturan gagal dengan `Undefined variable $selectedKegiatan` karena modal terbit manual/impor di view memakainya di semua tab. Controller kini selalu mengirim `selectedKegiatan` (null atau kegiatan dari `?kegiatan_id`).
+    - Tes penjaga: `Tests\Concerns\MengauditKolomSql` mencatat setiap query dan mencocokkan kolom ber-awalan tabel dan kolom query satu-tabel dengan `Schema::hasColumn`. Dipasang otomatis di `Tests\TestCase`, jadi seluruh 539 tes ikut diperiksa. `HalamanSertifikatDanKehadiranPenjagaKolomTest` memanggil semua tab sertifikat, tracking kehadiran, ekspor CSV, dan `/verifikasi` dengan registrasi free/pending/paid, presensi, sertifikat, dan penandatangan. Sebelum perbaikan 8 dari 12 tesnya merah dengan query persis dari laporan.
+    - Audit sejak `c86283b` (daftar temuan lengkap): (1) `SertifikatDigitalController` kolom `status` pada `kegiatan_registrations` (diperbaiki); (2) `$selectedKegiatan` tidak terdefinisi di tab non-Terbitkan (diperbaiki); (3) `PenilaianKaryaExcelTest::test_import_rejects_foreign_submission_id` memakai `assertDatabaseMissing('kegiatan_submissions', ['final_score' => 80])`, padahal `final_score` adalah aksesor model, kolomnya `nilai` (kode tes, bukan kode aplikasi; diganti `nilai`). Tidak ada kolom salah lain pada kode aplikasi: auditor dinamis bersih untuk seluruh tes, dan scan statis daftar `select/get([...])/pluck/orderBy/latest` pada controller dan service sertifikat memakai kolom yang ada di migrasi. Keterbatasan: auditor hanya memeriksa query yang dijalankan tes.
 
