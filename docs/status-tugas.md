@@ -673,3 +673,15 @@ Status pelacakan pengerjaan bertahap:
 
 
 
+
+- [ ] **Bagian 23: Tombol Edit Kegiatan Halaman Putih dan Tombol Setujui/Tolak di Samping Edit**
+  - **Temuan akar masalah (ditulis sebelum kode diubah)**:
+    - Gejala: `/admin/kegiatan`, klik ikon pensil, halaman putih kosong tanpa pesan galat. Ikon mata berfungsi.
+    - Penyebab pasti: `laravel-app/resources/js/Pages/Admin/Kegiatan/Index.jsx` baris 522 memakai `<form onSubmit={handleSubmit}>`, padahal `handleSubmit` tidak didefinisikan di berkas itu (`grep handleSubmit` hanya menemukan baris 522; yang ada hanya `simpanDenganAksi`, baris 174). Modal dirender hanya saat `modalOpen === true`. Begitu `openEditModal` memanggil `setModalOpen(true)`, React mengevaluasi JSX modal dan melempar `ReferenceError: handleSubmit is not defined`. Tidak ada error boundary, sehingga seluruh pohon React dilepas dan layar putih.
+    - Asal kesalahan: `git log -S"handleSubmit"` menunjuk `c86283b` (`git show c86283b` menghapus `const handleSubmit = async (e) => {` di baris 23 diff dan menggantinya dengan `simpanDenganAksi`), tetapi atribut `onSubmit={handleSubmit}` pada form tidak ikut diganti.
+    - Dampak: bukan hanya Edit. Tombol "Tambah Kegiatan Baru" membuka modal yang sama, jadi kemungkinan besar putih juga. Kegiatan terbit lama (misalnya "anniversary semadiksi") tidak spesifik rusak: penyebabnya tidak bergantung pada data baris, sehingga semua baris terkena. `npm run build` tidak menangkapnya karena bundler tidak memeriksa identifier yang tidak dideklarasikan.
+    - `kegiatanKeForm()` (`lib/kegiatanForm.js`) dan `keInputWib()`/`keDate()` (`lib/waktuWib.js`) aman terhadap `null`/`undefined` (semua properti memakai `??`, `||`, atau `Array.isArray`), jadi bukan penyebab tampilan putih.
+  - **Cacat kedua yang ditemukan lewat pembacaan kode (kehilangan data)**:
+    - `Kegiatan::$hidden` memuat `tautan_rapat`, `meeting_id`, `passcode_rapat`, sehingga `$item->toArray()` di `KegiatanController@index` tidak membawanya. `kegiatanKeForm()` lalu mengisi ketiganya dengan `''`. Saat form disimpan, `tautan_rapat: ''` dikonversi middleware menjadi `null`, lolos `nullable`, dan `kegiatanUpdatePayload()` menulis `null` ke kolom: tautan, meeting ID, dan passcode tersimpan terhapus tanpa disadari.
+    - Perbaikan yang direncanakan: payload daftar membawa penanda boolean `tautan_rapat_tersimpan`, `meeting_id_tersimpan`, `passcode_rapat_tersimpan` (tanpa nilai rahasia); form menampilkan "tersimpan" dengan placeholder untuk mengganti; klien tidak mengirim isian rahasia yang kosong; server mengabaikan isian rahasia yang kosong pada update.
+  - **Fakta soal commit c86283b (diminta pada tugas ini)**: `git show c86283b --stat` tidak memuat `MenuAdminPerRoleTest`, `KegiatanApprovalTest`, maupun `EventEngineAndBookingTest`. Di `Kegiatan.php` dan `KegiatanBookingController.php` commit itu tidak mengubah `hasSeatLayout` ataupun logika `is_seat_booking_active` (hanya menambah kolom daring/persetujuan; di controller, `is_seat_booking_active` hanya berpindah indentasi di dalam `Arr::only`). Rinciannya ada di laporan akhir.
