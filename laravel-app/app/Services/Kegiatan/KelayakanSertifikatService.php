@@ -175,8 +175,13 @@ class KelayakanSertifikatService
         // 3. Evaluasi Presensi Akhir (Fase 2)
         // Data presensi wajib memiliki registration_id yang valid dan signature_path
         if ($presensi === null) {
-            $presensi = KegiatanPresensi::where('registration_id', $registration->id)
-                ->where('kegiatan_id', $kegiatan->id)
+            $presensi = KegiatanPresensi::where('kegiatan_id', $kegiatan->id)
+                ->where(function ($q) use ($registration) {
+                    $q->where('registration_id', $registration->id);
+                    if ($registration->participant_user_id) {
+                        $q->orWhere('user_id', $registration->participant_user_id);
+                    }
+                })
                 ->first();
         }
 

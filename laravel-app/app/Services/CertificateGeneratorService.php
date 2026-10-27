@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Enums\JenisSertifikat;
 use App\Enums\PeranSertifikat;
+use App\Enums\StatusSertifikat;
 use App\Models\Kegiatan;
 use App\Models\KegiatanPresensi;
 use App\Models\KegiatanRegistration;
@@ -128,7 +130,15 @@ class CertificateGeneratorService
         ?User $user = null,
         ?string $customNomor = null,
         mixed $uploadedPdf = null,
-        PeranSertifikat $peran = PeranSertifikat::Peserta
+        PeranSertifikat $peran = PeranSertifikat::Peserta,
+        ?JenisSertifikat $jenis = null,
+        ?string $predikat = null,
+        ?string $asalInstitusi = null,
+        ?string $nimPenerima = null,
+        ?int $registrationId = null,
+        ?array $penandatanganSnapshot = null,
+        ?string $keteranganPublik = null,
+        ?int $nomorUrut = null
     ): Sertifikat {
         // 1. Tentukan nomor sertifikat format CERT-
         $nomorSertifikat = $customNomor ? trim($customNomor) : Sertifikat::generateCertificateNumber($kegiatan);
@@ -165,7 +175,7 @@ class CertificateGeneratorService
                 'sertifikat' => new Sertifikat(['nomor_sertifikat' => $nomorSertifikat, 'peran_sertifikat' => $peran]),
                 'kegiatan' => $kegiatan,
                 'namaLengkap' => $namaPenerima,
-                'nim' => $user?->nim ?? '-',
+                'nim' => $nimPenerima ?: ($user?->nim ?? '-'),
                 'prodi' => $user?->prodi ?? '-',
                 'qrCodeBase64' => 'data:image/svg+xml;base64,'.base64_encode(
                     QrCode::format('svg')->size(130)->margin(1)->generate(url("/verifikasi?code={$nomorSertifikat}"))
@@ -190,13 +200,28 @@ class CertificateGeneratorService
         $documentHash = hash_file('sha256', $absolutePath);
 
         // 6. Simpan record sertifikat ke tabel sertifikat
+        $jenisEnum = $jenis ?? JenisSertifikat::tryFrom($peran->value) ?? JenisSertifikat::Peserta;
+        $institusi = $asalInstitusi ?: ($user?->institution ?? 'Universitas Nahdlatul Ulama Surabaya');
+        $nim = $nimPenerima ?: ($user?->nim ?? null);
+        $penerimaKey = Sertifikat::hitungPenerimaKey($user?->id, $namaPenerima, $institusi);
+
         return Sertifikat::create([
             'kegiatan_id' => $kegiatan->id,
+            'registration_id' => $registrationId,
             'user_id' => $user?->id,
+            'penerima_key' => $penerimaKey,
             'nama_penerima' => $namaPenerima,
             'email_penerima' => $emailPenerima ?: ($user?->email),
+            'asal_institusi' => $institusi,
+            'nim_penerima' => $nim,
             'nomor_sertifikat' => $nomorSertifikat,
+            'nomor_urut' => $nomorUrut,
             'peran_sertifikat' => $peran,
+            'jenis' => $jenisEnum,
+            'predikat' => $predikat,
+            'keterangan_publik' => $keteranganPublik,
+            'status' => StatusSertifikat::Aktif,
+            'penandatangan_snapshot' => $penandatanganSnapshot,
             'file_pdf_path' => $storageFilePath,
             'document_hash' => $documentHash,
             'is_valid' => true,

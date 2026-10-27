@@ -216,8 +216,20 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::post('/pengguna/{id}/status-kip', [UserManagementController::class, 'statusKip'])->whereNumber('id')->name('users.status-kip');
         Route::post('/pengguna/{id}/akademik', [UserManagementController::class, 'akademik'])->whereNumber('id')->name('users.akademik');
 
-        // Legacy & Admin Certificates
-        Route::get('/sertifikat', [App\Http\Controllers\Admin\DashboardController::class, 'certificates'])->name('certificates');
+        // Pusat Sertifikat Digital (Super Admin)
+        Route::get('/sertifikat', [App\Http\Controllers\Admin\SertifikatDigitalController::class, 'index'])->name('certificates');
+        Route::post('/sertifikat/terbitkan-massal', [App\Http\Controllers\Admin\SertifikatDigitalController::class, 'batchIssue'])->name('certificates.batch-issue');
+        Route::post('/sertifikat/manual', [App\Http\Controllers\Admin\SertifikatDigitalController::class, 'storeManual'])->name('certificates.manual');
+        Route::post('/sertifikat/impor', [App\Http\Controllers\Admin\SertifikatDigitalController::class, 'importRecipients'])->name('certificates.import');
+        Route::get('/sertifikat/templat', [App\Http\Controllers\Admin\SertifikatDigitalController::class, 'downloadTemplate'])->name('certificates.template');
+        Route::put('/sertifikat/{id}/tampilan', [App\Http\Controllers\Admin\SertifikatDigitalController::class, 'updateDisplay'])->whereNumber('id')->name('certificates.update-display');
+        Route::post('/sertifikat/{id}/cabut', [App\Http\Controllers\Admin\SertifikatDigitalController::class, 'revoke'])->whereNumber('id')->name('certificates.revoke');
+        Route::post('/sertifikat/penandatangan', [App\Http\Controllers\Admin\SertifikatDigitalController::class, 'storePenandatangan'])->name('certificates.penandatangan.store');
+        Route::put('/sertifikat/penandatangan/{id}', [App\Http\Controllers\Admin\SertifikatDigitalController::class, 'updatePenandatangan'])->whereNumber('id')->name('certificates.penandatangan.update');
+        Route::post('/sertifikat/penugasan-penandatangan', [App\Http\Controllers\Admin\SertifikatDigitalController::class, 'assignPenandatangan'])->name('certificates.penandatangan.assign');
+        Route::post('/sertifikat/pengaturan', [App\Http\Controllers\Admin\SertifikatDigitalController::class, 'updatePengaturan'])->name('certificates.pengaturan.update');
+
+        // Legacy & Admin Certificates Fallback
         Route::post('/sertifikat', [App\Http\Controllers\Admin\DashboardController::class, 'storeCertificate'])->name('certificates.store');
         Route::delete('/sertifikat/{id}', [App\Http\Controllers\Admin\DashboardController::class, 'deleteCertificate'])->name('certificates.delete');
 

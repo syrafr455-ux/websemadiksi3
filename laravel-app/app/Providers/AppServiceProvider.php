@@ -11,11 +11,13 @@ use App\Models\CustomFormSubmission;
 use App\Models\Kegiatan;
 use App\Models\KegiatanPresensi;
 use App\Models\KipkDocument;
+use App\Models\Sertifikat;
 use App\Models\User;
 use App\Policies\CustomFormSubmissionPolicy;
 use App\Policies\KegiatanPolicy;
 use App\Policies\KegiatanPresensiPolicy;
 use App\Policies\KipkDocumentPolicy;
+use App\Policies\SertifikatPolicy;
 use App\Policies\UserPolicy;
 use App\Services\Academic\ApiUnusaAcademicProvider;
 use App\Services\Academic\DatabaseUnusaAcademicProvider;
@@ -87,5 +89,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(KipkDocument::class, KipkDocumentPolicy::class);
         Gate::policy(CustomFormSubmission::class, CustomFormSubmissionPolicy::class);
         Gate::policy(KegiatanPresensi::class, KegiatanPresensiPolicy::class);
+        Gate::policy(Sertifikat::class, SertifikatPolicy::class);
     }
 }

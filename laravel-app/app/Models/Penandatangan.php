@@ -54,9 +54,9 @@ class Penandatangan extends Model
             $nomor = trim($this->nomor_identitas);
             $panjang = strlen($nomor);
             if ($panjang <= 6) {
-                $nomorSamar = substr($nomor, 0, 1).str_repeat('*', max(1, $panjang - 2)).substr($nomor, -1);
+                $nomorSamar = substr($nomor, 0, 1).'****'.substr($nomor, -1);
             } else {
-                $nomorSamar = substr($nomor, 0, 4).str_repeat('*', max(1, $panjang - 8)).substr($nomor, -4);
+                $nomorSamar = substr($nomor, 0, 4).'****'.substr($nomor, -4);
             }
 
             return "{$jenis}: {$nomorSamar}";

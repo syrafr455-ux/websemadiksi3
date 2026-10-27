@@ -262,21 +262,14 @@ class DashboardController extends Controller
     }
 
     /**
-     * Manage Certificates (Alur Baru - Tabel sertifikat & Kegiatan).
+     * Manage Certificates (Pusat Sertifikat Digital - Delegasi ke SertifikatDigitalController).
      */
     public function certificates(): View
     {
-        $sertifikats = Sertifikat::with(['kegiatan', 'user'])->latest('id')->paginate(15);
-        $kegiatans = Kegiatan::with([
-            'presensis:id,kegiatan_id,user_id,nama_lengkap,email',
-            'registrations' => fn ($q) => $q->active()->select('id', 'kegiatan_id', 'participant_user_id', 'participant_name', 'participant_identity'),
-        ])->orderBy('nama_kegiatan')->get();
-        // Penerima sertifikat = mahasiswa_kipk & user_umum (tidak membaca role 'student')
-        $students = User::whereIn('role', [UserRole::MahasiswaKipk->value, UserRole::UserUmum->value])
-            ->orderBy('name')
-            ->get(['id', 'name', 'email', 'nim']);
-
-        return view('admin.certificates.index', compact('sertifikats', 'kegiatans', 'students'));
+        return app(SertifikatDigitalController::class)->index(
+            request(),
+            app(KelayakanSertifikatService::class)
+        );
     }
 
     public function storeCertificate(Request $request, CertificateGeneratorService $generatorService): RedirectResponse

@@ -810,4 +810,35 @@ Status pelacakan pengerjaan bertahap:
       - `Tests\Feature\AdminTrackingKehadiranTest` (4 tes, 48 assertions) memvalidasi netralisasi formula CSV, corong & filter kelayakan offline, verifikasi karya lomba, dan ekspor CSV berstempel WIB.
       - Seluruh tes terdampak `AdminPresensiAkhirTest` (5 tes, 63 assertions) tetap lulus 100%.
 
+  - **BAGIAN 6: Menu Sertifikat Digital: Arsip, Terbitkan Massal, dan Penerima Manual [SELESAI]**:
+    - **Pusat Sertifikat Digital Modern**:
+      - Mereformasi `/admin/sertifikat` menjadi portal manajemen 4 sub-tab: `terbitkan`, `arsip`, `penandatangan`, dan `pengaturan`.
+      - Hak akses dikunci ketat khusus `UserRole::SuperAdmin` via `App\Policies\SertifikatPolicy` (role lain mendapatkan respons 403 Forbidden).
+    - **Penerbitan Massal Idempoten & Transaksional (Chunk 50)**:
+      - Validasi waktu otomatis: untuk jenis `peserta`, tombol/aksi penerbitan hanya aktif jika kegiatan telah berakhir (`tanggal_selesai <= now()`) dan sesi presensi akhir telah ditutup; jenis `juri`, `pembicara`, dan `juara` dapat diterbitkan setelah kegiatan dimulai.
+      - Evaluasi ulang server-side (`KelayakanSertifikatService`): server mengecek ulang tiket pembayaran, check-in fase 1, presensi akhir bertanda tangan digital, karya lomba, dan rekam juri/juara. Penerima tidak layak atau yang sertifikat aktifnya sudah ada otomatis dilewati secara aman (idempoten).
+      - Penomoran seri atomik: `Sertifikat::generateNomorSertifikatAtomik($kegiatan)` menggunakan `SELECT MAX(nomor_urut) ... FOR UPDATE` menjamin tidak ada duplikasi nomor seri pada penerbitan konkuren.
+      - Notifikasi email: dikirim via `App\Mail\SertifikatTerbitMail` melalui pintu terpusat `EmailProtectionService::send($email, $mailable, false)` (kategori massal via `SendProtectedEmailJob`).
+      - Audit trail: mencatat aksi `sertifikat_batch_terbit` ke `AuditLog` lengkap dengan jumlah sukses, dilewati, dan daftar ID sertifikat.
+    - **Penerima Manual & Impor XLSX / CSV**:
+      - Form penerima manual tunggal: mendukung nama, institusi, jenis, predikat (wajib untuk juara), email, dan NIM tanpa kewajiban memiliki akun sistem sebelumnya.
+      - Impor berkas `.xlsx` dan `.csv`: menggunakan `SimpleXlsxService` dan CSV parser lokal dengan batas aman 500 baris dan ukuran maksimal 2 MB, penetralan formula injeksi spreadsheet (`CsvSanitizer`), serta validasi struktur kolom templat. Tersedia endpoint unduh templat `/admin/sertifikat/template`.
+    - **Arsip Sertifikat, Edit Tampilan & Pencabutan (Soft Revoke)**:
+      - Tab Arsip dilengkapi filter kegiatan, jenis sertifikat, status (aktif/dicabut), dan pencarian terpadu (nomor sertifikat, nama penerima, asal institusi, NIM).
+      - Edit data tampilan (nama, institusi, jenis, predikat, keterangan): mewajibkan alasan perubahan, mencatat riwayat ke tabel `sertifikat_riwayat_perubahan` (waktu, user admin, IP, kolom, nilai lama, nilai baru, alasan). Berkas PDF dan hash SHA-256 asli tidak berubah, dan ditampilkan peringatan edukatif bahwa berkas PDF belum diperbarui.
+      - Pencabutan sertifikat: mengganti penghapusan keras dengan soft revoke (`status = 'dicabut'`, mengisi `alasan_pencabutan`, `dicabut_pada`, `dicabut_oleh`). Tidak ada penghapusan baris DB agar keabsahan audit publik tetap terjaga.
+
+  - **BAGIAN 7: Menu Penandatangan (Pejabat dan Panitia) [SELESAI]**:
+    - **Master Data Penandatangan**:
+      - Model `App\Models\Penandatangan` mengelola daftar pejabat: nama, gelar, jabatan (preset Rektor, Dekan, Pembina, Ketua Umum, dll. atau teks bebas), jenis identitas (`nip`, `nim`, `nidn`, `nuptk`, `none`), nomor identitas, institusi, berkas tanda tangan PNG/WebP (maks 1 MB, disk privat), serta status aktif.
+    - **Penugasan Per Kegiatan & Snapshot Beku**:
+      - Model `App\Models\KegiatanPenandatangan`: mengatur penugasan 1 s.d. 4 penandatangan per kegiatan secara berurutan, dengan dukungan penugasan spesifik per jenis sertifikat (`semua`, `peserta`, `juri`, `pembicara`, `juara`).
+      - Snapshot beku (`penandatangan_snapshot`): saat sertifikat diterbitkan, seluruh atribut penandatangan (nama lengkap dengan gelar, jabatan, jenis & nomor identitas terformat, institusi, mode tampil) dibekukan dalam kolom JSON `penandatangan_snapshot` pada record sertifikat. Modifikasi master data di kemudian hari dijamin tidak akan mengubah data sertifikat masa lalu.
+    - **Privasi Identitas Penandatangan**:
+      - Disediakan 3 opsi mode tampilan publik: `sembunyikan` (hanya nama, gelar, institusi), `samarkan` (contoh: `NIP: 1975****1001`), dan `penuh` (NIP/NIM lengkap).
+      - Default untuk penandatangan baru: `sembunyikan`. Penandatangan lama mempertahankan tampilan saat ini. Admin perlu meninjau privasi NIP dan NIM.
+    - **Pengujian Fitur**:
+      - Suite pengujian `Tests\Feature\AdminSertifikatDigitalTest` (10 tes, 71 assertions) lulus 100%.
+
+
 
