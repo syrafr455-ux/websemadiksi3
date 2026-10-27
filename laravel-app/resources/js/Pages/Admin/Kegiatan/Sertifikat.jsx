@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
+import EditorTemplatSertifikat from '@/Components/Admin/EditorTemplatSertifikat';
 
 const MAKS_PENANDATANGAN = 4;
 
@@ -98,6 +99,8 @@ export default function KegiatanSertifikat({
     ringkasan = {},
     tautan = {},
     penandatangan = {},
+    templat = null,
+    kegiatanLain = [],
 }) {
     const [tab, setTab] = useState('templat');
     const kelasTab = (aktif) => `px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 ${
@@ -144,8 +147,8 @@ export default function KegiatanSertifikat({
                 </nav>
 
                 <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                    {tab === 'templat' && (
-                        <p className="text-xs text-slate-400">Tata letak bawaan sistem dipakai sampai templat disiapkan.</p>
+                    {tab === 'templat' && templat && (
+                        <EditorTemplatSertifikat kegiatanId={kegiatan.id} templat={templat} kegiatanLain={kegiatanLain} />
                     )}
                     {tab === 'penandatangan' && <PanelPenandatangan kegiatanId={kegiatan.id} penandatangan={penandatangan} />}
                 </section>

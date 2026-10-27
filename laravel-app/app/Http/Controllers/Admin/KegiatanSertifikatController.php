@@ -10,6 +10,7 @@ use App\Models\KegiatanPenandatangan;
 use App\Models\Penandatangan;
 use App\Models\Sertifikat;
 use App\Services\Kegiatan\KelayakanSertifikatService;
+use App\Services\Sertifikat\TemplatSertifikatService;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -20,7 +21,7 @@ use Inertia\Response;
  */
 class KegiatanSertifikatController extends Controller
 {
-    public function show(int $id, KelayakanSertifikatService $kelayakan): Response
+    public function show(int $id, KelayakanSertifikatService $kelayakan, TemplatSertifikatService $templat): Response
     {
         Gate::authorize('viewAny', Sertifikat::class);
 
@@ -58,6 +59,8 @@ class KegiatanSertifikatController extends Controller
                 'terbitkan' => route('admin.certificates', ['tab' => 'terbitkan', 'kegiatan_id' => $kegiatan->id]),
                 'arsip' => route('admin.certificates', ['tab' => 'arsip', 'kegiatan_id' => $kegiatan->id]),
             ],
+            'templat' => $templat->untukEditor($kegiatan),
+            'kegiatanLain' => Kegiatan::where('id', '!=', $kegiatan->id)->latest('tanggal_mulai')->get(['id', 'nama_kegiatan']),
             'penandatangan' => [
                 'ditugaskan' => $ditugaskan,
                 'master' => Penandatangan::where('is_active', true)->orderBy('nama')->get(['id', 'nama', 'gelar', 'jabatan']),

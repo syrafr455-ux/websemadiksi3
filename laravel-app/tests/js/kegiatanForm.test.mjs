@@ -102,6 +102,7 @@ const BERKAS_DIPERIKSA = [
     'resources/js/Pages/Admin/Kegiatan/Show.jsx',
     'resources/js/Pages/Admin/Kegiatan/Sertifikat.jsx',
     'resources/js/Components/Admin/AksiPersetujuanKegiatan.jsx',
+    'resources/js/Components/Admin/EditorTemplatSertifikat.jsx',
 ];
 
 for (const relatif of BERKAS_DIPERIKSA) {
