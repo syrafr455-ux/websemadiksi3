@@ -512,36 +512,92 @@ Seluruh input tanggal dan waktu pada formulir admin dikelola melalui komponen te
 
 ---
 
-## 7. Fitur "Terbitkan Sertifikat"
+## 7. Modul Sertifikat Digital, Penandatangan, dan Verifikasi Dinamis
 
 > [!NOTE]
-> **STATUS FITUR PADA KODE: SUDAH TERSEDIA**  
-> Fitur ini telah diimplementasikan penuh di dalam kode, baik sebagai antarmuka penerbitan manual ber-template PDF di panel admin maupun sebagai layanan otomatis (*batch generator*) saat peserta menyelesaikan presensi akhir.
+> **STATUS FITUR PADA KODE: SUDAH TERSEDIA LENGKAP (TUGAS T2a)**  
+> Fitur sertifikat digital telah dirombak menyeluruh dengan sistem kelayakan satu pintu (`KelayakanSertifikatService`), penerbitan massal transaksional terverifikasi, master penandatangan dengan snapshot beku dan privasi identitas, arsip audit riwayat perubahan & pencabutan (soft revoke), serta portal verifikasi publik dinamis yang memvalidasi integritas berkas riil (SHA-256).
 
-### 1. Antarmuka Penerbitan Sertifikat Panel Admin
-- **Role yang Berhak**: `super_admin` (`Route::middleware(['role:super_admin'])`).
-- **URL Awal**: `/admin/sertifikat` (Route: `admin.certificates`).
-- **Menu Sidebar**: Klik menu **"Sertifikat Digital"** (ikon `workspace_premium`).
-- **Halaman**: Berjudul **"Penerbitan & Arsip Sertifikat"** dengan tata letak 2 kolom:
-  - **Kolom Kiri (Formulir Penerbitan)**:
-    - Dropdown: **"Pilih Kegiatan / Beasiswa *"** (`kegiatan_id`)
-    - Input Teks: **"Penerima Sertifikat (Mahasiswa) *"** (`nama_lengkap`, dilengkapi fitur autocomplete datalist rekomendasi peserta kegiatan/mahasiswa KIP-K).
-    - Input Nomor Seri: **"Nomor Seri Sertifikat"** (`nomor_sertifikat`) beserta tombol klik **"Generate Otomatis"** (menghasilkan format unik: `CERT-{KODE_KEGIATAN}-{TAHUN}-{NOMOR}`).
-    - Area Unggah Berkas: **"Lampiran Berkas Sertifikat (PDF) *"** (`certificate_file`, area *drag-and-drop* berkas PDF maksimal 10 MB).
-    - Tombol Submit: berlabel persis **"Terbitkan Sertifikat"** (ikon `verified`).
-  - **Kolom Kanan (Tabel Arsip)**:
-    - Judul: **"Daftar Sertifikat Terbit"**.
-    - Menampilkan data: Mahasiswa, Nama Kegiatan, Nomor Seri unik, dan Tanggal Terbit.
-    - Tombol Aksi per Baris:
-      - **"Unduh Berkas"** (`download` &rarr; unduh file PDF)
-      - **"Verifikasi Publik"** (`verified` &rarr; membuka portal verifikasi publik di `/verifikasi?code=CERT-...`)
-      - **"Hapus"** (`delete` &rarr; hapus arsip sertifikat)
+### 1. Hak Akses & Pintu Masuk
+- **Role yang Berhak**: Khusus `super_admin` (`App\Policies\SertifikatPolicy`). Role lain (peserta, verifikator berkas, juri) mendapatkan respons `403 Forbidden`.
+- **URL Panel Admin**: `/admin/sertifikat` (Route: `admin.certificates`).
+- **Sidebar**: Klik menu **"Sertifikat Digital"** (ikon `workspace_premium`).
 
-### 2. Penerbitan Otomatis Lewat Presensi Akhir Fase 2
-Selain form admin di atas, sistem menyediakan *engine* otomatis `CertificateGeneratorService` yang:
-1. Membaca template PDF kegiatan yang diunggah di konfigurasi kegiatan.
-2. Menempelkan nama lengkap peserta, nomor seri unik, dan kode QR verifikasi dinamis di pojok sertifikat.
-3. Langsung terbit otomatis begitu peserta menyelesaikan tanda tangan digital presensi akhir di ponselnya.
+### 2. Antarmuka 4 Sub-Navigasi Panel Admin (`/admin/sertifikat`)
+
+#### A. Sub-Tab 1: "Terbitkan Massal" (`?tab=terbitkan`)
+1. **Penerbitan Berdasarkan Kelayakan Kegiatan**:
+   - Pilih kegiatan pada dropdown.
+   - Sistem menampilkan tabel calon penerima yang dihitung secara *real-time* oleh `KelayakanSertifikatService`:
+     - **Peserta**: Wajib check-in fase 1, presensi akhir fase 2 bertanda tangan kanvas, lunas (bila berbayar), dan telah mengumpulkan karya (bila lomba). Tombol penerbitan peserta hanya aktif bila kegiatan telah berakhir (`tanggal_selesai <= now()`) dan presensi akhir telah ditutup.
+     - **Juri / Pembicara / Juara**: Dapat diterbitkan setelah kegiatan dimulai.
+   - Klik tombol **"Terbitkan Massal Terpilih"**:
+     - Sistem memproses penerbitan dalam transaksi aman (*chunk* 50 baris).
+     - Menghasilkan nomor seri atomik berurutan tanpa celah: `CERT-{KODE}-{TAHUN}-{NOMOR}`.
+     - Menyimpan snapshot penandatangan beku (`penandatangan_snapshot`).
+     - Mengirim notifikasi email massal melalui antrean terproteksi `SendProtectedEmailJob`.
+2. **Penerbitan Manual Non-Akun**:
+   - Bagian form **"Tambah Penerima Manual"**: masukkan Nama Lengkap, Asal Institusi, Jenis (`peserta`, `juri`, `pembicara`, `juara`), Predikat (contoh: "Juara 1", "Keynote Speaker"), Email, dan NIM/NIP opsional.
+   - Berhasil menerbitkan sertifikat untuk pihak luar tanpa kewajiban memiliki akun SEMADIKSI.
+3. **Impor Berkas XLSX / CSV**:
+   - Unduh templat berkas di tautan **"Unduh Templat Berkas Impor (.csv)"** (`/admin/sertifikat/templat`).
+   - Unggah berkas maksimal 500 baris / 2 MB.
+   - Sistem menetralkan formula jahat spreadsheet (`CsvSanitizer`), memvalidasi kolom wajib, dan menerbitkan sertifikat secara massal.
+
+#### B. Sub-Tab 2: "Arsip Sertifikat" (`?tab=arsip`)
+1. **Pencarian & Filter Terpadu**:
+   - Filter menurut Kegiatan, Jenis Sertifikat (`Semua`, `Peserta`, `Juri`, `Pembicara`, `Juara`), dan Status (`Semua`, `Aktif`, `Dicabut`).
+   - Kotak pencarian realtime berdasarkan nama penerima, nomor seri, institusi, atau NIM.
+2. **Aksi Per Baris**:
+   - **Unduh PDF** (`/sertifikat/{id}/download`): mengunduh berkas fisik PDF resmi.
+   - **Verifikasi Publik** (`/verifikasi?code=...`): membuka halaman verifikasi publik langsung di tab baru.
+   - **Edit Data Tampilan**: klik tombol edit &rarr; ubah Nama, Institusi, Jenis, Predikat, atau Keterangan &rarr; **Wajib memasukkan Alasan Perubahan** (minimal 5 karakter). Sistem mencatat audit trail ke tabel `sertifikat_riwayat_perubahan` dan menampilkan notifikasi transparan di halaman verifikasi publik tanpa mengubah berkas PDF atau hash dokumen asli.
+   - **Cabut Sertifikat (Soft Revoke)**: klik tombol cabut &rarr; masukkan **Alasan Pencabutan Wajib**. Status sertifikat berubah menjadi `dicabut` (`dicabut_pada` terisi waktu WIB). Data tidak dihapus permanen (*no hard delete*) agar integritas audit tetap terjaga.
+
+#### C. Sub-Tab 3: "Penandatangan" (`?tab=penandatangan`)
+1. **Kelola Master Pejabat**:
+   - Menambahkan pejabat: Nama Lengkap beserta Gelar, Jabatan (Rektor, Dekan, Pembina, Ketua Umum, dll.), Jenis Identitas (`NIP`, `NIM`, `NIDN`, `NUPTK`, atau `None`), Nomor Identitas, Asal Institusi, dan unggahan tanda tangan digital (PNG transparan/WebP maks 1 MB).
+2. **Penugasan Per Kegiatan**:
+   - Tentukan susunan penandatangan (1 sampai 4 pejabat) untuk suatu kegiatan.
+   - Pilih peran sertifikat target (`Semua`, `Peserta`, `Juri`, `Pembicara`, atau `Juara`).
+   - Pilih **Mode Privasi Nomor Identitas**:
+     - `sembunyikan`: hanya menampilkan Nama, Gelar, Jabatan, dan Institusi.
+     - `samarkan`: menyamarkan digit identitas (contoh: `1975****1001`).
+     - `penuh`: menampilkan NIP/NIM lengkap.
+
+#### D. Sub-Tab 4: "Pengaturan Verifikasi" (`?tab=pengaturan`)
+- Pengaturan sakelar konfigurasi publik:
+  - Tampilkan Asal Institusi (On/Off)
+  - Tampilkan Jenis & Predikat Sertifikat (On/Off)
+  - Tampilkan NIM / Nomor Identitas Tersamar (On/Off)
+  - Tampilkan Penyelenggara Resmi (On/Off)
+  - Tampilkan Keterangan Publik (On/Off)
+  - Tampilkan Tabel Penandatangan Resmi (On/Off)
+- Kustomisasi Teks Pengantar Halaman Verifikasi.
+
+---
+
+### 3. Halaman Verifikasi Publik Dinamis (`/verifikasi`)
+- **Akses Publik Bebas Login**: `GET /verifikasi?code=CERT-...` (dengan pembatasan laju *Rate Limiting* 15 req/menit via `throttle:15,1`).
+- **Verifikasi Realistis & Indikator Status**:
+  1. **Lencana Peran & Predikat**: Badge visual khusus untuk `Peserta`, `Juri`, `Pembicara`, dan `Juara`. Jika memiliki predikat, tampil jelas di bawahnya (contoh: *"Juara 1"*).
+  2. **Penyamaran NIM Konsisten**: NIM disamarkan menggunakan `Masking::nim()` (contoh: `2240****55`). NIM lengkap dan data pribadi internal (email, nomor telepon) dijamin tidak bocor ke publik.
+  3. **Certified**: Bernilai **YA (SAH)** bila penandatangan terverifikasi resmi dalam snapshot penerbitan.
+  4. **Validity**: Bernilai **VALID (ASLI)** bila status aktif DAN checksum SHA-256 berkas fisik di storage cocok 100% dengan `document_hash`. Bernilai **TIDAK VALID** bila sertifikat dicabut atau berkas fisik PDF diubah/rusak di storage.
+  5. **Status Dicabut**: Bila sertifikat dicabut, tampil banner merah mencolok **"DICABUT (TIDAK SAH)"** disertai alasan pencabutan dan tanggal pencabutan dalam format WIB.
+  6. **Catatan Transparan Edit Data**: Jika data tampilan pernah diedit oleh panitia, tampil kotak pemberitahuan: *"Catatan: Data tampilan sertifikat ini telah diperbarui oleh panitia pada {tanggal WIB}."*.
+  7. **Kotak Legenda Edukatif**: Penjelasan teknis mengenai makna *Certified* (keabsahan penandatangan) dan *Validity* (keutuhan berkas digital dan status aktif).
+
+---
+
+### 4. Halaman Pengguna / Mahasiswa
+1. **Menu "Kegiatan Saya" (`/dashboard/kegiatan-saya`)**:
+   - Menghapus auto-penerbitan langsung pada saat presensi.
+   - Peserta yang telah menyelesaikan presensi akhir namun sertifikatnya belum diterbitkan oleh panitia akan melihat badge status informatif: **"Menunggu verifikasi panitia"**.
+   - Begitu sertifikat diterbitkan oleh Super Admin, tombol **"Unduh Sertifikat"** otomatis muncul dengan nomor seri resmi.
+2. **Menu "Sertifikat" (`/dashboard/sertifikat`)**:
+   - Seluruh sertifikat milik pengguna dikelompokkan rapi per kategori jenis peran (`Peserta Kegiatan`, `Dewan Juri`, `Narasumber / Pembicara`, dan `Pemenang / Juara`).
+   - Setiap kartu menyertakan nomor seri resmi, tanggal terbit WIB, nama kegiatan, dan tombol unduh PDF resmi.
 
 ---
 
