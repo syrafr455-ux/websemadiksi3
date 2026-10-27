@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
+import AksiPersetujuanKegiatan from '@/Components/Admin/AksiPersetujuanKegiatan';
 import InputWaktuWib from '@/Components/Form/InputWaktuWib';
 import { formatWib, tambahDuaJamWib } from '@/lib/waktuWib';
 import {
@@ -16,6 +17,15 @@ import {
     narasumberKosong,
 } from '@/lib/kegiatanForm';
 
+/** Penanda di label isian rahasia rapat: nilainya sudah tersimpan di server dan tidak ditampilkan ulang. */
+function LencanaTersimpan() {
+    return (
+        <span className="ml-2 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px] font-bold align-middle">
+            Tersimpan
+        </span>
+    );
+}
+
 export default function KegiatanIndex({
     title = 'Manajemen Kegiatan',
     kegiatans = {},
@@ -24,6 +34,7 @@ export default function KegiatanIndex({
     statusOptions = [],
     menungguPersetujuanAnda = 0,
     adaSuperAdminLain = false,
+    kegiatanEdit = null,
 }) {
     const [search, setSearch] = useState(filters.q || '');
     const [filterCategory, setFilterCategory] = useState(filters.kategori || '');
@@ -53,6 +64,26 @@ export default function KegiatanIndex({
         setData(kegiatanKeForm(item));
         setCurrentStep(1);
         setModalOpen(true);
+    };
+
+    // Tombol "Edit Kegiatan" di halaman detail membuka daftar dengan ?edit={id}; server mengirim baris itu
+    // sebagai kegiatanEdit karena belum tentu berada di halaman daftar yang sedang tampil.
+    useEffect(() => {
+        if (!kegiatanEdit) return;
+        openEditModal(kegiatanEdit);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('edit');
+        window.history.replaceState(window.history.state, '', url);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [kegiatanEdit?.id]);
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (currentStep < 5) {
+            setCurrentStep((prev) => prev + 1);
+            return;
+        }
+        simpanDenganAksi('draft');
     };
 
     const handleDelete = (id, nama) => {
@@ -187,7 +218,7 @@ export default function KegiatanIndex({
         }
 
         const isDaringOrHybrid = data.lokasi_type === 'online' || data.metode_pelaksanaan === 'online' || data.metode_pelaksanaan === 'hybrid';
-        if (aksi === 'ajukan' && isDaringOrHybrid && !data.tautan_rapat) {
+        if (aksi === 'ajukan' && isDaringOrHybrid && !data.tautan_rapat && !editingItem?.tautan_rapat_tersimpan) {
             setError('tautan_rapat', 'Tautan rapat daring wajib diisi sebelum kegiatan diajukan.');
             setCurrentStep(2);
             return;
@@ -391,37 +422,8 @@ export default function KegiatanIndex({
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    {/* Tombol Tinjau & Setujui untuk Super Admin yang wajib memberi suara */}
-                                                    {item.perlu_tindakan_anda && (
-                                                        <a
-                                                            href={`/admin/kegiatan/${item.id}#persetujuan`}
-                                                            className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[11px] shadow-sm flex items-center gap-1 transition-all"
-                                                            title="Tinjau & Berikan Keputusan Persetujuan"
-                                                        >
-                                                            <span className="material-symbols-outlined text-xs">how_to_reg</span>
-                                                            <span>Tinjau &amp; Setujui</span>
-                                                        </a>
-                                                    )}
-
-                                                    {/* Tombol Ajukan untuk Pembuat saat masih Draft */}
-                                                    {item.bisa_diajukan_oleh_anda && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                if (confirm(`Ajukan kegiatan "${item.nama_kegiatan}" untuk ditinjau oleh Super Admin lain?`)) {
-                                                                    router.post(`/admin/kegiatan/${item.id}/ajukan`);
-                                                                }
-                                                            }}
-                                                            className="px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-bold text-[11px] flex items-center gap-1 transition-all"
-                                                            title="Ajukan Persetujuan ke Super Admin Lain"
-                                                        >
-                                                            <span className="material-symbols-outlined text-xs">send</span>
-                                                            <span>Ajukan</span>
-                                                        </button>
-                                                    )}
-
+                                            <td className="px-6 py-4 text-right min-w-[16rem]">
+                                                <div className="flex flex-wrap items-center justify-end gap-2">
                                                     <a
                                                         href={`/admin/kegiatan/${item.id}`}
                                                         className="p-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300"
@@ -445,6 +447,11 @@ export default function KegiatanIndex({
                                                     >
                                                         <span className="material-symbols-outlined text-sm">edit</span>
                                                     </button>
+                                                    <AksiPersetujuanKegiatan
+                                                        kegiatanId={item.id}
+                                                        namaKegiatan={item.nama_kegiatan}
+                                                        aksi={item}
+                                                    />
                                                     <button
                                                         onClick={() => handleDelete(item.id, item.nama_kegiatan)}
                                                         className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400"
@@ -802,14 +809,15 @@ export default function KegiatanIndex({
                                                     <div>
                                                         <label className="block text-[11px] font-bold text-slate-300 mb-1">
                                                             Tautan Rapat Resmi *
+                                                            {editingItem?.tautan_rapat_tersimpan && <LencanaTersimpan />}
                                                         </label>
                                                         <input
                                                             type="url"
                                                             value={data.tautan_rapat}
                                                             onChange={(e) => setData('tautan_rapat', e.target.value)}
-                                                            placeholder="https://zoom.us/j/1234567890"
+                                                            placeholder={editingItem?.tautan_rapat_tersimpan ? 'Kosongkan untuk mempertahankan, isi untuk mengganti' : 'https://zoom.us/j/1234567890'}
                                                             className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-mono"
-                                                            required={data.metode_pelaksanaan === 'online' || data.metode_pelaksanaan === 'hybrid'}
+                                                            required={(data.metode_pelaksanaan === 'online' || data.metode_pelaksanaan === 'hybrid') && !editingItem?.tautan_rapat_tersimpan}
                                                         />
                                                         {errors.tautan_rapat && (
                                                             <span className="text-[10px] text-rose-400 block mt-1">{errors.tautan_rapat}</span>
@@ -822,23 +830,29 @@ export default function KegiatanIndex({
 
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                     <div>
-                                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Meeting ID (Opsional)</label>
+                                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                                                            Meeting ID (Opsional)
+                                                            {editingItem?.meeting_id_tersimpan && <LencanaTersimpan />}
+                                                        </label>
                                                         <input
                                                             type="text"
                                                             value={data.meeting_id}
                                                             onChange={(e) => setData('meeting_id', e.target.value)}
-                                                            placeholder="Contoh: 812 3456 7890"
+                                                            placeholder={editingItem?.meeting_id_tersimpan ? 'Kosongkan untuk mempertahankan, isi untuk mengganti' : 'Contoh: 812 3456 7890'}
                                                             className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-mono"
                                                         />
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Passcode / Kata Sandi (Opsional)</label>
+                                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                                                            Passcode / Kata Sandi (Opsional)
+                                                            {editingItem?.passcode_rapat_tersimpan && <LencanaTersimpan />}
+                                                        </label>
                                                         <input
                                                             type="text"
                                                             value={data.passcode_rapat}
                                                             onChange={(e) => setData('passcode_rapat', e.target.value)}
-                                                            placeholder="Contoh: semadiksi2026"
+                                                            placeholder={editingItem?.passcode_rapat_tersimpan ? 'Kosongkan untuk mempertahankan, isi untuk mengganti' : 'Contoh: semadiksi2026'}
                                                             className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-mono"
                                                         />
                                                     </div>

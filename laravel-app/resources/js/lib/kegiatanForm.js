@@ -1,7 +1,7 @@
 // Pemetaan data kegiatan (props dari server) <-> state form admin.
 // Nama field form = nama kolom model App\Models\Kegiatan, kecuali berkas unggahan (panduan_file).
 
-import { keInputWib } from './waktuWib';
+import { keInputWib } from './waktuWib.js';
 
 // Sama dengan Kegiatan::KATEGORI, Kegiatan::SASARAN, Kegiatan::METODE, Kegiatan::LOKASI_TYPES.
 export const KATEGORI_OPTIONS = [
@@ -156,13 +156,21 @@ export function kegiatanKeForm(item) {
  * Data yang dikirim ke server. Bila ada berkas, Inertia mengirim FormData yang membuang array kosong,
  * sehingga "hapus semua narasumber" atau "tanpa baris VIP" tidak sampai ke server. Array kosong
  * dikirim sebagai null (string kosong di FormData) dan server membacanya sebagai daftar kosong.
+ *
+ * Tautan rapat, meeting ID, dan passcode tidak pernah dikirim ke daftar, jadi form edit memulainya dari
+ * string kosong. Isian kosong tidak dikirim sama sekali supaya nilai tersimpan tidak tertimpa.
  */
+export const RAHASIA_RAPAT = ['tautan_rapat', 'meeting_id', 'passcode_rapat'];
+
 export function kegiatanKePayload(data) {
     const kosongJadiNull = (list) => (Array.isArray(list) && list.length === 0 ? null : list);
     const layout = data.seat_layout_config || {};
+    const tanpaRahasiaKosong = Object.fromEntries(
+        Object.entries(data).filter(([kunci, nilai]) => !(RAHASIA_RAPAT.includes(kunci) && (nilai ?? '') === '')),
+    );
 
     return {
-        ...data,
+        ...tanpaRahasiaKosong,
         narasumber: kosongJadiNull(data.narasumber),
         seat_layout_config: {
             ...layout,

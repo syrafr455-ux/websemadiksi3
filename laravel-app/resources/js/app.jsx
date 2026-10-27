@@ -3,6 +3,7 @@ import './session-guard';
 import React from 'react';
 import { createInertiaApp } from '@inertiajs/react';
 import { createRoot } from 'react-dom/client';
+import ErrorBoundary from '@/Components/ErrorBoundary';
 
 const appName = import.meta.env.VITE_APP_NAME || 'SEMADIKSI';
 
@@ -18,7 +19,11 @@ createInertiaApp({
     },
     setup({ el, App, props }) {
         const root = createRoot(el);
-        root.render(<App {...props} />);
+        root.render(
+            <ErrorBoundary>
+                <App {...props} />
+            </ErrorBoundary>,
+        );
     },
     progress: {
         color: '#10b981',

@@ -674,7 +674,7 @@ Status pelacakan pengerjaan bertahap:
 
 
 
-- [ ] **Bagian 23: Tombol Edit Kegiatan Halaman Putih dan Tombol Setujui/Tolak di Samping Edit**
+- [x] **Bagian 23: Tombol Edit Kegiatan Halaman Putih dan Tombol Setujui/Tolak di Samping Edit**
   - **Temuan akar masalah (ditulis sebelum kode diubah)**:
     - Gejala: `/admin/kegiatan`, klik ikon pensil, halaman putih kosong tanpa pesan galat. Ikon mata berfungsi.
     - Penyebab pasti: `laravel-app/resources/js/Pages/Admin/Kegiatan/Index.jsx` baris 522 memakai `<form onSubmit={handleSubmit}>`, padahal `handleSubmit` tidak didefinisikan di berkas itu (`grep handleSubmit` hanya menemukan baris 522; yang ada hanya `simpanDenganAksi`, baris 174). Modal dirender hanya saat `modalOpen === true`. Begitu `openEditModal` memanggil `setModalOpen(true)`, React mengevaluasi JSX modal dan melempar `ReferenceError: handleSubmit is not defined`. Tidak ada error boundary, sehingga seluruh pohon React dilepas dan layar putih.
@@ -685,3 +685,19 @@ Status pelacakan pengerjaan bertahap:
     - `Kegiatan::$hidden` memuat `tautan_rapat`, `meeting_id`, `passcode_rapat`, sehingga `$item->toArray()` di `KegiatanController@index` tidak membawanya. `kegiatanKeForm()` lalu mengisi ketiganya dengan `''`. Saat form disimpan, `tautan_rapat: ''` dikonversi middleware menjadi `null`, lolos `nullable`, dan `kegiatanUpdatePayload()` menulis `null` ke kolom: tautan, meeting ID, dan passcode tersimpan terhapus tanpa disadari.
     - Perbaikan yang direncanakan: payload daftar membawa penanda boolean `tautan_rapat_tersimpan`, `meeting_id_tersimpan`, `passcode_rapat_tersimpan` (tanpa nilai rahasia); form menampilkan "tersimpan" dengan placeholder untuk mengganti; klien tidak mengirim isian rahasia yang kosong; server mengabaikan isian rahasia yang kosong pada update.
   - **Fakta soal commit c86283b (diminta pada tugas ini)**: `git show c86283b --stat` tidak memuat `MenuAdminPerRoleTest`, `KegiatanApprovalTest`, maupun `EventEngineAndBookingTest`. Di `Kegiatan.php` dan `KegiatanBookingController.php` commit itu tidak mengubah `hasSeatLayout` ataupun logika `is_seat_booking_active` (hanya menambah kolom daring/persetujuan; di controller, `is_seat_booking_active` hanya berpindah indentasi di dalam `Arr::only`). Rinciannya ada di laporan akhir.
+  - **Perbaikan Edit (Bagian 2)**:
+    - `Index.jsx`: `handleSubmit` didefinisikan (Enter pada langkah 1-4 pindah ke langkah berikutnya, pada langkah 5 menyimpan lewat `simpanDenganAksi('draft')`), jadi modal tambah dan edit terbuka lagi.
+    - Rahasia rapat: `KegiatanController::barisDaftar()` mengirim `tautan_rapat_tersimpan`, `meeting_id_tersimpan`, `passcode_rapat_tersimpan` (boolean). Form menampilkan lencana "Tersimpan" dan placeholder "Kosongkan untuk mempertahankan, isi untuk mengganti". `kegiatanKePayload()` tidak mengirim isian rahasia yang kosong, dan `kegiatanUpdatePayload()` mengabaikan isian rahasia yang kosong. Mengosongkan passcode atau meeting ID tetap bisa lewat Pengaturan Daring di halaman detail (`updatePengaturanDaring`).
+    - `Components/ErrorBoundary.jsx` dipasang di `app.jsx` di atas komponen halaman Inertia (galat yang dilempar halaman itu sendiri tidak tertangkap boundary di dalam `AdminLayout`). Menampilkan kartu "Halaman gagal dimuat", tombol Muat Ulang, tautan kembali, dan `console.error`.
+    - Aturan lama tidak berubah: kolom kritis terkunci setelah terbit, penyetuju wajib, zona waktu WIB.
+  - **Tombol persetujuan (Bagian 3)**:
+    - `App\Support\AksiPersetujuan::untuk()` menjadi satu sumber `can_ajukan`, `can_tarik_draft`, `can_setujui`, `can_tolak`, `keputusan_saya`, `alasan_nonaktif`, dipakai daftar (`barisDaftar`) dan `approval` di halaman detail. Nama pembuat sudah ada sebagai `creator_name` di kedua payload, jadi tidak diduplikasi sebagai `nama_pembuat`.
+    - `Components/Admin/AksiPersetujuanKegiatan.jsx` dipakai di sel Aksi (tepat setelah ikon pensil) dan di header `Admin/Kegiatan/Show.jsx` bersama tombol baru "Edit Kegiatan" (`/admin/kegiatan?edit={id}`; server mengirim baris itu sebagai `kegiatanEdit` karena belum tentu ada di halaman daftar). Tombol memakai `flex-wrap`.
+    - Setelah memberi keputusan tombol Setujui/Tolak hilang dan diganti lencana. Sebelumnya `can_reject` di halaman detail tetap aktif setelah menyetujui; server tidak berubah dan masih menerima penolakan, hanya tombolnya yang disembunyikan sesuai spesifikasi.
+  - **Tes**:
+    - Baru: `KegiatanEditDanTombolPersetujuanTest` (14 tes: payload empat kasus, penanda tersimpan, simpan dengan rahasia kosong, ganti rahasia, `?edit=`, matriks tombol pembuat/penyetuju/yang sudah memutuskan/draft/terbit, non-super_admin, penolakan server untuk non-penyetuju, pembuat sendiri, status bukan diajukan, dan keputusan ganda) dan `tests/js/kegiatanForm.test.mjs` (7 tes `node --test tests/js`: `kegiatanKeForm` empat kasus, payload rahasia, dan pemeriksaan statis bahwa pengendali event di `Index.jsx` terdeklarasi; pemeriksaan terakhir gagal pada `handleSubmit` sebelum perbaikan).
+    - Diubah: tiga asersi di `AlurPersetujuanKegiatanTerlihatTest` mengikuti nama kunci baru (`perlu_tindakan_anda` menjadi `can_setujui` dan `can_tolak`, `bisa_diajukan_oleh_anda` menjadi `can_ajukan`, `can_withdraw` menjadi `can_tarik_draft`). Maknanya sama.
+    - Catatan perilaku nyata server: Setujui dua kali oleh orang yang sama tidak menambah suara (`updateOrCreate`) dan tidak menerbitkan kegiatan; server tidak menolak dengan galat, jadi tes memeriksa hasilnya (satu baris suara, status tetap diajukan).
+    - Peserta (non-staf) yang membuka rute admin dialihkan (302), staf non-super_admin memperoleh 403; tes menerima keduanya.
+  - **Uji manual di browser**: lihat laporan akhir tugas ini.
+
