@@ -116,14 +116,14 @@ class HalamanSertifikatDanKehadiranPenjagaKolomTest extends TestCase
     /** @return iterable<string, array{0: string}> */
     public static function halaman(): iterable
     {
-        yield 'sertifikat terbitkan' => ['/admin/sertifikat?tab=terbitkan'];
-        yield 'sertifikat terbitkan juri' => ['/admin/sertifikat?tab=terbitkan&jenis=juri'];
-        yield 'sertifikat terbitkan juara' => ['/admin/sertifikat?tab=terbitkan&jenis=juara'];
-        yield 'sertifikat terbitkan pembicara' => ['/admin/sertifikat?tab=terbitkan&jenis=pembicara'];
-        yield 'sertifikat arsip' => ['/admin/sertifikat?tab=arsip'];
-        yield 'sertifikat arsip terfilter' => ['/admin/sertifikat?tab=arsip&jenis=peserta&status=aktif&q=Contoh'];
-        yield 'sertifikat penandatangan' => ['/admin/sertifikat?tab=penandatangan'];
-        yield 'sertifikat pengaturan' => ['/admin/sertifikat?tab=pengaturan'];
+        yield 'sertifikat terbitkan' => ['/admin/penerbitan-sertifikat?tab=terbitkan'];
+        yield 'sertifikat terbitkan juri' => ['/admin/penerbitan-sertifikat?tab=terbitkan&jenis=juri'];
+        yield 'sertifikat terbitkan juara' => ['/admin/penerbitan-sertifikat?tab=terbitkan&jenis=juara'];
+        yield 'sertifikat terbitkan pembicara' => ['/admin/penerbitan-sertifikat?tab=terbitkan&jenis=pembicara'];
+        yield 'sertifikat arsip' => ['/admin/penerbitan-sertifikat?tab=arsip'];
+        yield 'sertifikat arsip terfilter' => ['/admin/penerbitan-sertifikat?tab=arsip&jenis=peserta&status=aktif&q=Contoh'];
+        yield 'sertifikat penandatangan' => ['/admin/penerbitan-sertifikat?tab=penandatangan'];
+        yield 'sertifikat pengaturan' => ['/admin/penerbitan-sertifikat?tab=pengaturan'];
         yield 'tracking kehadiran' => ['/admin/absensi'];
         yield 'verifikasi publik' => ['/verifikasi?code=CERT-GUARD-2026-0001'];
     }

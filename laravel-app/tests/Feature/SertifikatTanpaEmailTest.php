@@ -173,7 +173,7 @@ class SertifikatTanpaEmailTest extends TestCase
 
         $sertifikat = Sertifikat::where('nama_penerima', 'Tamu Tanpa Akun')->firstOrFail();
 
-        $this->actingAs($this->admin)->get('/admin/sertifikat?tab=arsip')
+        $this->actingAs($this->admin)->get(route('admin.certificates', ['tab' => 'arsip']))
             ->assertOk()
             ->assertSee('Salin tautan verifikasi', false)
             ->assertSee(url('/verifikasi?code='.$sertifikat->nomor_sertifikat), false);

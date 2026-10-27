@@ -31,7 +31,29 @@ use Symfony\Component\HttpFoundation\Response;
 class SertifikatDigitalController extends Controller
 {
     /**
-     * Pusat Manajemen Sertifikat Digital (/admin/sertifikat).
+     * Tautan lama /admin/sertifikat (dan sub-tab ?tab=) tetap berfungsi: dialihkan 302 ke halaman baru.
+     */
+    public function alihkanDariUrlLama(Request $request): RedirectResponse
+    {
+        Gate::authorize('viewAny', Sertifikat::class);
+
+        $tab = (string) $request->input('tab', 'terbitkan');
+        $kegiatanId = $request->input('kegiatan_id');
+
+        if ($tab === 'terbitkan' && ! $kegiatanId) {
+            return redirect()->route('admin.kegiatan');
+        }
+
+        $parameter = array_filter(
+            ['tab' => $tab] + $request->only(['kegiatan_id', 'jenis', 'status', 'q']),
+            fn ($nilai) => $nilai !== null && $nilai !== '',
+        );
+
+        return redirect()->route('admin.certificates', $parameter);
+    }
+
+    /**
+     * Halaman Terbitkan, Arsip, Penandatangan, dan Pengaturan Verifikasi (/admin/penerbitan-sertifikat).
      * Sub-navigasi: Terbitkan (default), Arsip, Penandatangan, Pengaturan Verifikasi.
      * Hanya Super Admin yang diizinkan (SertifikatPolicy).
      */

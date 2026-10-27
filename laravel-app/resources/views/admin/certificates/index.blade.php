@@ -48,6 +48,11 @@
     {{-- Sub-Navigasi 4 Tab Utama --}}
     <div class="border-b border-slate-200 bg-white rounded-2xl p-2 shadow-sm">
         <nav class="flex flex-wrap gap-2 text-sm font-bold" aria-label="Tabs">
+            <a href="{{ request('kegiatan_id') ? route('admin.kegiatan.sertifikat', (int) request('kegiatan_id')) : route('admin.kegiatan') }}"
+               class="px-3 py-2.5 rounded-xl flex items-center gap-1.5 text-slate-500 hover:bg-slate-100">
+                <span class="material-symbols-outlined text-base">arrow_back</span>
+                {{ request('kegiatan_id') ? 'Kembali ke sertifikat kegiatan' : 'Kembali ke Kelola Kegiatan' }}
+            </a>
             <a href="{{ route('admin.certificates', ['tab' => 'terbitkan']) }}" 
                class="px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all {{ $activeTab === 'terbitkan' ? 'bg-emerald-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
                 <span class="material-symbols-outlined text-lg">workspace_premium</span>

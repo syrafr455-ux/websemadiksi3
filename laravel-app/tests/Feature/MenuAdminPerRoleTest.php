@@ -59,6 +59,16 @@ class MenuAdminPerRoleTest extends TestCase
         return array_column($page['props']['menu_admin'], 'route');
     }
 
+    /** Pengelolaan sertifikat pindah ke Kelola Kegiatan; sidebar tidak lagi memuatnya (Blade maupun React). */
+    public function test_sertifikat_digital_tidak_ada_di_sidebar_mana_pun(): void
+    {
+        $this->assertNotContains('admin.certificates', array_column(MenuAdmin::ITEM, 'route'));
+
+        $admin = $this->pengguna(UserRole::SuperAdmin);
+        $this->assertNotContains('admin.certificates', $this->menuBlade($this->actingAs($admin)->get(route('admin.dashboard'))->getContent()));
+        $this->assertNotContains('admin.certificates', $this->menuReact($this->actingAs($admin)->get(route('admin.kegiatan'))->getContent()));
+    }
+
     #[DataProvider('menuPerRole')]
     public function test_menu_contains_exactly_the_links_the_role_may_open(UserRole $role, array $harapan): void
     {

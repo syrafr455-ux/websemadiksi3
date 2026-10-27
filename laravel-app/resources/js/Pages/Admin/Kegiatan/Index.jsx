@@ -35,6 +35,7 @@ export default function KegiatanIndex({
     menungguPersetujuanAnda = 0,
     adaSuperAdminLain = false,
     kegiatanEdit = null,
+    izinSertifikat = false,
 }) {
     const [search, setSearch] = useState(filters.q || '');
     const [filterCategory, setFilterCategory] = useState(filters.kategori || '');
@@ -271,6 +272,15 @@ export default function KegiatanIndex({
                             Kelola jadwal, integrasi fasilitas UNUSA, denah kursi interaktif, tiket, dan sistem penjurian.
                         </p>
                     </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                    {izinSertifikat && (
+                        <div className="flex flex-wrap items-center gap-2 pr-2 mr-1 border-r border-slate-800" role="group" aria-label="Sertifikat">
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Sertifikat</span>
+                            <a href="/admin/penerbitan-sertifikat?tab=penandatangan" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">Master Penandatangan</a>
+                            <a href="/admin/penerbitan-sertifikat?tab=arsip" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">Arsip Semua Sertifikat</a>
+                            <a href="/admin/penerbitan-sertifikat?tab=pengaturan" className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">Pengaturan Verifikasi</a>
+                        </div>
+                    )}
                     <button
                         onClick={openCreateModal}
                         className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 flex items-center gap-2 transition-all"
@@ -278,6 +288,7 @@ export default function KegiatanIndex({
                         <span className="material-symbols-outlined text-sm">add_circle</span>
                         Tambah Kegiatan Baru
                     </button>
+                    </div>
                 </div>
 
                 {/* Banner Peringatan Kegiatan Menunggu Persetujuan */}
@@ -447,6 +458,16 @@ export default function KegiatanIndex({
                                                     >
                                                         <span className="material-symbols-outlined text-sm">edit</span>
                                                     </button>
+                                                    {izinSertifikat && (
+                                                        <a
+                                                            href={`/admin/kegiatan/${item.id}/sertifikat`}
+                                                            className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300"
+                                                            title="Sertifikat"
+                                                            aria-label={`Sertifikat ${item.nama_kegiatan}`}
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">workspace_premium</span>
+                                                        </a>
+                                                    )}
                                                     <AksiPersetujuanKegiatan
                                                         kegiatanId={item.id}
                                                         namaKegiatan={item.nama_kegiatan}

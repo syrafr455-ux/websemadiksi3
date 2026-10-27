@@ -97,17 +97,25 @@ test('kegiatanKePayload mengirim rahasia rapat yang diisi', () => {
     assert.ok(!('meeting_id' in payload));
 });
 
-test('Index.jsx: setiap pengendali event berbentuk identifier sudah terdeklarasi', () => {
-    const berkas = join(dirname(fileURLToPath(import.meta.url)), '../../resources/js/Pages/Admin/Kegiatan/Index.jsx');
-    const kode = readFileSync(berkas, 'utf8');
+const BERKAS_DIPERIKSA = [
+    'resources/js/Pages/Admin/Kegiatan/Index.jsx',
+    'resources/js/Pages/Admin/Kegiatan/Show.jsx',
+    'resources/js/Pages/Admin/Kegiatan/Sertifikat.jsx',
+    'resources/js/Components/Admin/AksiPersetujuanKegiatan.jsx',
+];
 
-    const dipakai = new Set([...kode.matchAll(/\bon[A-Z]\w*=\{(\w+)\}/g)].map((m) => m[1]));
-    assert.ok(dipakai.size > 0, 'pemeriksaan ini harus menemukan setidaknya satu pengendali');
+for (const relatif of BERKAS_DIPERIKSA) {
+    test(`${relatif}: setiap pengendali event berbentuk identifier sudah terdeklarasi`, () => {
+        const berkas = join(dirname(fileURLToPath(import.meta.url)), '../..', relatif);
+        const kode = readFileSync(berkas, 'utf8');
 
-    for (const nama of dipakai) {
-        const terdeklarasi = new RegExp(
-            String.raw`(?:const|let|function)\s+${nama}\b|import[^;]*\b${nama}\b|\(\s*\{[^}]*\b${nama}\b[^}]*\}\s*\)`,
-        ).test(kode);
-        assert.ok(terdeklarasi, `pengendali '${nama}' dipakai tetapi tidak terdeklarasi (ReferenceError saat render)`);
-    }
-});
+        const dipakai = new Set([...kode.matchAll(/\bon[A-Z]\w*=\{(\w+)\}/g)].map((m) => m[1]));
+
+        for (const nama of dipakai) {
+            const terdeklarasi = new RegExp(
+                String.raw`(?:const|let|function)\s+${nama}\b|import[^;]*\b${nama}\b|\(\s*\{[^}]*\b${nama}\b[^}]*\}\s*\)`,
+            ).test(kode);
+            assert.ok(terdeklarasi, `pengendali '${nama}' dipakai tetapi tidak terdeklarasi (ReferenceError saat render)`);
+        }
+    });
+}

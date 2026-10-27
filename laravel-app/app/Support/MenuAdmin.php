@@ -31,7 +31,6 @@ class MenuAdmin
         ['route' => 'admin.mahasiswa-unusa', 'label' => 'Data Mahasiswa UNUSA', 'icon' => 'school', 'aktif' => 'admin.mahasiswa-unusa*'],
         ['route' => 'admin.penerima-kipk', 'label' => 'Daftar Penerima KIP-K', 'icon' => 'badge', 'aktif' => 'admin.penerima-kipk*'],
         ['route' => 'admin.attendances', 'label' => 'Presensi & Kehadiran', 'icon' => 'how_to_reg', 'aktif' => 'admin.attendances*'],
-        ['route' => 'admin.certificates', 'label' => 'Sertifikat Digital', 'icon' => 'workspace_premium', 'aktif' => 'admin.certificates*'],
         ['route' => 'admin.berkas', 'label' => 'Verifikasi Berkas KIP-K', 'icon' => 'folder_shared', 'aktif' => 'admin.berkas*'],
         ['route' => 'admin.submissions', 'label' => 'Formulir Masuk', 'icon' => 'dynamic_form', 'aktif' => 'admin.submissions*'],
     ];

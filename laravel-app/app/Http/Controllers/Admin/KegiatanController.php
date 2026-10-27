@@ -13,6 +13,7 @@ use App\Models\AuditLog;
 use App\Models\Kegiatan;
 use App\Models\KegiatanPersetujuan;
 use App\Models\KegiatanRegistration;
+use App\Models\Sertifikat;
 use App\Models\User;
 use App\Rules\ValidMeetingUrl;
 use App\Services\EmailProtectionService;
@@ -115,6 +116,7 @@ class KegiatanController extends Controller
             'menungguPersetujuanAnda' => $menungguPersetujuanAnda,
             'adaSuperAdminLain' => $adaSuperAdminLain,
             'kegiatanEdit' => $kegiatanEdit,
+            'izinSertifikat' => Gate::allows('viewAny', Sertifikat::class),
         ]);
     }
 
