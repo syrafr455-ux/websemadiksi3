@@ -12,7 +12,6 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class PaymentGatewayService
@@ -215,7 +214,7 @@ class PaymentGatewayService
                     try {
                         $recipientEmail = $reg->participantUser?->email ?? $reg->bookerUser?->email;
                         if ($recipientEmail) {
-                            Mail::to($recipientEmail)->send(new TicketIssuedMail($reg));
+                            app(EmailProtectionService::class)->kirim($recipientEmail, new TicketIssuedMail($reg));
                         }
                     } catch (\Throwable $mailError) {
                         Log::error('Gagal mengirim E-Tiket setelah pembayaran: '.$mailError->getMessage());

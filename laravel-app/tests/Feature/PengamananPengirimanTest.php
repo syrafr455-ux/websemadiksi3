@@ -6,9 +6,13 @@ use App\Enums\KegiatanStatus;
 use App\Enums\UserRole;
 use App\Jobs\SendProtectedEmailJob;
 use App\Mail\ActivationLinkMail;
+use App\Mail\KegiatanDiajukanMail;
 use App\Mail\KegiatanUpdatedMail;
 use App\Mail\ResetKataSandiMail;
+use App\Mail\SeatReselectionMail;
+use App\Mail\TicketIssuedMail;
 use App\Models\Kegiatan;
+use App\Models\KegiatanRegistration;
 use App\Models\MasterMahasiswaUnusa;
 use App\Models\ProgramStudi;
 use App\Models\User;
@@ -428,5 +432,102 @@ class PengamananPengirimanTest extends TestCase
         // Pastikan kunci cache ter-hash (tidak menyimpan NIM polos)
         $hashKey = 'unusa_nim_search_'.hash('sha256', '2241010001');
         $this->assertTrue(Cache::has($hashKey));
+    }
+
+    public function test_penjaga_seluruh_pengiriman_email_di_app_lewat_layanan_terpusat(): void
+    {
+        $appPath = app_path();
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($appPath));
+        $pelanggaran = [];
+
+        $dikecualikan = [
+            realpath(app_path('Jobs/SendProtectedEmailJob.php')),
+            realpath(app_path('Console/Commands/TesEmailCommand.php')),
+        ];
+
+        foreach ($files as $file) {
+            if (! $file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $realPath = realpath($file->getPathname());
+            if (in_array($realPath, $dikecualikan, true)) {
+                continue;
+            }
+
+            $content = file_get_contents($realPath);
+
+            // Periksa pemanggilan langsung Mail::to, Mail::send, Mail::raw, Mail::queue, Mail::later, Mail::bcc, Mail::cc
+            if (preg_match('/\bMail::(to|send|raw|queue|later|bcc|cc)\b/', $content, $matches)) {
+                $pelanggaran[] = str_replace(base_path(), '', $realPath).': memanggil Mail::'.$matches[1];
+            }
+        }
+
+        $this->assertEmpty(
+            $pelanggaran,
+            "Ditemukan pemanggilan email langsung di luar layanan terpusat EmailProtectionService:\n".implode("\n", $pelanggaran)
+        );
+    }
+
+    public function test_semua_kategori_mailable_terdefinisi_kritis_atau_massal(): void
+    {
+        $service = app(EmailProtectionService::class);
+        $kegiatan = $this->buatKegiatan();
+        $user = User::factory()->create();
+
+        // Kategori Kritis: aktivasi, reset kata sandi, tiket
+        $aktivasi = new ActivationLinkMail('Budi', 'https://semadiksi.test/aktivasi', 60);
+        $this->assertTrue($service->isCritical($aktivasi), 'ActivationLinkMail harus berkategori kritis');
+
+        $reset = new ResetKataSandiMail('Budi', 'https://semadiksi.test/reset', 60);
+        $this->assertTrue($service->isCritical($reset), 'ResetKataSandiMail harus berkategori kritis');
+
+        $registration = new KegiatanRegistration([
+            'kegiatan_id' => $kegiatan->id,
+            'participant_name' => 'Budi',
+            'ticket_code' => 'TIK-123',
+            'qr_code_hash' => 'hash123',
+        ]);
+        $tiket = new TicketIssuedMail($registration);
+        $this->assertTrue($service->isCritical($tiket), 'TicketIssuedMail harus berkategori kritis');
+
+        // Kategori Massal: pengingat, pengumuman, ajukan kegiatan, pindah kursi
+        $diajukan = new KegiatanDiajukanMail($kegiatan, $user);
+        $this->assertFalse($service->isCritical($diajukan), 'KegiatanDiajukanMail harus berkategori massal');
+
+        $updated = new KegiatanUpdatedMail($kegiatan, $user, []);
+        $this->assertFalse($service->isCritical($updated), 'KegiatanUpdatedMail harus berkategori massal');
+
+        $kursi = new SeatReselectionMail($kegiatan, 'Budi', '28 Oktober 2026', 'https://semadiksi.test', true);
+        $this->assertFalse($service->isCritical($kursi), 'SeatReselectionMail harus berkategori massal');
+    }
+
+    public function test_pintu_terpusat_kirim_menyalurkan_ke_send_protected_email_job(): void
+    {
+        Queue::fake([SendProtectedEmailJob::class]);
+
+        $kegiatan = $this->buatKegiatan();
+        $user = User::factory()->create();
+        $mailable = new KegiatanDiajukanMail($kegiatan, $user);
+
+        EmailProtectionService::send('approver@unusa.ac.id', $mailable);
+
+        Queue::assertPushed(SendProtectedEmailJob::class, function ($job) {
+            return $job->recipient === 'approver@unusa.ac.id'
+                && $job->isCritical === false;
+        });
+    }
+
+    public function test_pintu_terpusat_bekerja_dengan_queue_connection_sync(): void
+    {
+        Mail::fake();
+        config(['queue.default' => 'sync']);
+
+        $mailable = new ResetKataSandiMail('User Sync', 'https://semadiksi.test/reset', 60);
+        EmailProtectionService::send('sync@contoh.test', $mailable);
+
+        Mail::assertSent(ResetKataSandiMail::class, function ($mail) {
+            return $mail->hasTo('sync@contoh.test');
+        });
     }
 }

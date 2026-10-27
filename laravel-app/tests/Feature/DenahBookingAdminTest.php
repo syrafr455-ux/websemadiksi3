@@ -152,7 +152,7 @@ class DenahBookingAdminTest extends TestCase
 
         // Menyimpan lalu menjalankan job mengirim email sebanyak yang dilaporkan pratinjau.
         Mail::fake();
-        Queue::fake();
+        Queue::fake([SendSeatReselectionNotificationJob::class]);
         $this->actingAs($this->admin)->put(route('admin.kegiatan.venue-config', $kegiatan->id), $this->payload(['rows' => ['A', 'B', 'C'], 'cols_per_row' => 3]))
             ->assertSessionHasNoErrors();
         (new SendSeatReselectionNotificationJob($kegiatan->fresh()))->handle();

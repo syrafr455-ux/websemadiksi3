@@ -9,6 +9,7 @@ use App\Mail\ActivationLinkMail;
 use App\Models\AktivasiMahasiswa;
 use App\Models\User;
 use App\Services\AktivasiMahasiswaService;
+use App\Services\EmailProtectionService;
 use App\Services\Kip\StatusKipService;
 use App\Services\UnusaAcademicService;
 use App\Support\Masking;
@@ -18,7 +19,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
@@ -146,7 +146,7 @@ class PendaftaranController extends Controller
         $url = $this->aktivasi->buatLink($mahasiswa['nim']);
         $berlaku = (int) config('unusa.aktivasi_berlaku_menit', 60);
 
-        Mail::to($mahasiswa['email_kampus'])->send(new ActivationLinkMail($mahasiswa['nama_lengkap'], $url, $berlaku));
+        app(EmailProtectionService::class)->kirim($mahasiswa['email_kampus'], new ActivationLinkMail($mahasiswa['nama_lengkap'], $url, $berlaku));
 
         return $this->hasil('terkirim', 'Link aktivasi dikirim ke '.$kartu['email'].". Buka email kampus Anda; link berlaku {$berlaku} menit.", $kartu);
     }

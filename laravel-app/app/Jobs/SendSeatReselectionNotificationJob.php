@@ -14,7 +14,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class SendSeatReselectionNotificationJob implements ShouldQueue
 {
@@ -55,14 +54,13 @@ class SendSeatReselectionNotificationJob implements ShouldQueue
 
         foreach ($penerima as $p) {
             try {
-                Mail::to($p['email'])->send(new SeatReselectionMail(
+                $protection->kirim($p['email'], new SeatReselectionMail(
                     kegiatan: $this->kegiatan,
                     recipientName: $p['nama'],
                     deadlineWib: $deadlineWib,
                     reselectionUrl: $p['pemesan'] ? $reselectionUrl : null,
                     isBooker: $p['pemesan']
                 ));
-                $protection->recordSent(isCritical: true);
             } catch (\Throwable $e) {
                 Log::error('Gagal mengirim email pemilihan ulang kursi (kegiatan '.$this->kegiatan->id.'): '.$e->getMessage());
             }

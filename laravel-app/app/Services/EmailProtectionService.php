@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
+use App\Jobs\SendProtectedEmailJob;
 use App\Mail\ActivationLinkMail;
 use App\Mail\ResetKataSandiMail;
-use App\Mail\SeatReselectionMail;
 use App\Mail\TicketIssuedMail;
+use Illuminate\Mail\Mailable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
@@ -13,18 +14,21 @@ use Illuminate\Support\Facades\Cache;
  * Layanan pengamanan pengiriman email SEMADIKSI.
  *
  * Mengelola kuota harian (default 400), membedakan email kritis vs email massal,
- * serta mendeteksi peringatan batas 80% kuota.
+ * serta menjadi satu pintu terpusat pengiriman seluruh email aplikasi.
  */
 class EmailProtectionService
 {
     private const KUNCI_PREFIX = 'email_daily_sent_count:';
 
+    /**
+     * Kategori kritis: aktivasi, reset kata sandi, tiket.
+     * Kategori massal: pengingat, pengumuman, pemberitahuan sertifikat terbit, pindah kursi.
+     */
     public function isCritical(object $mailable): bool
     {
         if ($mailable instanceof ActivationLinkMail
             || $mailable instanceof ResetKataSandiMail
-            || $mailable instanceof TicketIssuedMail
-            || $mailable instanceof SeatReselectionMail) {
+            || $mailable instanceof TicketIssuedMail) {
             return true;
         }
 
@@ -33,6 +37,23 @@ class EmailProtectionService
         }
 
         return false;
+    }
+
+    /**
+     * Satu pintu terpusat yang dipakai SEMUA email di aplikasi SEMADIKSI.
+     */
+    public function kirim(string $recipient, Mailable $mailable, ?bool $isCritical = null): void
+    {
+        $critical = $isCritical ?? $this->isCritical($mailable);
+        SendProtectedEmailJob::dispatch($recipient, $mailable, $critical);
+    }
+
+    /**
+     * Alias statis untuk mempermudah pemanggilan satu pintu terpusat.
+     */
+    public static function send(string $recipient, Mailable $mailable, ?bool $isCritical = null): void
+    {
+        app(self::class)->kirim($recipient, $mailable, $isCritical);
     }
 
     public function getDailyCount(?Carbon $date = null): int

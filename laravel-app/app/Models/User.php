@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\UserRole;
 use App\Mail\ResetKataSandiMail;
+use App\Services\EmailProtectionService;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,7 +15,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Mail;
 
 /**
  * Verifikasi email hanya diwajibkan untuk pendaftaran mandiri jalur Peserta Umum
@@ -258,7 +258,7 @@ class User extends Authenticatable implements MustVerifyEmail
         $url = route('password.reset', ['token' => $token, 'email' => $this->email]);
         $berlaku = (int) config('auth.passwords.'.config('auth.defaults.passwords', 'users').'.expire', 60);
 
-        Mail::to($this->email)->send(new ResetKataSandiMail($this->name, $url, $berlaku));
+        app(EmailProtectionService::class)->kirim($this->email, new ResetKataSandiMail($this->name, $url, $berlaku));
     }
 
     /**

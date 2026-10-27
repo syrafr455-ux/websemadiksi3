@@ -9,7 +9,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Jobs\SyncJob;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class SendKegiatanUpdatedNotification implements ShouldQueue
 {
@@ -57,8 +56,7 @@ class SendKegiatanUpdatedNotification implements ShouldQueue
 
             $sentEmails[] = $user->email;
             try {
-                Mail::to($user->email)->send(new KegiatanUpdatedMail($kegiatan, $user, $event->changedAttributes));
-                $protection->recordSent(isCritical: false);
+                $protection->kirim($user->email, new KegiatanUpdatedMail($kegiatan, $user, $event->changedAttributes));
             } catch (\Throwable $e) {
                 Log::error('Gagal mengirim email pembaruan kegiatan: '.$e->getMessage());
             }

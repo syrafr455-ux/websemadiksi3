@@ -13,6 +13,7 @@ use App\Models\Kegiatan;
 use App\Models\KegiatanRegistration;
 use App\Models\KegiatanSeat;
 use App\Models\User;
+use App\Services\EmailProtectionService;
 use App\Services\Kegiatan\PetaKursiService;
 use App\Services\PaymentGatewayService;
 use App\Support\Wib;
@@ -21,7 +22,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -373,7 +373,7 @@ class KegiatanBookingController extends Controller
                     try {
                         $targetEmail = $reg->participantUser?->email ?? $reg->delegation_data['email'] ?? $user->email;
                         if ($targetEmail) {
-                            Mail::to($targetEmail)->send(new TicketIssuedMail($reg));
+                            app(EmailProtectionService::class)->kirim($targetEmail, new TicketIssuedMail($reg));
                         }
                     } catch (\Throwable $e) {
                         // ignore mail failure
@@ -741,7 +741,7 @@ class KegiatanBookingController extends Controller
                 try {
                     $targetEmail = $reg->participantUser?->email ?? ($reg->delegation_data['email'] ?? null);
                     if ($targetEmail) {
-                        Mail::to($targetEmail)->send(new TicketIssuedMail($reg));
+                        app(EmailProtectionService::class)->kirim($targetEmail, new TicketIssuedMail($reg));
                     }
                 } catch (\Throwable $e) {
                     // ignore mail failure

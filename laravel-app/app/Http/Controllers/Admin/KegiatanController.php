@@ -8,7 +8,6 @@ use App\Enums\SeatStatus;
 use App\Enums\UserRole;
 use App\Events\KegiatanUpdatedEvent;
 use App\Http\Controllers\Controller;
-use App\Jobs\SendProtectedEmailJob;
 use App\Mail\KegiatanDiajukanMail;
 use App\Models\AuditLog;
 use App\Models\Kegiatan;
@@ -16,6 +15,7 @@ use App\Models\KegiatanPersetujuan;
 use App\Models\KegiatanRegistration;
 use App\Models\User;
 use App\Rules\ValidMeetingUrl;
+use App\Services\EmailProtectionService;
 use App\Services\Kegiatan\DenahKursiService;
 use App\Services\Kegiatan\PetaKursiService;
 use App\Services\UnusaFacilityService;
@@ -287,7 +287,7 @@ class KegiatanController extends Controller
             // Jika langsung diajukan, kirim email notifikasi ke semua penyetuju wajib lewat antrean pengamanan
             if ($statusKegiatan === KegiatanStatus::Diajukan) {
                 foreach ($kegiatan->penyetujuWajib() as $penyetuju) {
-                    SendProtectedEmailJob::dispatch($penyetuju->email, new KegiatanDiajukanMail($kegiatan, $penyetuju));
+                    EmailProtectionService::send($penyetuju->email, new KegiatanDiajukanMail($kegiatan, $penyetuju));
                 }
             }
 
@@ -653,7 +653,7 @@ class KegiatanController extends Controller
         // Kirim email notifikasi ke semua penyetuju wajib lewat antrean pengamanan email
         $penyetujuWajib = $kegiatan->penyetujuWajib();
         foreach ($penyetujuWajib as $penyetuju) {
-            SendProtectedEmailJob::dispatch($penyetuju->email, new KegiatanDiajukanMail($kegiatan, $penyetuju));
+            EmailProtectionService::send($penyetuju->email, new KegiatanDiajukanMail($kegiatan, $penyetuju));
         }
 
         AuditLog::record(
