@@ -107,7 +107,7 @@ class MenuAdminPerRoleTest extends TestCase
         if ($halamanBlade) {
             $html = $this->actingAs($user)->get(route($halamanBlade))->assertOk()->getContent();
             $this->assertSame($harapan, $this->menuBlade($html));
-            $this->assertStringContainsString('data-menu-admin="'.$halamanBlade.'" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors bg-amber-600', $html, 'Link halaman aktif ditandai.');
+            $this->assertStringContainsString('data-menu-admin="'.$halamanBlade.'" class="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all bg-emerald-700', $html, 'Link halaman aktif ditandai (kelas sama dengan AdminLayout.jsx).');
         }
 
         if ($halamanReact) {

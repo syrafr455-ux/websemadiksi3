@@ -12,6 +12,8 @@ final class TeksTemplat
 
     public const BIDANG = ['judul' => 150, 'pengantar' => 200, 'penutup' => 600];
 
+    public const LABEL = ['judul' => 'Judul', 'pengantar' => 'Pengantar', 'penutup' => 'Kalimat penutup'];
+
     /** @return array<string, array<string, string>> */
     public static function bawaan(): array
     {
@@ -48,8 +50,18 @@ final class TeksTemplat
 
                     continue;
                 }
-                if (! is_string($isi) || mb_strlen($isi) > self::BIDANG[$nama]) {
-                    $galat["teks.{$jenis}.{$nama}"] = "Teks {$nama} untuk {$jenis} maksimal ".self::BIDANG[$nama].' karakter.';
+                // Laravel mengubah string kosong menjadi null pada permintaan JSON; kosong berarti memakai teks bawaan.
+                if ($isi === null || (is_string($isi) && trim($isi) === '')) {
+                    continue;
+                }
+                if (! is_string($isi)) {
+                    $galat["teks.{$jenis}.{$nama}"] = self::LABEL[$nama].' harus berupa teks.';
+
+                    continue;
+                }
+                $panjang = mb_strlen($isi);
+                if ($panjang > self::BIDANG[$nama]) {
+                    $galat["teks.{$jenis}.{$nama}"] = self::LABEL[$nama]." terlalu panjang ({$panjang} dari ".self::BIDANG[$nama].' karakter)';
 
                     continue;
                 }

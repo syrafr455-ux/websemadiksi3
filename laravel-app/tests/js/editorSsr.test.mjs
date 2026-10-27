@@ -68,37 +68,68 @@ after(async () => {
     await server?.close();
 });
 
-test('editor SSR: tata letak bawaan menampilkan kanvas A4 lanskap, elemen contoh, dan semua tombol', () => {
-    const html = renderToStaticMarkup(React.createElement(Editor, { kegiatanId: 7, templat: templatContoh(), kegiatanLain: [{ id: 3, nama_kegiatan: 'Seminar Lama' }] }));
+const render = (templatProps, props = {}) => renderToStaticMarkup(React.createElement(Editor, { kegiatanId: 7, templat: templatProps, ...props }));
+const SIAP_BERSIH = [/belum disimpan/i, /terlalu panjang/i, /maksimal/i, /role="alert"/];
+
+test('editor SSR: templat kosong tidak menampilkan galat atau status berubah dan Simpan nonaktif', () => {
+    const html = render(templatContoh());
+
+    for (const pola of SIAP_BERSIH) assert.doesNotMatch(html, pola, `keadaan awal tidak boleh memuat ${pola}`);
+    assert.match(html, /<button[^>]*disabled[^>]*>Simpan<\/button>/, 'Simpan nonaktif selama tidak ada perubahan');
+});
+
+test('editor SSR: templat tersimpan dan teks bawaan juga bersih pada keadaan awal', () => {
+    const tersimpan = templatContoh({
+        tersimpan: true, versi: 3, latar_url: '/admin/kegiatan/7/sertifikat/latar?v=3',
+        teks: { ...teksContoh, peserta: { judul: 'PIAGAM LOMBA ESSAY', pengantar: 'Dengan bangga diberikan kepada', penutup: 'Atas juara pada {kegiatan}.' } },
+    });
+    const panjang = templatContoh({ teks: { ...teksContoh, juara: { judul: 'J'.repeat(150), pengantar: 'P'.repeat(200), penutup: 'K'.repeat(600) } } });
+
+    for (const html of [render(tersimpan), render(panjang)]) {
+        for (const pola of SIAP_BERSIH) assert.doesNotMatch(html, pola);
+    }
+});
+
+test('editor SSR: satu layar sederhana, tanpa tab jenis, orientasi, daftar elemen, atau penimpa per jenis', () => {
+    const html = render(templatContoh({ penimpa: { juri: { layout: layoutContoh(), teks: {}, orientasi: 'landscape', versi: 1 } } }), { kegiatanLain: [{ id: 3, nama_kegiatan: 'Seminar Lama' }] });
 
     assert.match(html, /aspect-ratio:297 \/ 210/);
     assert.match(html, /Nama Peserta Contoh/);
     assert.match(html, /Kode QR contoh/);
-    assert.match(html, /SERTIFIKAT PESERTA/);
-    assert.match(html, /Atas partisipasi dalam Nama Kegiatan Contoh pada 1 Januari 2026\./, 'penampung diisi data contoh');
-    for (const label of ['Simpan', 'Pratinjau PDF', 'Unggah latar', 'Reset ke bawaan', 'Seminar Lama', 'Bawaan semua jenis', 'Peserta', 'Juri', 'Pembicara', 'Juara']) {
-        assert.ok(html.includes(label), `label '${label}' tidak ada`);
+    for (const label of ['Simpan', 'Pratinjau PDF', 'Unggah Latar', 'Kembalikan ke Bawaan']) assert.ok(html.includes(label), `tombol '${label}' tidak ada`);
+    for (const hilang of ['Bawaan semua jenis', 'role="tablist"', 'Gunakan tata letak berbeda', 'Hapus tata letak khusus', 'Orientasi A4', 'orientasi-templat', 'Seminar Lama', 'Reset ke bawaan', 'Hapus latar', 'aria-pressed', 'memakai tata letak khusus']) {
+        assert.ok(!html.includes(hilang), `'${hilang}' seharusnya sudah tidak ada`);
     }
-    assert.match(html, /Properti: Nama penerima/);
-    assert.doesNotMatch(html, /undefined|NaN/, 'tidak ada nilai undefined/NaN di keluaran');
+    assert.doesNotMatch(html, /undefined|NaN/);
 });
 
-test('editor SSR: orientasi potret dan penimpa per jenis ditandai di tab', () => {
-    const html = renderToStaticMarkup(React.createElement(Editor, {
-        kegiatanId: 7,
-        templat: templatContoh({ orientasi: 'portrait', penimpa: { juri: { layout: layoutContoh(), teks: {}, orientasi: 'portrait', versi: 1 } } }),
-    }));
-
-    assert.match(html, /aspect-ratio:210 \/ 297/);
-    assert.match(html, /Juri \*/);
-    assert.doesNotMatch(html, /Peserta \*/);
+test('editor SSR: orientasi mengikuti templat (latar), potret menghasilkan kanvas 210 x 297', () => {
+    assert.match(render(templatContoh({ orientasi: 'portrait' })), /aspect-ratio:210 \/ 297/);
+    assert.match(render(templatContoh({ latar_url: '/admin/kegiatan/7/sertifikat/latar?v=2' })), /background-image:url\(\/admin\/kegiatan\/7\/sertifikat\/latar\?v=2\)/);
 });
 
-test('editor SSR: latar tampil sebagai gambar latar kanvas dan tombol hapus latar muncul', () => {
-    const html = renderToStaticMarkup(React.createElement(Editor, { kegiatanId: 7, templat: templatContoh({ latar_url: '/admin/kegiatan/7/sertifikat/latar?v=2' }) }));
+test('editor SSR: pengeditan teks ada di bagian lipat tertutup dengan penghitung per kolom', () => {
+    const html = render(templatContoh());
 
-    assert.match(html, /background-image:url\(\/admin\/kegiatan\/7\/sertifikat\/latar\?v=2\)/);
-    assert.match(html, /Hapus latar/);
+    assert.match(html, /<details(?![^>]*\bopen\b)[^>]*>\s*<summary[^>]*>Ubah teks sertifikat \(opsional\)<\/summary>/);
+    assert.match(html, /18\/150/, 'penghitung judul bawaan "SERTIFIKAT PESERTA"');
+    assert.match(html, /\/200/);
+    assert.match(html, /\/600/);
+    assert.doesNotMatch(html, /text-rose-[0-9]+[^"]*">\d+\/\d+/, 'penghitung tidak merah selama tidak melebihi');
+});
+
+test('editor SSR: panel elemen terpilih; nama dan QR tidak punya tombol Sembunyikan, elemen opsional punya', () => {
+    const panel = (kunci) => render(templatContoh(), { terpilihAwal: kunci });
+
+    assert.match(panel('nama'), /Nama penerima/);
+    assert.ok(!panel('nama').includes('Sembunyikan'));
+    assert.match(panel('qr'), /Ukuran \(mm\)/);
+    assert.ok(!panel('qr').includes('Sembunyikan'));
+    assert.ok(!panel('nomor_seri').includes('Sembunyikan'));
+    assert.match(panel('tanggal'), />Sembunyikan</);
+    assert.match(panel('tanggal'), /Ukuran huruf/);
+    assert.match(panel('tanggal'), /Rata teks/);
+    assert.match(panel('tanggal'), /Warna/);
 });
 
 test('tombol persetujuan SSR: label sesuai peran dan status', () => {

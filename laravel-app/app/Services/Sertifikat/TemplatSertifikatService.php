@@ -84,6 +84,7 @@ class TemplatSertifikatService
                 'elemen' => TataLetak::ELEMEN,
                 'wajib' => TataLetak::WAJIB,
                 'penampung' => TeksTemplat::PENAMPUNG,
+                'batas_teks' => TeksTemplat::BIDANG,
                 'qr_min_mm' => TataLetak::QR_MIN_MM,
                 'qr_maks_mm' => TataLetak::QR_MAKS_MM,
                 'margin_qr_mm' => TataLetak::MARGIN_QR_MM,
@@ -186,10 +187,11 @@ class TemplatSertifikatService
 
         $templat = SertifikatTemplat::firstOrNew(['kegiatan_id' => $kegiatan->id, 'jenis' => null]);
         $lama = $templat->latar_path;
-        $orientasi = $templat->orientasi ?? 'landscape';
+        // Orientasi mengikuti gambar latar (potret bila lebih tinggi daripada lebar); tata letak dijepit ke halaman baru.
+        $orientasi = $tinggi > $lebar ? 'portrait' : 'landscape';
         $templat->fill([
             'orientasi' => $orientasi,
-            'layout' => $templat->layout ?? TataLetak::bawaan($orientasi),
+            'layout' => $this->layoutUntukOrientasi($templat->layout, $orientasi),
             'teks' => $templat->teks ?? [],
             'latar_path' => $path,
             'versi' => ($templat->versi ?? 0) + 1,
@@ -212,7 +214,13 @@ class TemplatSertifikatService
             return;
         }
         $this->hapusBerkasLatar($templat->latar_path);
-        $templat->update(['latar_path' => null, 'versi' => $templat->versi + 1, 'diubah_oleh' => $oleh->id]);
+        $templat->update([
+            'latar_path' => null,
+            'orientasi' => 'landscape',
+            'layout' => $this->layoutUntukOrientasi($templat->layout, 'landscape'),
+            'versi' => $templat->versi + 1,
+            'diubah_oleh' => $oleh->id,
+        ]);
 
         AuditLog::record($oleh->id, 'sertifikat_templat_latar_hapus', "Menghapus latar templat sertifikat kegiatan '{$kegiatan->nama_kegiatan}'.", $kegiatan);
     }
@@ -259,6 +267,12 @@ class TemplatSertifikatService
         $mime = str_ends_with($path, '.png') ? 'image/png' : 'image/jpeg';
 
         return 'data:'.$mime.';base64,'.base64_encode(Storage::disk(self::DISK)->get($path));
+    }
+
+    /** Tata letak tersimpan dijepit ke halaman A4 berorientasi baru; tanpa tata letak tersimpan, memakai bawaan. */
+    private function layoutUntukOrientasi(?array $layout, string $orientasi): array
+    {
+        return $layout === null || $layout === [] ? TataLetak::bawaan($orientasi) : TataLetak::validasi($layout, $orientasi);
     }
 
     private function hapusBerkasLatar(?string $path): void

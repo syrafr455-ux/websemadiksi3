@@ -85,7 +85,7 @@ function PanelPenandatangan({ kegiatanId, penandatangan }) {
                 type="button"
                 disabled={memproses || ids.length === 0 || duplikat}
                 onClick={simpan}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold"
+                className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-bold"
             >
                 Simpan Penugasan
             </button>
@@ -100,11 +100,10 @@ export default function KegiatanSertifikat({
     tautan = {},
     penandatangan = {},
     templat = null,
-    kegiatanLain = [],
 }) {
     const [tab, setTab] = useState('templat');
-    const kelasTab = (aktif) => `px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 ${
-        aktif ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+    const kelasTab = (aktif) => `px-3.5 py-2 rounded-xl text-sm font-bold flex items-center gap-1.5 ${
+        aktif ? 'bg-emerald-700 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
     }`;
 
     return (
@@ -112,20 +111,20 @@ export default function KegiatanSertifikat({
             <div className="space-y-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <a href={tautan.kembali} className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1">
+                        <a href={tautan.kembali} className="text-xs text-slate-400 hover:text-white flex items-center gap-1">
                             <span className="material-symbols-outlined text-sm">arrow_back</span>
                             Kembali ke Kelola Kegiatan
                         </a>
                         <h2 className="text-xl font-black text-white mt-1">{kegiatan.nama_kegiatan}</h2>
-                        <p className="text-xs text-slate-400 mt-1">Sertifikat kegiatan &middot; Status: {kegiatan.status_teks || kegiatan.status}</p>
+                        <p className="text-sm text-slate-400 mt-1">Sertifikat kegiatan &middot; Status: {kegiatan.status_teks || kegiatan.status}</p>
                     </div>
                     <div className="flex flex-wrap gap-3 text-xs">
                         <div className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800">
-                            <div className="text-[10px] uppercase tracking-wider text-slate-500">Layak terbit</div>
+                            <div className="text-xs uppercase tracking-wider text-slate-400">Layak terbit</div>
                             <div className="text-lg font-black text-white">{ringkasan.layak ?? 0}</div>
                         </div>
                         <div className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800">
-                            <div className="text-[10px] uppercase tracking-wider text-slate-500">Sudah terbit</div>
+                            <div className="text-xs uppercase tracking-wider text-slate-400">Sudah terbit</div>
                             <div className="text-lg font-black text-white">{ringkasan.terbit ?? 0}</div>
                         </div>
                     </div>
@@ -148,7 +147,7 @@ export default function KegiatanSertifikat({
 
                 <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                     {tab === 'templat' && templat && (
-                        <EditorTemplatSertifikat kegiatanId={kegiatan.id} templat={templat} kegiatanLain={kegiatanLain} />
+                        <EditorTemplatSertifikat kegiatanId={kegiatan.id} templat={templat} />
                     )}
                     {tab === 'penandatangan' && <PanelPenandatangan kegiatanId={kegiatan.id} penandatangan={penandatangan} />}
                 </section>

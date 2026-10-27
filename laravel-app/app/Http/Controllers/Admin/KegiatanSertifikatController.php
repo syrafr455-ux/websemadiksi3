@@ -60,7 +60,6 @@ class KegiatanSertifikatController extends Controller
                 'arsip' => route('admin.certificates', ['tab' => 'arsip', 'kegiatan_id' => $kegiatan->id]),
             ],
             'templat' => $templat->untukEditor($kegiatan),
-            'kegiatanLain' => Kegiatan::where('id', '!=', $kegiatan->id)->latest('tanggal_mulai')->get(['id', 'nama_kegiatan']),
             'penandatangan' => [
                 'ditugaskan' => $ditugaskan,
                 'master' => Penandatangan::where('is_active', true)->orderBy('nama')->get(['id', 'nama', 'gelar', 'jabatan']),

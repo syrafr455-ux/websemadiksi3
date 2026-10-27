@@ -9,6 +9,10 @@ export const WAJIB = ['nama', 'qr', 'nomor_seri'];
 export const LANGKAH_PANAH = 0.5;
 export const LANGKAH_PANAH_SHIFT = 2;
 export const AMBANG_SNAP = 1.2;
+export const JENIS_TEKS = ['peserta', 'juri', 'pembicara', 'juara'];
+// Sama dengan App\Support\Sertifikat\TeksTemplat::BIDANG; server tetap yang memutuskan.
+export const BATAS_TEKS = { judul: 150, pengantar: 200, penutup: 600 };
+export const LABEL_BIDANG = { judul: 'Judul', pengantar: 'Pengantar', penutup: 'Kalimat penutup' };
 
 export const LABEL_ELEMEN = {
     judul: 'Judul',
@@ -130,3 +134,83 @@ export const DATA_CONTOH = {
     tanggal: '1 Januari 2026',
     nomor: 'CERT-CONTOH-0000-0000',
 };
+
+/** Panjang teks per karakter, sama dengan mb_strlen di server. */
+export function panjangTeks(teks) {
+    return [...String(teks ?? '')].length;
+}
+
+const PROP_ANGKA = ['x', 'y', 'lebar', 'tinggi', 'ukuran_font'];
+
+/**
+ * Bentuk baku untuk membandingkan keadaan editor: angka dan string disamakan, urutan kunci tetap, warna huruf kecil,
+ * null/kosong pada teks berarti teks bawaan. Keadaan awal dan keadaan sekarang HARUS melewati fungsi ini.
+ */
+export function normalisasiKeadaan({ orientasi, layout, teks }, bawaanTeks = {}) {
+    const tata = {};
+    for (const kunci of Object.keys(layout ?? {}).sort()) {
+        const el = layout[kunci] ?? {};
+        const baku = {
+            rata: String(el.rata ?? ''), tebal: Boolean(el.tebal), warna: String(el.warna ?? '').toLowerCase(), font: String(el.font ?? ''),
+            tampil: WAJIB.includes(kunci) ? true : Boolean(el.tampil),
+        };
+        for (const prop of PROP_ANGKA) baku[prop] = bulat(Number(el[prop] ?? 0));
+        tata[kunci] = Object.fromEntries(Object.entries(baku).sort(([a], [b]) => (a < b ? -1 : 1)));
+    }
+    const teksBaku = {};
+    for (const jenis of JENIS_TEKS) {
+        teksBaku[jenis] = {};
+        for (const bidang of Object.keys(BATAS_TEKS)) {
+            const isi = String(teks?.[jenis]?.[bidang] ?? '').trim();
+            teksBaku[jenis][bidang] = isi !== '' ? isi : String(bawaanTeks?.[jenis]?.[bidang] ?? '');
+        }
+    }
+
+    return { orientasi: String(orientasi ?? 'landscape'), layout: tata, teks: teksBaku };
+}
+
+/** Ada perubahan nyata dibanding keadaan awal (keduanya sudah dinormalisasi). */
+export function adaPerubahan(awal, sekarang) {
+    return JSON.stringify(awal) !== JSON.stringify(sekarang);
+}
+
+/**
+ * Galat teks per kolom, kunci 'jenis.bidang'. Hanya kolom yang sudah diubah dibanding keadaan awal dan benar-benar
+ * melebihi batas yang dilaporkan.
+ */
+export function galatTeks(sekarang, awal, batas = BATAS_TEKS) {
+    const galat = {};
+    for (const jenis of JENIS_TEKS) {
+        for (const [bidang, maks] of Object.entries(batas)) {
+            const nilai = String(sekarang?.[jenis]?.[bidang] ?? '');
+            if (nilai === String(awal?.[jenis]?.[bidang] ?? '')) continue;
+            const panjang = panjangTeks(nilai.trim());
+            if (panjang > maks) galat[`${jenis}.${bidang}`] = `${LABEL_BIDANG[bidang]} terlalu panjang (${panjang} dari ${maks} karakter)`;
+        }
+    }
+    return galat;
+}
+
+/** Hanya teks yang berbeda dari bawaan yang dikirim; kolom kosong atau sama dengan bawaan berarti memakai bawaan. */
+export function teksUntukDisimpan(teks, bawaan) {
+    const hasil = {};
+    for (const jenis of JENIS_TEKS) {
+        for (const bidang of Object.keys(BATAS_TEKS)) {
+            const isi = String(teks?.[jenis]?.[bidang] ?? '').trim();
+            if (isi !== '' && isi !== String(bawaan?.[jenis]?.[bidang] ?? '')) hasil[jenis] = { ...hasil[jenis], [bidang]: isi };
+        }
+    }
+    return hasil;
+}
+
+/** Atur sisi QR dalam milimeter; tetap persegi, 18-60 mm, di dalam halaman. */
+export function aturSisiQr(el, orientasi, mm) {
+    const [w, h] = HALAMAN_MM[orientasi] ?? HALAMAN_MM.landscape;
+    return ubahUkuran(el, 'qr', orientasi, (Number(mm) / w) * 100, (Number(mm) / h) * 100);
+}
+
+/** Sembunyikan elemen opsional. Nama, QR, dan nomor seri tidak pernah bisa disembunyikan. */
+export function sembunyikanElemen(layout, kunci, orientasi) {
+    if (WAJIB.includes(kunci) || !layout[kunci]) return layout;
+    return { ...layout, [kunci]: jepitElemen({ ...layout[kunci], tampil: false }, kunci, orientasi) };
+}

@@ -17,7 +17,7 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans selection:bg-emerald-500 selection:text-white">
+        <div data-tata-letak="admin" className="min-h-screen bg-slate-950 text-slate-100 flex font-sans selection:bg-emerald-500 selection:text-white">
             {/* Mobile Sidebar Overlay */}
             {sidebarOpen && (
                 <div
@@ -42,7 +42,7 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
                             <div className="text-base font-bold tracking-wide text-emerald-400">
                                 SEMADIKSI
                             </div>
-                            <div className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">
+                            <div className="text-xs uppercase font-bold text-slate-400 tracking-widest">
                                 Panel Admin • UNUSA
                             </div>
                         </div>
@@ -62,9 +62,9 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="text-xs font-bold text-white truncate">{user.name || 'Admin'}</div>
-                        <div className="text-[10px] text-slate-400 truncate">{user.email || '-'}</div>
+                        <div className="text-xs text-slate-400 truncate">{user.email || '-'}</div>
                         <div className="mt-1">
-                            <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-xs font-extrabold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                                 {user.role_label || user.role || 'Staff'}
                             </span>
                         </div>
@@ -80,7 +80,7 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
                             data-menu-admin={item.route}
                             className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                                 item.active
-                                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/25 font-bold'
+                                    ? 'bg-emerald-700 text-white shadow-lg shadow-emerald-700/25 font-bold'
                                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                             }`}
                         >
@@ -89,7 +89,7 @@ export default function AdminLayout({ children, title = 'Panel Administrator' })
                                 <span>{item.label}</span>
                             </div>
                             {item.badge > 0 && (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
+                                <span className="px-2 py-0.5 rounded-full text-xs font-black bg-amber-400 text-slate-950">
                                     {item.badge}
                                 </span>
                             )}

@@ -1,47 +1,55 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router } from '@inertiajs/react';
 import {
+    BATAS_TEKS,
     DATA_CONTOH,
     HALAMAN_MM,
+    JENIS_TEKS,
+    LABEL_BIDANG,
     LABEL_ELEMEN,
     LANGKAH_PANAH,
     LANGKAH_PANAH_SHIFT,
+    QR_MAKS_MM,
+    QR_MIN_MM,
     WAJIB,
+    adaPerubahan,
+    aturSisiQr,
+    galatTeks,
     geserElemen,
     isiPenampung,
     jepitElemen,
     menutupiQr,
+    normalisasiKeadaan,
+    panjangTeks,
     penampungAsing,
     pikselKePersen,
+    sembunyikanElemen,
     sisiQrMm,
     snapTengah,
+    teksUntukDisimpan,
     ubahUkuran,
 } from '@/lib/templatSertifikat';
 
-const TAB_JENIS = [
-    { id: 'bawaan', label: 'Bawaan semua jenis' },
-    { id: 'peserta', label: 'Peserta' },
-    { id: 'juri', label: 'Juri' },
-    { id: 'pembicara', label: 'Pembicara' },
-    { id: 'juara', label: 'Juara' },
-];
-
+const LABEL_JENIS = { peserta: 'Peserta', juri: 'Juri', pembicara: 'Pembicara', juara: 'Juara' };
 const RATA = { kiri: 'left', tengah: 'center', kanan: 'right' };
 const MM_PER_PT = 0.3528;
 
-function pesanGalat(err) {
-    const data = err?.response?.data;
-    if (data?.errors) return Object.values(data.errors).flat();
-    return [data?.message || 'Permintaan gagal. Periksa koneksi lalu coba lagi.'];
-}
+const kelasInput = 'w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm';
+const kelasTombol = 'px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50';
+const kelasTombolBiasa = `${kelasTombol} bg-slate-800 hover:bg-slate-700 text-slate-100`;
 
-function bangunKeadaan(templat) {
-    return {
-        orientasi: templat.orientasi,
-        dasar: templat.layout,
-        teks: templat.teks,
-        penimpa: Object.fromEntries(Object.entries(templat.penimpa || {}).map(([jenis, p]) => [jenis, p.layout])),
-    };
+/** Pesan galat dari respons axios; respons berupa Blob (pratinjau PDF) dibaca dulu sebagai JSON. */
+async function pesanGalat(err) {
+    let data = err?.response?.data;
+    if (typeof Blob !== 'undefined' && data instanceof Blob) {
+        try {
+            data = JSON.parse(await data.text());
+        } catch {
+            data = null;
+        }
+    }
+    if (data?.errors) return { umum: Object.entries(data.errors).filter(([k]) => !k.startsWith('teks.')).flatMap(([, v]) => v), perKolom: Object.fromEntries(Object.entries(data.errors).filter(([k]) => k.startsWith('teks.')).map(([k, v]) => [k.slice(5), v[0]])) };
+    return { umum: [data?.message || 'Permintaan gagal. Periksa koneksi lalu coba lagi.'], perKolom: {} };
 }
 
 /** Isi kotak untuk satu elemen pada kanvas, memakai data contoh. */
@@ -74,44 +82,41 @@ function QrContoh() {
     );
 }
 
-export default function EditorTemplatSertifikat({ kegiatanId, templat, kegiatanLain = [] }) {
-    const awal = useMemo(() => bangunKeadaan(templat), [templat]);
-    const [orientasi, setOrientasi] = useState(awal.orientasi);
-    const [dasar, setDasar] = useState(awal.dasar);
-    const [teks, setTeks] = useState(awal.teks);
-    const [penimpa, setPenimpa] = useState(awal.penimpa);
-    const [tersimpanPenimpa, setTersimpanPenimpa] = useState(Object.keys(awal.penimpa));
-    const [tab, setTab] = useState('bawaan');
-    const [terpilih, setTerpilih] = useState('nama');
-    const [snapAktif, setSnapAktif] = useState(true);
+export default function EditorTemplatSertifikat({ kegiatanId, templat, terpilihAwal = 'nama' }) {
+    const bawaanTeks = templat.bawaan.teks;
+    const batasTeks = templat.aturan.batas_teks ?? BATAS_TEKS;
+
+    // Satu sumber kebenaran: keadaan awal dan keadaan sekarang sama-sama lewat normalisasiKeadaan.
+    const [awal, setAwal] = useState(() => normalisasiKeadaan(templat, bawaanTeks));
+    const [teksTersimpan, setTeksTersimpan] = useState(templat.teks);
+    const [orientasi, setOrientasi] = useState(templat.orientasi);
+    const [layout, setLayout] = useState(templat.layout);
+    const [teks, setTeks] = useState(templat.teks);
+    const [latarUrl, setLatarUrl] = useState(templat.latar_url);
+    const [jenisTeks, setJenisTeks] = useState('peserta');
+    const [terpilih, setTerpilih] = useState(terpilihAwal);
     const [garisTengah, setGarisTengah] = useState(false);
-    const [kotor, setKotor] = useState(false);
     const [sibuk, setSibuk] = useState(false);
     const [pesan, setPesan] = useState(null);
-    const [galat, setGalat] = useState([]);
     const [peringatan, setPeringatan] = useState(null);
-    const [latarUrl, setLatarUrl] = useState(templat.latar_url);
-    const [sumberSalin, setSumberSalin] = useState('');
+    const [galatUmum, setGalatUmum] = useState([]);
+    const [galatServer, setGalatServer] = useState({});
     const [lebarKanvas, setLebarKanvas] = useState(640);
     const kanvasRef = useRef(null);
     const gerak = useRef(null);
 
+    const sekarang = useMemo(() => normalisasiKeadaan({ orientasi, layout, teks }, bawaanTeks), [orientasi, layout, teks, bawaanTeks]);
+    const kotor = adaPerubahan(awal, sekarang);
+    const galatKolom = useMemo(() => ({ ...galatServer, ...galatTeks(teks, teksTersimpan, batasTeks) }), [galatServer, teks, teksTersimpan, batasTeks]);
+    const adaGalatKolom = Object.keys(galatKolom).length > 0;
+
     const [w, h] = HALAMAN_MM[orientasi];
-    const jenisAktif = tab === 'bawaan' ? 'peserta' : tab;
-    const punyaPenimpa = tab !== 'bawaan' && Boolean(penimpa[tab]);
-    const layout = punyaPenimpa ? penimpa[tab] : dasar;
-    const teksAktif = teks[jenisAktif] || {};
-    const jenisLabel = TAB_JENIS.find((t) => t.id === jenisAktif)?.label ?? 'Peserta';
+    const jenisLabel = LABEL_JENIS[jenisTeks];
+    const teksAktif = teks[jenisTeks] || {};
     const tumpang = menutupiQr(layout);
-    const asing = Object.values(teksAktif).flatMap((t) => penampungAsing(t, templat.aturan.penampung));
+    const tersembunyi = Object.keys(layout).filter((k) => !layout[k].tampil);
 
-    const ubahLayout = useCallback((fungsi) => {
-        setKotor(true);
-        if (punyaPenimpa) setPenimpa((prev) => ({ ...prev, [tab]: fungsi(prev[tab]) }));
-        else setDasar((prev) => fungsi(prev));
-    }, [punyaPenimpa, tab]);
-
-    const setElemen = (kunci, el) => ubahLayout((prev) => ({ ...prev, [kunci]: el }));
+    const setElemen = useCallback((kunci, el) => setLayout((prev) => ({ ...prev, [kunci]: el })), []);
 
     useEffect(() => {
         const el = kanvasRef.current;
@@ -121,6 +126,7 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, kegiatanL
         return () => pengamat.disconnect();
     }, []);
 
+    // Peringatan keluar halaman hanya bila ada perubahan nyata dibanding yang tersimpan.
     useEffect(() => {
         const cegah = (e) => {
             if (!kotor) return;
@@ -137,15 +143,15 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, kegiatanL
         };
     }, [kotor]);
 
+    /** Ambil keadaan dari data server dan jadikan baseline baru (setelah simpan, reset, atau ganti latar). */
     const muatDari = (data) => {
-        const keadaan = bangunKeadaan(data);
-        setOrientasi(keadaan.orientasi);
-        setDasar(keadaan.dasar);
-        setTeks(keadaan.teks);
-        setPenimpa(keadaan.penimpa);
-        setTersimpanPenimpa(Object.keys(keadaan.penimpa));
+        setAwal(normalisasiKeadaan(data, bawaanTeks));
+        setTeksTersimpan(data.teks);
+        setOrientasi(data.orientasi);
+        setLayout(data.layout);
+        setTeks(data.teks);
         setLatarUrl(data.latar_url);
-        setKotor(false);
+        setGalatServer({});
     };
 
     // --- Seret dan ubah ukuran dengan pointer events ---
@@ -168,7 +174,7 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, kegiatanL
             return;
         }
         let baru = geserElemen(g.awal, g.kunci, orientasi, dx, dy);
-        const snap = snapTengah(baru, snapAktif);
+        const snap = snapTengah(baru, true);
         setGarisTengah(snap.garis);
         if (snap.garis) baru = jepitElemen({ ...baru, x: snap.x }, g.kunci, orientasi);
         setElemen(g.kunci, baru);
@@ -187,39 +193,29 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, kegiatanL
         setElemen(kunci, geserElemen(layout[kunci], kunci, orientasi, arah[0], arah[1]));
     };
 
-    const ubahProp = (kunci, tambahan) => {
-        const el = { ...layout[kunci], ...tambahan };
-        if (kunci === 'qr' && 'lebar' in tambahan) {
-            setElemen(kunci, ubahUkuran(layout.qr, 'qr', orientasi, Number(tambahan.lebar), Number(tambahan.lebar)));
-            return;
-        }
-        setElemen(kunci, jepitElemen(el, kunci, orientasi));
-    };
-
-    const ubahOrientasi = (baru) => {
-        const sesuaikan = (tata) => Object.fromEntries(Object.entries(tata).map(([k, el]) => [k, jepitElemen(el, k, baru)]));
-        setOrientasi(baru);
-        setDasar((prev) => sesuaikan(prev));
-        setPenimpa((prev) => Object.fromEntries(Object.entries(prev).map(([j, tata]) => [j, sesuaikan(tata)])));
-        setKotor(true);
-    };
+    const ubahProp = (kunci, tambahan) => setElemen(kunci, jepitElemen({ ...layout[kunci], ...tambahan }, kunci, orientasi));
 
     const ubahTeks = (bidang, nilai) => {
-        setTeks((prev) => ({ ...prev, [jenisAktif]: { ...prev[jenisAktif], [bidang]: nilai } }));
-        setKotor(true);
+        setTeks((prev) => ({ ...prev, [jenisTeks]: { ...prev[jenisTeks], [bidang]: nilai } }));
+        setGalatServer((prev) => {
+            const { [`${jenisTeks}.${bidang}`]: _, ...sisa } = prev;
+            return sisa;
+        });
     };
 
     // --- Aksi ke server ---
     const jalankan = async (fungsi, pesanSukses) => {
         setSibuk(true);
         setPesan(null);
-        setGalat([]);
+        setGalatUmum([]);
         try {
             const hasil = await fungsi();
             if (pesanSukses) setPesan(pesanSukses);
             return hasil;
         } catch (err) {
-            setGalat(pesanGalat(err));
+            const { umum, perKolom } = await pesanGalat(err);
+            setGalatUmum(umum);
+            setGalatServer(perKolom);
             return null;
         } finally {
             setSibuk(false);
@@ -227,25 +223,23 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, kegiatanL
     };
 
     const alamat = `/admin/kegiatan/${kegiatanId}/sertifikat`;
+    const badanTemplat = (jenis) => ({ jenis, orientasi, layout, teks: teksUntukDisimpan(teks, bawaanTeks) });
 
     const simpan = () => jalankan(async () => {
-        await window.axios.put(`${alamat}/templat`, { jenis: null, orientasi, layout: dasar, teks });
-        for (const [jenis, tata] of Object.entries(penimpa)) {
-            await window.axios.put(`${alamat}/templat`, { jenis, orientasi, layout: tata, teks: { [jenis]: teks[jenis] } });
-        }
-        for (const jenis of tersimpanPenimpa.filter((j) => !penimpa[j])) {
-            await window.axios.delete(`${alamat}/templat`, { data: { jenis } });
-        }
-        setTersimpanPenimpa(Object.keys(penimpa));
-        setKotor(false);
+        const { data } = await window.axios.put(`${alamat}/templat`, badanTemplat(null));
+        muatDari(data.templat);
     }, 'Templat disimpan.');
 
-    const resetBawaan = () => {
-        if (!window.confirm('Kembalikan semua tata letak dan teks kegiatan ini ke bawaan sistem? Latar juga dihapus.')) return;
+    const kembalikanBawaan = () => {
+        if (!window.confirm('Kembalikan tata letak, teks, dan latar kegiatan ini ke bawaan sistem?')) return;
         jalankan(async () => {
-            for (const jenis of [null, ...tersimpanPenimpa]) await window.axios.delete(`${alamat}/templat`, { data: { jenis } });
-            const { bawaan } = templat;
-            muatDari({ ...templat, orientasi: 'landscape', layout: bawaan.landscape, teks: bawaan.teks, penimpa: {}, latar_url: null });
+            let terakhir = null;
+            for (const jenis of [null, ...Object.keys(templat.penimpa || {})]) {
+                const { data } = await window.axios.delete(`${alamat}/templat`, { data: { jenis } });
+                terakhir = data.templat;
+            }
+            muatDari(terakhir);
+            setPeringatan(null);
         }, 'Templat dikembalikan ke bawaan.');
     };
 
@@ -257,78 +251,44 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, kegiatanL
         form.append('latar', berkas);
         jalankan(async () => {
             const { data } = await window.axios.post(`${alamat}/latar`, form);
-            setLatarUrl(data.templat.latar_url);
+            const baru = data.templat;
+            setLatarUrl(baru.latar_url);
             setPeringatan(data.peringatan);
+            // Server sudah menyimpan latar dan orientasinya; perubahan lain yang belum disimpan tetap dipertahankan.
+            setAwal(normalisasiKeadaan(baru, bawaanTeks));
+            setTeksTersimpan(baru.teks);
+            if (baru.orientasi !== orientasi) {
+                setLayout((prev) => Object.fromEntries(Object.entries(prev).map(([k, el]) => [k, jepitElemen(el, k, baru.orientasi)])));
+                setOrientasi(baru.orientasi);
+            }
         }, 'Latar diunggah.');
     };
 
-    const hapusLatar = () => jalankan(async () => {
-        const { data } = await window.axios.delete(`${alamat}/latar`);
-        setLatarUrl(data.templat.latar_url);
-        setPeringatan(null);
-    }, 'Latar dihapus.');
-
-    const salinDariKegiatan = () => {
-        if (!sumberSalin || !window.confirm('Templat kegiatan ini akan diganti dengan salinan. Lanjutkan?')) return;
-        jalankan(async () => {
-            const { data } = await window.axios.post(`${alamat}/salin`, { sumber_id: Number(sumberSalin) });
-            muatDari(data.templat);
-        }, 'Templat disalin.');
-    };
-
     const pratinjau = () => jalankan(async () => {
-        const badan = {
-            jenis: jenisAktif,
-            orientasi,
-            layout,
-            teks: { [jenisAktif]: teks[jenisAktif] },
-        };
-        const { data } = await window.axios.post(`${alamat}/pratinjau`, badan, { responseType: 'blob' });
+        const { data } = await window.axios.post(`${alamat}/pratinjau`, badanTemplat(jenisTeks), { responseType: 'blob' });
         window.open(URL.createObjectURL(new Blob([data], { type: 'application/pdf' })), '_blank', 'noopener');
     });
 
     const el = layout[terpilih];
     const pxPerMm = lebarKanvas / w;
-    const kelasInput = 'w-full px-2 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs';
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Jenis sertifikat">
-                {TAB_JENIS.map((t) => (
-                    <button
-                        key={t.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={tab === t.id}
-                        onClick={() => setTab(t.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold ${tab === t.id ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
-                    >
-                        {t.label}{penimpa[t.id] ? ' *' : ''}
-                    </button>
-                ))}
-                <span className="text-[11px] text-slate-500">* memakai tata letak khusus</span>
-            </div>
-
-            {kotor && <div role="status" className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">Ada perubahan yang belum disimpan.</div>}
-            {pesan && <div role="status" className="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300">{pesan}</div>}
-            {peringatan && <div role="alert" className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">{peringatan}</div>}
-            {galat.length > 0 && (
-                <ul role="alert" className="px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 list-disc list-inside">
-                    {galat.map((g) => <li key={g}>{g}</li>)}
+            {kotor && <div role="status" className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200">Ada perubahan yang belum disimpan.</div>}
+            {pesan && <div role="status" className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-200">{pesan}</div>}
+            {peringatan && <div role="status" className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200">{peringatan}</div>}
+            {galatUmum.length > 0 && (
+                <ul role="alert" className="px-6 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-sm text-rose-200 list-disc">
+                    {galatUmum.map((g) => <li key={g}>{g}</li>)}
                 </ul>
             )}
             {tumpang.length > 0 && (
-                <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
-                    Menutupi kode QR: {tumpang.map((k) => LABEL_ELEMEN[k]).join(', ')}. Ini hanya peringatan; QR tetap dirender di atas pelat putih.
-                </div>
-            )}
-            {asing.length > 0 && (
-                <div role="alert" className="px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300">
-                    Penampung tidak dikenal: {asing.map((a) => `{${a}}`).join(', ')}. Tersedia: {templat.aturan.penampung.map((p) => `{${p}}`).join(', ')}.
+                <div className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200">
+                    Menutupi kode QR: {tumpang.map((k) => LABEL_ELEMEN[k]).join(', ')}. QR tetap dirender di atas pelat putih.
                 </div>
             )}
 
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-4">
                 <div>
                     <div
                         ref={kanvasRef}
@@ -349,7 +309,7 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, kegiatanL
                                 onPointerCancel={akhiriGerak}
                                 onFocus={() => setTerpilih(kunci)}
                                 onKeyDown={(ev) => tekanTombol(ev, kunci)}
-                                className={`absolute cursor-move overflow-hidden outline-none ${terpilih === kunci ? 'ring-2 ring-emerald-500 bg-emerald-500/10' : 'ring-1 ring-slate-400/60'}`}
+                                className={`absolute cursor-move overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${terpilih === kunci ? 'ring-2 ring-emerald-500 bg-emerald-500/10' : 'ring-1 ring-slate-400/60'}`}
                                 style={{
                                     left: `${e.x}%`, top: `${e.y}%`, width: `${e.lebar}%`, height: `${e.tinggi}%`,
                                     color: e.warna, fontFamily: `'${e.font}', sans-serif`, fontWeight: e.tebal ? 700 : 400,
@@ -370,132 +330,118 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, kegiatanL
                             </div>
                         ))}
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
-                        <label className="flex items-center gap-1.5">
-                            <input type="checkbox" checked={snapAktif} onChange={(e) => setSnapAktif(e.target.checked)} />
-                            Tarik ke tengah halaman (snap)
-                        </label>
-                        <span>Panah: geser {LANGKAH_PANAH}%, Shift+panah: {LANGKAH_PANAH_SHIFT}%.</span>
-                    </div>
-                </div>
-
-                <div className="space-y-4">
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
-                        <label htmlFor="orientasi-templat" className="block text-[11px] font-bold text-slate-300">Orientasi A4</label>
-                        <select id="orientasi-templat" value={orientasi} onChange={(e) => ubahOrientasi(e.target.value)} className={kelasInput}>
-                            <option value="landscape">Lanskap (297 x 210 mm)</option>
-                            <option value="portrait">Potret (210 x 297 mm)</option>
-                        </select>
-                        {tab !== 'bawaan' && (punyaPenimpa ? (
-                            <button type="button" onClick={() => { setPenimpa((p) => { const { [tab]: _, ...sisa } = p; return sisa; }); setKotor(true); }} className="text-[11px] text-rose-300 underline">
-                                Hapus tata letak khusus {jenisLabel}
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => { setPenimpa((p) => ({ ...p, [tab]: JSON.parse(JSON.stringify(dasar)) })); setKotor(true); }}
-                                className="text-[11px] text-emerald-300 underline"
-                            >
-                                Gunakan tata letak berbeda untuk jenis ini
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
-                        <div className="text-[11px] font-bold text-slate-300">Elemen</div>
-                        <div className="flex flex-wrap gap-1.5">
-                            {Object.keys(layout).map((kunci) => (
-                                <button
-                                    key={kunci}
-                                    type="button"
-                                    onClick={() => setTerpilih(kunci)}
-                                    aria-pressed={terpilih === kunci}
-                                    className={`px-2 py-1 rounded-md text-[10px] font-bold ${terpilih === kunci ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'} ${layout[kunci].tampil ? '' : 'opacity-50'}`}
-                                >
-                                    {LABEL_ELEMEN[kunci]}
+                    <p className="mt-2 text-xs text-slate-400">
+                        Klik elemen lalu seret ke posisi yang diinginkan. Panah menggeser {LANGKAH_PANAH}%, Shift+panah {LANGKAH_PANAH_SHIFT}%.
+                    </p>
+                    {tersembunyi.length > 0 && (
+                        <p className="mt-1 text-xs text-slate-300">
+                            Disembunyikan:{' '}
+                            {tersembunyi.map((k) => (
+                                <button key={k} type="button" onClick={() => { ubahProp(k, { tampil: true }); setTerpilih(k); }} className="mr-2 underline text-emerald-300 hover:text-emerald-200">
+                                    {LABEL_ELEMEN[k]} (tampilkan)
                                 </button>
                             ))}
-                        </div>
-                    </div>
-
-                    {el && (
-                        <fieldset className="bg-slate-950 border border-slate-800 rounded-xl p-3 grid grid-cols-2 gap-2">
-                            <legend className="px-1 text-[11px] font-bold text-slate-300">Properti: {LABEL_ELEMEN[terpilih]}</legend>
-                            {[['x', 'X (%)'], ['y', 'Y (%)'], ['lebar', terpilih === 'qr' ? 'Sisi (% lebar)' : 'Lebar (%)'], ['tinggi', 'Tinggi (%)'], ['ukuran_font', 'Font (pt)']].map(([prop, label]) => (
-                                <label key={prop} className="text-[10px] text-slate-400">
-                                    {label}
-                                    <input
-                                        type="number"
-                                        step="0.5"
-                                        value={el[prop]}
-                                        disabled={terpilih === 'qr' && prop === 'tinggi'}
-                                        onChange={(e) => (prop === 'ukuran_font' ? ubahProp(terpilih, { ukuran_font: Number(e.target.value) }) : ubahProp(terpilih, { [prop]: Number(e.target.value) }))}
-                                        className={kelasInput}
-                                    />
-                                </label>
-                            ))}
-                            {terpilih === 'qr' && <p className="col-span-2 text-[10px] text-slate-400">Sisi QR sekarang {sisiQrMm(el, orientasi).toFixed(1)} mm (batas {templat.aturan.qr_min_mm}-{templat.aturan.qr_maks_mm} mm, margin {templat.aturan.margin_qr_mm} mm).</p>}
-                            <label className="text-[10px] text-slate-400">
-                                Rata
-                                <select value={el.rata} onChange={(e) => ubahProp(terpilih, { rata: e.target.value })} className={kelasInput}>
-                                    <option value="kiri">Kiri</option>
-                                    <option value="tengah">Tengah</option>
-                                    <option value="kanan">Kanan</option>
-                                </select>
-                            </label>
-                            <label className="text-[10px] text-slate-400">
-                                Font
-                                <select value={el.font} onChange={(e) => ubahProp(terpilih, { font: e.target.value })} className={kelasInput}>
-                                    {templat.aturan.font.map((f) => <option key={f} value={f}>{f}</option>)}
-                                </select>
-                            </label>
-                            <label className="text-[10px] text-slate-400">
-                                Warna
-                                <input type="color" value={el.warna} onChange={(e) => ubahProp(terpilih, { warna: e.target.value })} className="w-full h-8 rounded-lg bg-slate-950 border border-slate-800" />
-                            </label>
-                            <div className="flex flex-col gap-1 text-[11px] text-slate-300 pt-4">
-                                <label className="flex items-center gap-1.5"><input type="checkbox" checked={el.tebal} onChange={(e) => ubahProp(terpilih, { tebal: e.target.checked })} />Tebal</label>
-                                <label className="flex items-center gap-1.5">
-                                    <input type="checkbox" checked={el.tampil} disabled={WAJIB.includes(terpilih)} onChange={(e) => ubahProp(terpilih, { tampil: e.target.checked })} />
-                                    Tampil{WAJIB.includes(terpilih) ? ' (wajib)' : ''}
-                                </label>
-                            </div>
-                        </fieldset>
+                        </p>
                     )}
+                </div>
 
-                    {tab !== 'bawaan' && (
-                        <fieldset className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
-                            <legend className="px-1 text-[11px] font-bold text-slate-300">Teks sertifikat {jenisLabel}</legend>
-                            {[['judul', 'Judul'], ['pengantar', 'Pengantar'], ['penutup', 'Kalimat penutup']].map(([bidang, label]) => (
-                                <label key={bidang} className="block text-[10px] text-slate-400">
-                                    {label}
-                                    <textarea rows={bidang === 'penutup' ? 3 : 1} value={teksAktif[bidang] ?? ''} onChange={(e) => ubahTeks(bidang, e.target.value)} className={kelasInput} />
-                                </label>
-                            ))}
-                            <p className="text-[10px] text-slate-500">Penampung: {templat.aturan.penampung.map((p) => `{${p}}`).join(' ')}</p>
+                <div>
+                    {el && (
+                        <fieldset className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                            <legend className="px-1 text-sm font-bold text-white">{LABEL_ELEMEN[terpilih]}</legend>
+                            {terpilih === 'qr' ? (
+                                <>
+                                    <label className="block text-sm text-slate-300">
+                                        Ukuran (mm)
+                                        <input
+                                            type="number"
+                                            min={QR_MIN_MM}
+                                            max={QR_MAKS_MM}
+                                            step="1"
+                                            value={Math.round(sisiQrMm(el, orientasi) * 10) / 10}
+                                            onChange={(e) => setElemen('qr', aturSisiQr(layout.qr, orientasi, Number(e.target.value)))}
+                                            className={`${kelasInput} mt-1`}
+                                        />
+                                    </label>
+                                    <p className="text-xs text-slate-400">QR selalu persegi, {QR_MIN_MM} sampai {QR_MAKS_MM} mm, dan berada di dalam halaman.</p>
+                                </>
+                            ) : (
+                                <>
+                                    <label className="block text-sm text-slate-300">
+                                        Ukuran huruf (pt)
+                                        <input type="number" min="6" max="72" step="1" value={el.ukuran_font} onChange={(e) => ubahProp(terpilih, { ukuran_font: Number(e.target.value) })} className={`${kelasInput} mt-1`} />
+                                    </label>
+                                    <label className="block text-sm text-slate-300">
+                                        Rata teks
+                                        <select value={el.rata} onChange={(e) => ubahProp(terpilih, { rata: e.target.value })} className={`${kelasInput} mt-1`}>
+                                            <option value="kiri">Kiri</option>
+                                            <option value="tengah">Tengah</option>
+                                            <option value="kanan">Kanan</option>
+                                        </select>
+                                    </label>
+                                    <label className="block text-sm text-slate-300">
+                                        Warna
+                                        <input type="color" value={el.warna} onChange={(e) => ubahProp(terpilih, { warna: e.target.value })} className="mt-1 w-full h-10 rounded-xl bg-slate-950 border border-slate-700" />
+                                    </label>
+                                </>
+                            )}
+                            {WAJIB.includes(terpilih)
+                                ? <p className="text-xs text-slate-400">Elemen ini selalu tampil di sertifikat.</p>
+                                : <button type="button" onClick={() => setLayout((prev) => sembunyikanElemen(prev, terpilih, orientasi))} className={kelasTombolBiasa}>Sembunyikan</button>}
                         </fieldset>
                     )}
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
-                <button type="button" disabled={sibuk || !kotor} onClick={simpan} className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold">Simpan</button>
-                <button type="button" disabled={sibuk} onClick={pratinjau} className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">Pratinjau PDF</button>
-                <label className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold cursor-pointer">
-                    Unggah latar
-                    <input type="file" accept="image/png,image/jpeg" className="sr-only" onChange={unggahLatar} />
-                </label>
-                {latarUrl && <button type="button" disabled={sibuk} onClick={hapusLatar} className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-bold">Hapus latar</button>}
-                <button type="button" disabled={sibuk} onClick={resetBawaan} className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold">Reset ke bawaan</button>
-                {kegiatanLain.length > 0 && (
-                    <span className="flex items-center gap-1.5">
-                        <select aria-label="Salin templat dari kegiatan" value={sumberSalin} onChange={(e) => setSumberSalin(e.target.value)} className={`${kelasInput} w-auto`}>
-                            <option value="">Salin dari kegiatan lain...</option>
-                            {kegiatanLain.map((k) => <option key={k.id} value={k.id}>{k.nama_kegiatan}</option>)}
+            <details className="bg-slate-950 border border-slate-800 rounded-xl">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-white">Ubah teks sertifikat (opsional)</summary>
+                <div className="px-4 pb-4 space-y-3">
+                    <label className="block text-sm text-slate-300 max-w-xs">
+                        Jenis sertifikat
+                        <select value={jenisTeks} onChange={(e) => setJenisTeks(e.target.value)} className={`${kelasInput} mt-1`}>
+                            {JENIS_TEKS.map((j) => <option key={j} value={j}>{LABEL_JENIS[j]}</option>)}
                         </select>
-                        <button type="button" disabled={sibuk || !sumberSalin} onClick={salinDariKegiatan} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-bold">Salin</button>
-                    </span>
-                )}
+                    </label>
+                    {Object.keys(batasTeks).map((bidang) => {
+                        const kunci = `${jenisTeks}.${bidang}`;
+                        const nilai = teksAktif[bidang] ?? '';
+                        const panjang = panjangTeks(String(nilai).trim());
+                        const melebihi = panjang > batasTeks[bidang];
+                        const berubah = nilai !== (teksTersimpan[jenisTeks]?.[bidang] ?? '');
+                        const asing = berubah ? penampungAsing(nilai, templat.aturan.penampung) : [];
+                        const galat = galatKolom[kunci] || (asing.length > 0 ? `Penampung tidak dikenal: ${asing.map((a) => `{${a}}`).join(', ')}` : null);
+                        return (
+                            <div key={bidang}>
+                                <label htmlFor={`teks-${bidang}`} className="block text-sm text-slate-300">{LABEL_BIDANG[bidang]}</label>
+                                <textarea
+                                    id={`teks-${bidang}`}
+                                    rows={bidang === 'penutup' ? 3 : 2}
+                                    value={nilai}
+                                    placeholder={bawaanTeks[jenisTeks]?.[bidang]}
+                                    aria-invalid={galat ? 'true' : undefined}
+                                    aria-describedby={`teks-${bidang}-info`}
+                                    onChange={(e) => ubahTeks(bidang, e.target.value)}
+                                    className={`${kelasInput} mt-1 ${galat ? 'border-rose-400' : ''}`}
+                                />
+                                <div id={`teks-${bidang}-info`} className="mt-1 flex items-start justify-between gap-3 text-xs">
+                                    <span className={galat ? 'text-rose-300' : 'text-slate-400'}>{galat}</span>
+                                    <span className={melebihi ? 'text-rose-300 font-bold' : 'text-slate-400'}>{panjang}/{batasTeks[bidang]}</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                    <p className="text-xs text-slate-400">Penampung: {templat.aturan.penampung.map((p) => `{${p}}`).join(' ')}. Kolom dikosongkan berarti memakai teks bawaan.</p>
+                </div>
+            </details>
+
+            <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-800">
+                <label className={`${kelasTombolBiasa} cursor-pointer ${sibuk ? 'opacity-50' : ''}`}>
+                    Unggah Latar
+                    <input type="file" accept="image/png,image/jpeg" className="sr-only" disabled={sibuk} onChange={unggahLatar} />
+                </label>
+                <button type="button" disabled={sibuk || !kotor || adaGalatKolom} onClick={simpan} className={`${kelasTombol} bg-emerald-700 hover:bg-emerald-600 text-white`}>Simpan</button>
+                <button type="button" disabled={sibuk || adaGalatKolom} onClick={pratinjau} className={kelasTombolBiasa}>Pratinjau PDF</button>
+                <button type="button" disabled={sibuk} onClick={kembalikanBawaan} className={`${kelasTombol} bg-slate-800 hover:bg-slate-700 text-amber-200`}>Kembalikan ke Bawaan</button>
             </div>
         </div>
     );

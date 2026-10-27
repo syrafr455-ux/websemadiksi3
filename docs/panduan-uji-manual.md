@@ -732,3 +732,15 @@ where c.contype = 'c' and n.nspname = current_schema() and array_length(c.conkey
 order by 1, 2;
 ```
 Migrasi `2026_10_29_000002_selaraskan_batasan_check_enum.php` (dijalankan pemilik lewat `php artisan migrate`) menyelaraskan batasan yang berbeda dan tidak menyentuh yang sudah benar.
+
+### G. Editor templat sertifikat yang disederhanakan (`/admin/kegiatan/{id}/sertifikat`, tab Templat)
+Masuk sebagai super_admin. Satu layar, satu tata letak untuk semua jenis sertifikat dalam kegiatan.
+1. **Keadaan awal bersih**: buka tab Templat. Tidak boleh ada banner kuning "Ada perubahan yang belum disimpan", daftar galat merah, atau tab jenis. Tombol Simpan nonaktif. Klik tab Terbitkan: pindah halaman tanpa dialog "Leave site?".
+2. **Latar**: tekan **Unggah Latar**, pilih PNG/JPG. Gambar lebih tinggi daripada lebar menjadikan kanvas potret; tanpa latar atau gambar lanskap, kanvas lanskap. Bila rasio tidak A4, muncul peringatan kuning (gambar diregangkan).
+3. **Posisi**: seret Nama Penerima, Kode QR, dan elemen lain di atas latar. Klik biasa tanpa menggeser tidak boleh menyalakan banner. Setelah digeser, banner muncul dan Simpan aktif. Panah menggeser 0,5%, Shift+panah 2%.
+4. **Panel kanan**: pilih elemen teks untuk mengubah ukuran huruf, rata teks, dan warna. QR hanya punya kolom Ukuran (mm), 18 sampai 60 mm, selalu persegi dan di dalam halaman. Nama, QR, dan nomor seri tidak punya tombol Sembunyikan; elemen lain punya, dan yang disembunyikan bisa dikembalikan lewat tautan "tampilkan" di bawah kanvas.
+5. **Simpan**: tekan Simpan, banner "Templat disimpan." muncul dan banner kuning hilang. Muat ulang halaman: posisi tetap.
+6. **Pratinjau PDF**: tekan Pratinjau PDF, PDF berwatermark CONTOH terbuka di tab baru. Nomor seri tidak terpakai (cek di Arsip).
+7. **Ubah teks sertifikat (opsional)**: bagian lipat tertutup. Buka, pilih jenis, ubah judul. Penghitung abu-abu "n/150" berubah merah dan pesan "Judul terlalu panjang (162 dari 150 karakter)" muncul di bawah kolom hanya setelah melebihi batas; Simpan dan Pratinjau nonaktif selama ada galat. Mengosongkan kolom berarti memakai teks bawaan.
+8. **Kembalikan ke Bawaan**: konfirmasi, lalu tata letak, teks, dan latar kembali ke bawaan sistem.
+9. **Terbitkan**: dari tab Terbitkan, header, sidebar, dan tab sama dengan halaman Kelola Kegiatan; nama dan status kegiatan tampil di atas, dan "Kembali ke sertifikat kegiatan" membawa kembali ke editor.

@@ -17,104 +17,102 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-full bg-slate-900 text-slate-100 flex admin-body" style="background-color: #0f172a; color: #f8fafc;" x-data="{ sidebarOpen: false }">
+<body class="min-h-full bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-white">
+{{-- Struktur dan kelas sama dengan resources/js/Layouts/AdminLayout.jsx (acuan). Ubah keduanya bersamaan. --}}
+<div data-tata-letak="admin" class="min-h-screen bg-slate-950 text-slate-100 flex font-sans" x-data="{ sidebarOpen: false }">
 
-    {{-- Admin Sidebar --}}
-    <aside 
-        :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
-        class="fixed inset-y-0 left-0 z-50 w-72 bg-slate-950 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out shadow-2xl lg:shadow-none"
+    <div x-show="sidebarOpen" x-cloak @click="sidebarOpen = false" class="fixed inset-0 z-40 bg-black/70 lg:hidden"></div>
+
+    <aside
+        :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+        class="fixed top-0 bottom-0 left-0 z-50 w-72 bg-slate-900 border-r border-slate-800/80 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0"
     >
-        <div class="h-20 px-6 border-b border-slate-800 flex items-center justify-between">
+        <div class="p-6 border-b border-slate-800/80 flex items-center justify-between">
             <a href="{{ \App\Support\MenuAdmin::beranda(Auth::user()) ?? route('home') }}" class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center text-white shadow-sm">
-                    <span class="material-symbols-outlined text-2xl">admin_panel_settings</span>
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20 font-black text-white text-lg tracking-wider">
+                    SD
                 </div>
                 <div>
-                    <span class="text-base font-bold text-amber-500 block leading-none">SEMADIKSI</span>
-                    <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-widest block mt-1">Panel Pengelola</span>
+                    <div class="text-base font-bold tracking-wide text-emerald-400">SEMADIKSI</div>
+                    <div class="text-xs uppercase font-bold text-slate-400 tracking-widest">Panel Admin • UNUSA</div>
                 </div>
             </a>
-            <button @click="sidebarOpen = false" class="lg:hidden p-1.5 rounded-lg text-slate-400 hover:bg-slate-800">
+            <button type="button" class="lg:hidden text-slate-400 hover:text-white p-1" @click="sidebarOpen = false" aria-label="Tutup menu">
                 <span class="material-symbols-outlined text-xl">close</span>
             </button>
         </div>
 
-        <nav class="flex-1 overflow-y-auto px-4 py-4 space-y-1 text-xs">
+        <div class="p-4 mx-4 my-3 rounded-2xl bg-slate-950/70 border border-slate-800/60 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-black flex items-center justify-center text-sm">
+                {{ strtoupper(mb_substr(Auth::user()->name ?? 'A', 0, 1)) }}
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="text-xs font-bold text-white truncate">{{ Auth::user()->name ?? 'Admin' }}</div>
+                <div class="text-xs text-slate-400 truncate">{{ Auth::user()->email ?? '-' }}</div>
+                <div class="mt-1">
+                    <span class="inline-block px-2 py-0.5 rounded-full text-xs font-extrabold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        {{ Auth::user()->role instanceof \App\Enums\UserRole ? Auth::user()->role->label() : (string) Auth::user()->role }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-4 py-2 space-y-1 overflow-y-auto">
             {{-- Satu sumber menu dengan AdminLayout.jsx: App\Support\MenuAdmin (hanya link yang boleh diakses role ini). --}}
             @foreach (\App\Support\MenuAdmin::untuk(Auth::user(), request()) as $menu)
-                <a href="{{ $menu['href'] }}" data-menu-admin="{{ $menu['route'] }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-colors {{ $menu['active'] ? 'bg-amber-600 text-white' : 'text-slate-300 hover:bg-slate-900 hover:text-white' }}">
-                    <span class="material-symbols-outlined text-lg">{{ $menu['icon'] }}</span>
-                    <span>{{ $menu['label'] }}</span>
+                <a href="{{ $menu['href'] }}" data-menu-admin="{{ $menu['route'] }}" class="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all {{ $menu['active'] ? 'bg-emerald-700 text-white shadow-lg shadow-emerald-700/25 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' }}">
+                    <div class="flex items-center gap-3">
+                        <span class="material-symbols-outlined text-lg">{{ $menu['icon'] }}</span>
+                        <span>{{ $menu['label'] }}</span>
+                    </div>
                     @if(!empty($menu['badge']))
-                        <span class="ml-auto px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
-                            {{ $menu['badge'] }}
-                        </span>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-black bg-amber-400 text-slate-950">{{ $menu['badge'] }}</span>
                     @endif
                 </a>
             @endforeach
         </nav>
 
-        <div class="p-4 border-t border-slate-800">
+        <div class="p-4 border-t border-slate-800/80 space-y-2">
+            <a href="{{ route('home') }}" target="_blank" rel="noreferrer" class="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors">
+                <span class="material-symbols-outlined text-base">public</span>
+                <span>Lihat Web Publik</span>
+            </a>
             <form action="{{ route('logout') }}" method="POST">
                 @csrf
-                <button type="submit" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-950/40 transition-colors">
-                    <span class="material-symbols-outlined text-lg">logout</span>
-                    Keluar
+                <button type="submit" class="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors">
+                    <span class="material-symbols-outlined text-base">logout</span>
+                    <span>Keluar Sistem</span>
                 </button>
             </form>
         </div>
     </aside>
 
-    {{-- Main Admin App Area --}}
-    <div class="flex-1 lg:pl-72 flex flex-col min-h-screen bg-slate-900 text-slate-100" style="background-color: #0f172a;">
-        <header class="h-20 bg-slate-950 border-b border-slate-800 sticky top-0 z-30 px-6 flex items-center justify-between" style="background-color: #020617;">
-            <div class="flex items-center gap-3">
-                <button @click="sidebarOpen = true" class="lg:hidden p-2 rounded-xl text-slate-400 hover:bg-slate-900">
-                    <span class="material-symbols-outlined text-2xl">menu</span>
+    <div class="flex-1 lg:pl-72 flex flex-col min-w-0">
+        <header class="sticky top-0 z-30 h-16 bg-slate-900/80 border-b border-slate-800/80 px-6 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <button type="button" @click="sidebarOpen = true" class="lg:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 focus:outline-none" aria-label="Buka menu">
+                    <span class="material-symbols-outlined">menu</span>
                 </button>
-                <div>
-                    <h1 class="text-base font-bold text-white">@yield('pageTitle', $pageTitle ?? 'Panel Pengelola')</h1>
-                    <p class="text-xs text-slate-400">@yield('pageSubtitle', $pageSubtitle ?? 'Sistem Informasi SEMADIKSI UNUSA')</p>
-                </div>
-            </div>
-
-            <div class="flex items-center gap-4 text-xs">
-                <a href="{{ route('home') }}" target="_blank" class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold flex items-center gap-1.5">
-                    <span class="material-symbols-outlined text-sm">public</span>
-                    Lihat Web Publik
-                </a>
-                <span class="text-amber-500 font-bold hidden sm:inline">{{ Auth::user()->name }}</span>
+                <h1 class="text-sm font-bold text-white tracking-wide">@yield('pageTitle', $pageTitle ?? 'Panel Administrator')</h1>
             </div>
         </header>
 
-        @if(session('success'))
-            <div class="px-6 mt-4">
-                <div class="p-4 rounded-2xl bg-emerald-950 border border-emerald-800 text-emerald-200 text-xs font-medium flex items-center gap-3">
-                    <span class="material-symbols-outlined text-emerald-400">check_circle</span>
-                    {{ session('success') }}
+        @foreach ([
+            'success' => ['bg-emerald-500/15 border-emerald-500/30 text-emerald-300', 'text-emerald-400', 'check_circle'],
+            'warning' => ['bg-amber-500/15 border-amber-500/30 text-amber-300', 'text-amber-400', 'warning'],
+            'error' => ['bg-rose-500/15 border-rose-500/30 text-rose-300', 'text-rose-400', 'error'],
+        ] as $jenis => [$kelasKotak, $kelasIkon, $ikon])
+            @if(session($jenis))
+                <div class="p-4 px-6">
+                    <div class="flex items-center gap-2 p-4 rounded-xl border text-xs font-medium shadow-md {{ $kelasKotak }}">
+                        <span class="material-symbols-outlined {{ $kelasIkon }}">{{ $ikon }}</span>
+                        <span>{{ session($jenis) }}</span>
+                    </div>
                 </div>
-            </div>
-        @endif
+            @endif
+        @endforeach
 
-        @if(session('warning'))
-            <div class="px-6 mt-4">
-                <div class="p-4 rounded-2xl bg-amber-950 border border-amber-800 text-amber-200 text-xs font-medium flex items-center gap-3">
-                    <span class="material-symbols-outlined text-amber-400">warning</span>
-                    {{ session('warning') }}
-                </div>
-            </div>
-        @endif
-
-        @if(session('error'))
-            <div class="px-6 mt-4">
-                <div class="p-4 rounded-2xl bg-rose-950 border border-rose-800 text-rose-200 text-xs font-medium flex items-center gap-3">
-                    <span class="material-symbols-outlined text-rose-400">error</span>
-                    {{ session('error') }}
-                </div>
-            </div>
-        @endif
-
-        <main class="flex-1 p-6 bg-slate-900 text-slate-100" style="background-color: #0f172a;">
+        <main class="flex-1 p-6 lg:p-8">
             @if(isset($slot) && trim($slot))
                 {{ $slot }}
             @else
@@ -122,6 +120,6 @@
             @endif
         </main>
     </div>
-
+</div>
 </body>
 </html>

@@ -88,7 +88,7 @@ class MenuSertifikatDiKelolaKegiatanTest extends TestCase
             $this->assertSame('landscape', $props['templat']['orientasi']);
             $this->assertArrayHasKey('qr', $props['templat']['layout']);
             $this->assertContains('DejaVu Sans', $props['templat']['aturan']['font']);
-            $this->assertNotContains($kegiatan->id, array_column($props['kegiatanLain'], 'id'));
+            $this->assertArrayNotHasKey('kegiatanLain', $props, 'Fitur salin templat dihapus dari editor yang disederhanakan.');
             $this->assertArrayHasKey('terbit', $props['ringkasan']);
             $this->assertSame(route('admin.certificates', ['tab' => 'terbitkan', 'kegiatan_id' => $kegiatan->id]), $props['tautan']['terbitkan']);
             $this->assertSame(route('admin.certificates', ['tab' => 'arsip', 'kegiatan_id' => $kegiatan->id]), $props['tautan']['arsip']);
