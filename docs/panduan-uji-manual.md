@@ -514,6 +514,8 @@ Seluruh input tanggal dan waktu pada formulir admin dikelola melalui komponen te
 
 ## 7. Modul Sertifikat Digital, Penandatangan, dan Verifikasi Dinamis
 
+> Pembaruan T2b: menu "Sertifikat Digital" tidak lagi ada di sidebar. Halaman Terbitkan/Arsip/Penandatangan/Pengaturan kini di `/admin/penerbitan-sertifikat` dan dibuka dari Kelola Kegiatan (bagian 9). Tautan lama `/admin/sertifikat?tab=...` dialihkan.
+
 > [!NOTE]
 > **STATUS FITUR PADA KODE: SUDAH TERSEDIA LENGKAP (TUGAS T2a)**  
 > Fitur sertifikat digital telah dirombak menyeluruh dengan sistem kelayakan satu pintu (`KelayakanSertifikatService`), penerbitan massal transaksional terverifikasi, master penandatangan dengan snapshot beku dan privasi identitas, arsip audit riwayat perubahan & pencabutan (soft revoke), serta portal verifikasi publik dinamis yang memvalidasi integritas berkas riil (SHA-256).
@@ -659,4 +661,49 @@ php artisan semadiksi:diagnosa-sso 4330024012
 | **Wizard Langkah 5 (Karya)** | Kelola Kegiatan | `/admin/kegiatan` | Tab `"5. Karya"` &rarr; `"Terbitkan Kegiatan"` | **Tersedia di UI** |
 | **Unggah Karya Peserta** | Kegiatan Saya | `/dashboard/kegiatan-saya` | `"Unggah Karya"` &rarr; `"Kirim Karya untuk Dinilai"` | **Tersedia di UI** |
 | **Pemilih Waktu (WIB)** | Form Kegiatan | `/admin/kegiatan` | Input kalender & tombol `"Kosongkan"` | **Tersedia di UI** |
-| **Terbitkan Sertifikat** | Sertifikat Digital | `/admin/sertifikat` | `"Terbitkan Sertifikat"` | **Tersedia di UI** |
+| **Terbitkan Sertifikat** | Kelola Kegiatan &rarr; ikon Sertifikat &rarr; tab Terbitkan | `/admin/penerbitan-sertifikat?tab=terbitkan&kegiatan_id={id}` | `"Terbitkan Sertifikat"` | **Tersedia di UI** |
+
+---
+
+## 9. T2b: Sertifikat di Kelola Kegiatan, Editor Templat, dan PDF
+
+Semua langkah memakai akun `super_admin`; jalankan `npm run build` (atau `npm run dev`) dan `php artisan migrate` (bukan `migrate:fresh`) lebih dulu.
+
+### A. Akses dan menu
+1. Buka `/admin/kegiatan`. Di setiap baris (semua status, termasuk draft), tepat di kanan ikon pensil ada ikon medali dengan tooltip **Sertifikat**. Persempit jendela: tombol turun baris, tidak terpotong, termasuk bila ada Ajukan/Setujui/Tolak.
+2. Di header halaman ada kelompok **Sertifikat**: Master Penandatangan, Arsip Semua Sertifikat, Pengaturan Verifikasi.
+3. Sidebar tidak lagi memuat "Sertifikat Digital". Buka `/admin/sertifikat` dan `/admin/sertifikat?tab=arsip`: keduanya dialihkan (302) ke halaman baru.
+4. Login sebagai verifikator atau penilai: ikon dan halaman tidak tersedia (403/dialihkan).
+
+### B. Halaman per kegiatan (`/admin/kegiatan/{id}/sertifikat`)
+1. Header: nama kegiatan, status, jumlah **layak terbit** dan **sudah terbit**, tautan kembali.
+2. Tab **Terbitkan** dan **Penerima & Arsip** membuka halaman yang sudah ada, difilter ke kegiatan ini, dengan tautan "Kembali ke sertifikat kegiatan".
+3. Tab **Penandatangan**: pilih jenis sertifikat, isi 1 sampai 4 penandatangan, Simpan Penugasan.
+4. Terbitkan sertifikat (massal atau manual): **tidak ada email** terkirim dan kuota harian email tidak bertambah. Di tab Arsip, tombol ikon tautan **Salin tautan verifikasi** menampilkan "Tersalin"; tempel di peramban dan pastikan `/verifikasi?code=...` terbuka.
+
+### C. Editor templat (tab Templat)
+1. Seret kotak **Nama penerima**, **Kode QR**, dan **Nomor seri** di kanvas. Garis biru muncul bila pusat elemen dekat tengah halaman (matikan "Tarik ke tengah halaman" untuk menonaktifkan snap).
+2. Pilih elemen lalu tekan panah (0,5%) atau Shift+panah (2%); ubah angka X, Y, lebar, font, rata, warna, tebal pada panel properti.
+3. QR: tarik pegangan sudut; bentuk tetap persegi, sisi 18 sampai 60 mm, tidak keluar dari margin 5 mm. Elemen wajib (nama, QR, nomor seri) tidak bisa disembunyikan.
+4. Ubah orientasi ke potret; kanvas dan posisi menyesuaikan. Buka tab **Juri**, klik "Gunakan tata letak berbeda untuk jenis ini", ubah judul; tab diberi tanda `*`.
+5. Tulis `{rahasia}` pada kalimat penutup: peringatan merah muncul dan Simpan ditolak server dengan pesan Indonesia.
+6. **Unggah latar** PNG/JPG (maks. 5 MB, 4000x4000 px). SVG atau file palsu bernama `.png` ditolak. Gambar berasio bukan A4 memunculkan peringatan dan tampil diisi penuh.
+7. Ubah sesuatu: muncul "Ada perubahan yang belum disimpan"; menutup tab memunculkan peringatan peramban. **Simpan** menghapus tanda itu.
+8. **Pratinjau PDF** membuka PDF di tab baru berwatermark **CONTOH**, QR menuju tautan tidak valid; tidak ada sertifikat atau nomor seri baru di Arsip.
+9. **Salin dari kegiatan lain** mengganti templat dengan salinan; **Reset ke bawaan** mengembalikan tata letak sistem.
+
+### D. Berkas PDF sertifikat
+1. Setelah penerbitan, sertifikat baru belum punya berkas. Peserta membuka **Sertifikat & Portofolio** atau **Kegiatan Saya** dan menekan unduh: PDF dibuat pada unduhan pertama; nomor seri, QR, dan hash tidak berubah pada unduhan berikutnya. Akun lain yang membuka tautan unduhan mendapat 403.
+2. Ubah templat lalu unduh ulang sertifikat yang sudah punya berkas: isinya **tidak** berubah otomatis (hash tetap cocok).
+3. `POST /admin/kegiatan/{id}/sertifikat/berkas` membuat berkas untuk sertifikat yang belum punya, 20 per permintaan; kegagalan satu berkas diberi penanda gagal dan tidak menghentikan yang lain.
+4. Sertifikat lama (mis. `CERT-ASYK-2026-8280`) dan unduhannya tidak berubah.
+5. `/verifikasi?code=...`: sertifikat aktif tanpa berkas tampil **Valid**; berkas utuh **Valid**; berkas diubah di server **Tidak Valid**.
+
+### E. Menjalankan tes terhadap PostgreSQL (opsional, dilakukan pemilik)
+Tes biasa memakai SQLite di memori yang meloloskan kolom salah. Untuk memeriksa PostgreSQL:
+1. Buat database kosong **khusus uji** secara manual, misalnya `CREATE DATABASE semadiksi_test;` (nama wajib berakhiran `_test`; jangan memakai database pengembangan).
+2. Pastikan lingkungan shell memuat `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD` untuk server itu (tidak ditulis di berkas konfigurasi).
+3. Jalankan `php artisan test --configuration=phpunit.pgsql.xml`. Tes menjalankan `migrate:fresh` pada database uji tersebut.
+4. Penjaga menolak berjalan (exception di `tests/bootstrap-pgsql.php` dan `TestCase::setUpTraits`) bila driver bukan `pgsql`, nama database tidak berakhiran `_test`, atau sama dengan `DB_DATABASE_DEV` bila variabel itu diisi.
+5. Kegagalan yang tidak terkait modul sertifikat dicatat di `docs/status-tugas.md`, tidak diperbaiki di tugas ini.
+
