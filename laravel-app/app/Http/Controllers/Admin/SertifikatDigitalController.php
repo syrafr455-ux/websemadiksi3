@@ -7,7 +7,6 @@ use App\Enums\PeranSertifikat;
 use App\Enums\StatusSertifikat;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
-use App\Mail\SertifikatTerbitMail;
 use App\Models\AuditLog;
 use App\Models\Kegiatan;
 use App\Models\KegiatanPenandatangan;
@@ -18,7 +17,6 @@ use App\Models\Sertifikat;
 use App\Models\SertifikatRiwayatPerubahan;
 use App\Models\User;
 use App\Services\CertificateGeneratorService;
-use App\Services\EmailProtectionService;
 use App\Services\Kegiatan\KelayakanSertifikatService;
 use App\Services\SimpleXlsxService;
 use App\Support\CsvSanitizer;
@@ -328,11 +326,6 @@ class SertifikatDigitalController extends Controller
 
                     $berhasil++;
                     $daftarId[] = $sertifikat->id;
-
-                    // Kirim email notifikasi (kategori massal lewat pintu terpusat)
-                    if (! empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                        EmailProtectionService::send($email, new SertifikatTerbitMail($sertifikat), false);
-                    }
                 }
             });
         }
@@ -432,11 +425,6 @@ class SertifikatDigitalController extends Controller
             keteranganPublik: $keterangan,
             nomorUrut: $nomorData['nomor_urut']
         );
-
-        // Kirim email jika ada
-        if (! empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            EmailProtectionService::send($email, new SertifikatTerbitMail($sertifikat), false);
-        }
 
         AuditLog::record(
             auth()->id(),
@@ -635,10 +623,6 @@ class SertifikatDigitalController extends Controller
 
                 $berhasil++;
                 $daftarId[] = $sertifikat->id;
-
-                if (! empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    EmailProtectionService::send($email, new SertifikatTerbitMail($sertifikat), false);
-                }
             }
         });
 

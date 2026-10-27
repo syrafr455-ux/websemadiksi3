@@ -151,7 +151,7 @@ class AdminSertifikatDigitalTest extends TestCase
         $this->assertDatabaseCount('sertifikat', 0);
     }
 
-    public function test_batch_issue_successfully_issues_certificates_with_atomic_serials_and_email(): void
+    public function test_batch_issue_successfully_issues_certificates_with_atomic_serials_without_email(): void
     {
         Queue::fake();
         $admin = $this->buatAdmin();
@@ -197,8 +197,8 @@ class AdminSertifikatDigitalTest extends TestCase
         $this->assertNotEmpty($sertifikats[0]->penandatangan_snapshot);
         $this->assertIsArray($sertifikats[0]->penandatangan_snapshot);
 
-        // Verifikasi antrean email massal lewat SendProtectedEmailJob
-        Queue::assertPushed(SendProtectedEmailJob::class, 2);
+        // Keputusan pemilik: penerbitan sertifikat tidak mengirim email (lihat SertifikatTanpaEmailTest).
+        Queue::assertNotPushed(SendProtectedEmailJob::class);
 
         // Verifikasi audit log
         $this->assertTrue(AuditLog::where('action', 'sertifikat_batch_terbit')->exists());

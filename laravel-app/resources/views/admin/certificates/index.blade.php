@@ -769,6 +769,18 @@
                                         <a href="{{ $st->verification_url }}" target="_blank" class="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-50" title="Buka Halaman Verifikasi">
                                             <span class="material-symbols-outlined text-base">verified</span>
                                         </a>
+                                        <span x-data="{ tersalin: false }" class="inline-flex items-center">
+                                            <button
+                                                type="button"
+                                                @click="navigator.clipboard.writeText({{ json_encode($st->verification_url) }}).then(() => { tersalin = true; setTimeout(() => tersalin = false, 2000) })"
+                                                class="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer"
+                                                title="Salin tautan verifikasi"
+                                                aria-label="Salin tautan verifikasi {{ $st->nomor_sertifikat }}"
+                                            >
+                                                <span class="material-symbols-outlined text-base">link</span>
+                                            </button>
+                                            <span x-show="tersalin" x-cloak role="status" class="text-[10px] font-bold text-emerald-700">Tersalin</span>
+                                        </span>
                                         @if($st->file_url)
                                             <a href="{{ $st->file_url }}" target="_blank" class="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100" title="Unduh PDF">
                                                 <span class="material-symbols-outlined text-base">download</span>
@@ -1076,7 +1088,7 @@
                 </div>
 
                 <div>
-                    <label class="font-bold text-slate-700 block uppercase tracking-wider mb-1">Email Penerima (Untuk Kirim Notifikasi)</label>
+                    <label class="font-bold text-slate-700 block uppercase tracking-wider mb-1">Email (opsional, hanya untuk arsip; sertifikat tidak dikirim lewat email)</label>
                     <input type="email" name="email_penerima" placeholder="penerima@example.com" class="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50">
                 </div>
 
@@ -1352,7 +1364,7 @@ function certHubManager() {
                 alert('Pilih minimal 1 peserta untuk diterbitkan sertifikat.');
                 return;
             }
-            if (confirm(`Terbitkan ${this.selectedPesertaCount} sertifikat sekarang? Email notifikasi resmi akan otomatis dikirimkan ke penerima.`)) {
+            if (confirm(`Terbitkan ${this.selectedPesertaCount} sertifikat sekarang? Sertifikat langsung tampil di menu Sertifikat peserta; tidak ada email yang dikirim.`)) {
                 document.getElementById('batchIssueForm').submit();
             }
         },

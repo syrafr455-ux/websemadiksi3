@@ -22,7 +22,7 @@ class EmailProtectionService
 
     /**
      * Kategori kritis: aktivasi, reset kata sandi, tiket.
-     * Kategori massal: pengingat, pengumuman, pemberitahuan sertifikat terbit, pindah kursi.
+     * Kategori massal: pengingat, pengumuman, pindah kursi.
      */
     public function isCritical(object $mailable): bool
     {
