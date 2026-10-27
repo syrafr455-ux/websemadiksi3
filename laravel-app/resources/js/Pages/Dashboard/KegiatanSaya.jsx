@@ -318,31 +318,52 @@ export default function KegiatanSaya({
                                         </div>
 
                                         {/* Action Buttons */}
-                                        <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                                        <div className="pt-3 border-t border-slate-800 flex flex-col gap-2">
                                             {isPaidOrFree ? (
-                                                <div className="flex items-center gap-2 w-full">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openTicketModal(reg)}
-                                                        className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 transition-all"
-                                                        data-lihat-tiket={reg.id}
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">qr_code</span>
-                                                        Tampilkan E-Tiket
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setActiveTicket(reg);
-                                                            setTimeout(() => window.print(), 350);
-                                                        }}
-                                                        className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-xs border border-emerald-500/30 flex items-center justify-center gap-1.5 transition-all shrink-0"
-                                                        data-unduh-tiket={reg.id}
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">download</span>
-                                                        Unduh E-Tiket
-                                                    </button>
-                                                </div>
+                                                <>
+                                                    <div className="flex items-center gap-2 w-full">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openTicketModal(reg)}
+                                                            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 transition-all"
+                                                            data-lihat-tiket={reg.id}
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">qr_code</span>
+                                                            Tampilkan E-Tiket
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setActiveTicket(reg);
+                                                                setTimeout(() => window.print(), 350);
+                                                            }}
+                                                            className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-xs border border-emerald-500/30 flex items-center justify-center gap-1.5 transition-all shrink-0"
+                                                            data-unduh-tiket={reg.id}
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">download</span>
+                                                            Unduh E-Tiket
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Status / Unduh Sertifikat */}
+                                                    {reg.sertifikat_status === 'terbit' ? (
+                                                        <a
+                                                            href={reg.sertifikat_url || reg.sertifikat_verification_url}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="w-full py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                                                            data-sertifikat-terbit={reg.id}
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">workspace_premium</span>
+                                                            Unduh Sertifikat ({reg.sertifikat_nomor})
+                                                        </a>
+                                                    ) : reg.sertifikat_status === 'menunggu_verifikasi' ? (
+                                                        <div className="w-full py-2 px-3 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-400 text-xs flex items-center justify-center gap-1.5" data-sertifikat-menunggu={reg.id}>
+                                                            <span className="material-symbols-outlined text-sm text-amber-400">hourglass_top</span>
+                                                            <span>Menunggu verifikasi panitia</span>
+                                                        </div>
+                                                    ) : null}
+                                                </>
                                             ) : (
                                                 <div className="text-xs text-amber-400 font-bold flex items-center gap-1">
                                                     <span className="material-symbols-outlined text-sm">pending</span>

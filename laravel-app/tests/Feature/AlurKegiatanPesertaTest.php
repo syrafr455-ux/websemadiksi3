@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Enums\AttendanceStatus;
+use App\Enums\JenisSertifikat;
 use App\Enums\KegiatanStatus;
 use App\Enums\SeatStatus;
+use App\Enums\StatusSertifikat;
 use App\Enums\UserRole;
 use App\Models\Kegiatan;
 use App\Models\KegiatanPresensi;
@@ -329,12 +331,27 @@ class AlurKegiatanPesertaTest extends TestCase
         $this->assertNotEmpty($presensi->signature_path);
         Storage::disk('public')->assertExists($presensi->signature_path);
 
-        // 7. Sertifikat otomatis terbit & terverifikasi di portal publik
-        $sertifikat = Sertifikat::where('kegiatan_id', $kegiatan->id)
+        // 7. Presensi mandiri tidak lagi membuat sertifikat otomatis (Tugas T2a Bagian 4)
+        $sertifikatAuto = Sertifikat::where('kegiatan_id', $kegiatan->id)
             ->where('presensi_id', $presensi->id)
-            ->firstOrFail();
+            ->first();
+        $this->assertNull($sertifikatAuto);
 
-        $this->assertStringStartsWith('CERT-', $sertifikat->nomor_sertifikat);
+        // Terbitkan sertifikat resmi secara terpisah untuk verifikasi portal
+        $sertifikat = Sertifikat::create([
+            'kegiatan_id' => $kegiatan->id,
+            'user_id' => $peserta->id,
+            'registration_id' => $registration->id,
+            'presensi_id' => $presensi->id,
+            'nomor_sertifikat' => 'CERT-KGTN-2026-9999',
+            'recipient_name' => $peserta->name,
+            'nama_penerima' => $peserta->name,
+            'jenis' => JenisSertifikat::Peserta,
+            'status' => StatusSertifikat::Aktif,
+            'document_hash' => hash('sha256', 'CERT-KGTN-2026-9999'),
+            'file_pdf_path' => 'kegiatan/sertifikat/test.pdf',
+            'issued_at' => now(),
+        ]);
 
         $resVerif = $this->get('/verifikasi?code='.$sertifikat->nomor_sertifikat);
         $resVerif->assertOk();

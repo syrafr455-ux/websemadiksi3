@@ -238,19 +238,12 @@ class TwoPhaseAttendanceAndCertificateTest extends TestCase
         $this->assertNotEmpty($presensi->signature_path);
         Storage::disk('public')->assertExists($presensi->signature_path);
 
-        // Verifikasi tabel sertifikat otomatis terbit
+        // Verifikasi sertifikat TIDAK otomatis terbit pada presensi mandiri (Tugas T2a Bagian 4)
         $sertifikat = Sertifikat::where('kegiatan_id', $kegiatan->id)
             ->where('presensi_id', $presensi->id)
             ->first();
 
-        $this->assertNotNull($sertifikat);
-        $this->assertStringStartsWith('CERT-', $sertifikat->nomor_sertifikat);
-        $this->assertNotEmpty($sertifikat->document_hash);
-        $this->assertNotEmpty($sertifikat->file_pdf_path);
-        Storage::disk('public')->assertExists($sertifikat->file_pdf_path);
-
-        // Verifikasi kriptografi hash dokumen
-        $this->assertTrue($sertifikat->verifyDocumentHash());
+        $this->assertNull($sertifikat);
     }
 
     /**

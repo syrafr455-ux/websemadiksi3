@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AttendanceStatus;
-use App\Enums\PeranSertifikat;
 use App\Models\Kegiatan;
 use App\Models\KegiatanPresensi;
 use App\Models\KegiatanRegistration;
@@ -248,7 +247,7 @@ class PresensiController extends Controller
     public function submitSelfAttendance(
         Request $request,
         int $kegiatanId,
-        CertificateGeneratorService $certificateGenerator
+        ?CertificateGeneratorService $certificateGenerator = null
     ): JsonResponse|RedirectResponse {
         $kegiatan = Kegiatan::findOrFail($kegiatanId);
 
@@ -355,25 +354,17 @@ class PresensiController extends Controller
             ]
         );
 
-        // Generate sertifikat resmi dinamis langsung
-        $sertifikat = $certificateGenerator->generate(
-            $kegiatan,
-            $presensi,
-            PeranSertifikat::Peserta,
-            $presensi->id
-        );
-
         // Hapus izin sisi server setelah presensi tersimpan agar tidak bisa dipakai dua kali
         session()->forget("presensi_akhir_unlocked_{$kegiatan->id}");
 
         $responseData = [
             'success' => true,
-            'message' => 'Presensi mandiri berhasil dicatat dan Sertifikat Resmi Anda telah diterbitkan.',
+            'message' => 'Presensi mandiri berhasil dicatat. Sertifikat akan diverifikasi dan diterbitkan oleh panitia.',
             'presensi_id' => $presensi->id,
-            'nomor_sertifikat' => $sertifikat->nomor_sertifikat,
-            'certificate_url' => $sertifikat->file_url,
-            'verification_url' => $sertifikat->verification_url,
-            'document_hash' => $sertifikat->document_hash,
+            'nomor_sertifikat' => null,
+            'certificate_url' => null,
+            'verification_url' => null,
+            'document_hash' => null,
         ];
 
         if ($request->wantsJson()) {
@@ -381,8 +372,7 @@ class PresensiController extends Controller
         }
 
         return redirect()->route('dashboard.kegiatan.saya')
-            ->with('success', 'Presensi mandiri berhasil! Sertifikat Anda telah selesai diterbitkan.')
-            ->with('sertifikat', $sertifikat);
+            ->with('success', 'Presensi mandiri berhasil dicatat. Sertifikat akan diterbitkan dan diverifikasi oleh panitia.');
     }
 
     /**

@@ -1,79 +1,62 @@
-<x-layouts.dashboard title="Presensi & Log Kehadiran" pageTitle="Presensi Kegiatan" pageSubtitle="Catatan absensi mandiri dan riwayat verifikasi kehadiran">
+<x-layouts.dashboard title="Riwayat Presensi Kegiatan" pageTitle="Riwayat Presensi Kegiatan" pageSubtitle="Catatan riwayat kehadiran kegiatan dan panduan alur presensi resmi dua tahap">
     <div class="space-y-8">
-        {{-- Submission Form Card --}}
-        <div class="bg-surface rounded-3xl border border-surface-variant/40 p-6 sm:p-8 shadow-sm">
-            <h3 class="text-base font-bold text-on-surface mb-1">Kirim Bukti Presensi Mandiri</h3>
-            <p class="text-xs text-outline mb-6">Pilih kegiatan dan unggah bukti kehadiran untuk diverifikasi oleh pengurus.</p>
-
-            {{-- Panduan Presensi Akhir --}}
-            <div class="mb-6 p-4 rounded-2xl bg-emerald-950/40 border border-emerald-800/50 text-xs text-emerald-300 flex items-start gap-3">
-                <span class="material-symbols-outlined text-emerald-400 text-lg shrink-0 mt-0.5">qr_code_scanner</span>
+        {{-- Card Penjelasan Alur Presensi 2 Tahap --}}
+        <div class="bg-surface rounded-3xl border border-surface-variant/40 p-6 sm:p-8 shadow-sm space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <div class="font-bold text-emerald-200">Presensi Akhir Acara:</div>
-                    <p class="text-emerald-400/90 mt-0.5 leading-relaxed">
-                        Pindai QR di layar acara untuk presensi akhir dan penerbitan e-sertifikat resmi. Formulir di bawah ini dikhususkan untuk unggah bukti presensi mandiri kegiatan yang Anda ikuti.
+                    <h3 class="text-base font-bold text-on-surface">Alur Presensi Resmi 2-Tahap</h3>
+                    <p class="text-xs text-outline mt-0.5">Kehadiran peserta kini dicatat secara otomatis melalui sistem tiket terpadu dan presensi akhir berbatas waktu.</p>
+                </div>
+                <a href="{{ route('dashboard.kegiatan.saya') }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-white text-xs font-bold shadow-sm transition-all self-start sm:self-auto">
+                    <span class="material-symbols-outlined text-sm">confirmation_number</span>
+                    <span>Buka E-Tiket di Kegiatan Saya</span>
+                </a>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {{-- Tahap 1 --}}
+                <div class="p-5 rounded-2xl bg-surface-container border border-surface-variant/30 space-y-2">
+                    <div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
+                        <span class="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-black">1</span>
+                        <span>Tahap 1: Check-in Awal</span>
+                    </div>
+                    <p class="text-xs text-on-surface leading-relaxed">
+                        <strong>Kegiatan Luring / Hybrid:</strong> Tunjukkan QR E-Tiket Anda kepada petugas panitia di meja registrasi lokasi acara.<br>
+                        <strong>Kegiatan Daring:</strong> Klik tombol <em>"Gabung Sekarang"</em> di halaman Kegiatan Saya saat ruang pertemuan dibuka.
+                    </p>
+                </div>
+
+                {{-- Tahap 2 --}}
+                <div class="p-5 rounded-2xl bg-surface-container border border-surface-variant/30 space-y-2">
+                    <div class="flex items-center gap-2 text-emerald-700 font-bold text-xs uppercase tracking-wider">
+                        <span class="w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-700 flex items-center justify-center text-xs font-black">2</span>
+                        <span>Tahap 2: Presensi Akhir</span>
+                    </div>
+                    <p class="text-xs text-on-surface leading-relaxed">
+                        Pindai kode QR dinamis di layar proyektor acara menjelang penutupan kegiatan dan bubuhkan tanda tangan digital Anda. Sertifikat resmi akan diverifikasi dan diterbitkan panitia setelah kegiatan selesai.
                     </p>
                 </div>
             </div>
 
-            @if($activities->isEmpty())
-                <div class="py-10 px-6 text-center bg-surface-container rounded-2xl border border-surface-variant/40 space-y-3">
-                    <div class="w-12 h-12 rounded-2xl bg-surface border border-surface-variant/40 flex items-center justify-center mx-auto text-outline">
-                        <span class="material-symbols-outlined text-2xl">event_busy</span>
-                    </div>
-                    <div class="text-xs font-semibold text-outline">
-                        Belum ada kegiatan yang sedang membuka presensi untuk Anda
-                    </div>
-                    <div>
-                        <a href="{{ route('dashboard.kegiatan.saya') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-container text-white text-xs font-bold shadow-sm transition-all">
-                            <span class="material-symbols-outlined text-sm">confirmation_number</span>
-                            Lihat Kegiatan Saya
-                        </a>
-                    </div>
+            <div class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 flex items-start gap-3">
+                <span class="material-symbols-outlined text-amber-700 text-lg shrink-0 mt-0.5">info</span>
+                <div class="leading-relaxed">
+                    <strong>Pemberitahuan:</strong> Formulir unggah swafoto mandiri sebelumnya telah dipensiunkan demi akurasi verifikasi. Seluruh riwayat presensi lama Anda tetap tersimpan dan dapat dilihat pada tabel di bawah.
                 </div>
-            @else
-                <form action="{{ route('dashboard.absensi.store') }}" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    @csrf
-
-                    <div>
-                        <label for="activity_id" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
-                            Pilih Kegiatan <span class="text-rose-500">*</span>
-                        </label>
-                        <select name="activity_id" id="activity_id" required class="w-full px-4 py-2.5 bg-surface-container rounded-xl border border-surface-variant/40 text-xs font-medium focus:border-primary">
-                            <option value="">-- Pilih Agenda --</option>
-                            @foreach($activities as $act)
-                                <option value="{{ $act->id }}">{{ $act->nama_kegiatan ?? $act->title }} ({{ $act->date_text }})</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div>
-                        <label for="location_name" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
-                            Lokasi / Ruangan
-                        </label>
-                        <input type="text" name="location_name" id="location_name" value="Auditorium Kampus B UNUSA" class="w-full px-4 py-2.5 bg-surface-container rounded-xl border border-surface-variant/40 text-xs font-medium focus:border-primary">
-                    </div>
-
-                    <div class="md:col-span-2">
-                        <label for="proof_image" class="block text-xs font-bold text-on-surface uppercase tracking-wider mb-2">
-                            Swafoto / Foto Bukti Kehadiran <span class="text-rose-500">*</span>
-                        </label>
-                        <input type="file" name="proof_image" id="proof_image" accept="image/*" required class="block w-full text-xs text-outline file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary file:text-white hover:file:bg-primary-container cursor-pointer">
-                    </div>
-
-                    <div class="md:col-span-2 flex justify-end">
-                        <button type="submit" class="px-6 py-3 rounded-2xl bg-primary hover:bg-primary-container text-white font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2">
-                            <span class="material-symbols-outlined text-base">how_to_reg</span>
-                            Simpan Presensi
-                        </button>
-                    </div>
-                </form>
-            @endif
+            </div>
         </div>
 
         {{-- Attendance History Table --}}
         <div class="bg-surface rounded-3xl border border-surface-variant/40 p-6 sm:p-8 shadow-sm space-y-4">
-            <h3 class="text-base font-bold text-on-surface">Riwayat Kehadiran Anda</h3>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-bold text-on-surface">Riwayat Kehadiran Anda</h3>
+                    <p class="text-xs text-outline mt-0.5">Daftar presensi kegiatan yang tercatat di sistem SEMADIKSI.</p>
+                </div>
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-surface-container text-on-surface border border-surface-variant/40">
+                    Total: {{ count($attendances) }} Catatan
+                </span>
+            </div>
 
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs">
@@ -82,22 +65,28 @@
                             <th class="py-3 px-4">Kegiatan</th>
                             <th class="py-3 px-4">Waktu Presensi</th>
                             <th class="py-3 px-4">Lokasi</th>
-                            <th class="py-3 px-4">Bukti</th>
+                            <th class="py-3 px-4">Sumber</th>
                             <th class="py-3 px-4">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-surface-variant/20">
                         @forelse($attendances as $att)
                             <tr class="hover:bg-surface-container/50">
-                                <td class="py-3 px-4 font-bold text-on-surface">{{ $att->activity_title }}</td>
-                                <td class="py-3 px-4 text-outline">{{ $att->submitted_at ? \App\Support\Wib::dari($att->submitted_at)->translatedFormat('d M Y, H:i').' WIB' : '-' }}</td>
-                                <td class="py-3 px-4 text-outline">{{ $att->location_name ?? '-' }}</td>
-                                <td class="py-3 px-4">
-                                    <a href="{{ $att->proof_image_url }}" target="_blank" class="font-bold text-primary hover:underline">
-                                        Lihat Foto
-                                    </a>
+                                <td class="py-3.5 px-4 font-bold text-on-surface">{{ $att->activity_title }}</td>
+                                <td class="py-3.5 px-4 text-outline">{{ $att->submitted_at ? \App\Support\Wib::dari($att->submitted_at)->translatedFormat('d M Y, H:i').' WIB' : '-' }}</td>
+                                <td class="py-3.5 px-4 text-outline">{{ $att->location_name ?? '-' }}</td>
+                                <td class="py-3.5 px-4">
+                                    @if(!empty($att->is_legacy))
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                            Legacy
+                                        </span>
+                                    @else
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800 border border-teal-300">
+                                            Presensi Resmi
+                                        </span>
+                                    @endif
                                 </td>
-                                <td class="py-3 px-4">
+                                <td class="py-3.5 px-4">
                                     <span class="px-2.5 py-1 rounded-full text-[10px] font-bold {{ $att->status === 'Hadir' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
                                         {{ $att->status }}
                                     </span>
@@ -105,7 +94,11 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="py-8 text-center text-outline">Belum ada catatan presensi.</td>
+                                <td colspan="5" class="py-12 text-center text-outline">
+                                    <span class="material-symbols-outlined text-4xl text-outline/40 block mb-2">fact_check</span>
+                                    <p class="font-bold text-on-surface">Belum ada riwayat presensi yang tercatat.</p>
+                                    <p class="text-xs text-outline mt-1">Ikuti kegiatan dan selesaikan alur presensi dua tahap untuk mencatat kehadiran.</p>
+                                </td>
                             </tr>
                         @endforelse
                     </tbody>

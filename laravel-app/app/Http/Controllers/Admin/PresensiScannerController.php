@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Enums\AttendanceStatus;
-use App\Enums\PeranSertifikat;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Kegiatan;
@@ -325,7 +324,7 @@ class PresensiScannerController extends Controller
     public function manualPresensiAkhir(
         Request $request,
         Kegiatan $kegiatan,
-        CertificateGeneratorService $certService
+        ?CertificateGeneratorService $certService = null
     ): JsonResponse|RedirectResponse {
         Gate::authorize('managePresensiAkhir', KegiatanPresensi::class);
 
@@ -383,14 +382,6 @@ class PresensiScannerController extends Controller
             ]
         );
 
-        // Auto generate sertifikat
-        $sertifikat = null;
-        try {
-            $sertifikat = $certService->generate($kegiatan, $presensi, PeranSertifikat::Peserta, $presensi->id);
-        } catch (\Throwable) {
-            // Abaikan jika template belum disetel
-        }
-
         AuditLog::record(
             userId: $request->user()->id,
             action: 'presensi_akhir_manual',
@@ -408,7 +399,7 @@ class PresensiScannerController extends Controller
                 'success' => true,
                 'message' => "Presensi akhir manual untuk {$nama} berhasil dicatat.",
                 'presensi_id' => $presensi->id,
-                'nomor_sertifikat' => $sertifikat?->nomor_sertifikat,
+                'nomor_sertifikat' => null,
             ]);
         }
 

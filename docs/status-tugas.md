@@ -749,5 +749,46 @@ Status pelacakan pengerjaan bertahap:
       - Tersimpan pada kolom `kegiatan.narasumber` berformat JSONB array `[{nama, gelar, instansi, foto}]`.
     - **9. Halaman Presensi Admin Yang Ada**:
       - Rute `/admin/presensi` (`Admin\PresensiScannerController::index()`), view `admin.presensi.index`. Sudah memiliki rekap gabung daring, status check-in tiket fase 1, dan status presensi akhir fase 2.
+  - **BAGIAN 2: Model Data Jenis Sertifikat, Penerima, dan Riwayat Perubahan [SELESAI]**:
+    - Dibuat migrasi baru `2026_10_27_000001_expand_sertifikat_table_for_t2a.php` tanpa `migrate:fresh` dan aman untuk data yang ada.
+    - Kolom baru pada tabel `sertifikat`: `jenis` (peserta, juri, pembicara, juara), `predikat`, `asal_institusi`, `nama_penerima`, `nim_penerima`, `email_penerima`, `keterangan_publik`, `status` (aktif, dicabut), `alasan_pencabutan`, `dicabut_pada`, `dicabut_oleh`, `recipient_key` (hash sha256 nama+institusi yang dinormalisasi untuk penerima eksternal tanpa user_id), dan `penandatangan_snapshot` (JSON beku).
+    - Tabel baru:
+      - `sertifikat_riwayat_perubahan`: mencatat riwayat perubahan data tampilan sertifikat (kolom, nilai lama, nilai baru, alasan wajib, user_id, ip_address).
+      - `penandatangan`: master penandatangan resmi (nama_lengkap, gelar, jabatan, jenis_identitas, nomor_identitas, institusi, file_tanda_tangan, is_active, mode_tampil).
+      - `kegiatan_penandatangan`: pivot penugasan penandatangan per kegiatan dan jenis sertifikat dengan nomor urut.
+      - `pengaturan_verifikasi`: konfigurasi sakelar global visibilitas bagian halaman verifikasi dan teks pengantar.
+    - Unique index komposit: `[kegiatan_id, user_id, jenis]` dan `[kegiatan_id, recipient_key, jenis]` untuk menjamin idempotensi penerbitan.
+    - Penomoran seri atomik: `Sertifikat::generateAtomicSerialNumber($kegiatan)` menggunakan `SELECT MAX(nomor_urut) ... FOR UPDATE` dalam transaksi DB.
+    - Data lama dipertahankan secara utuh, nomor seri, hash, dan QR tidak berubah.
+    - Suite pengujian `SertifikatModelDanDataLamaTest` (6 tes, 23 assertions) lulus 100%.
+  - **BAGIAN 3: Mesin Kelayakan Sertifikat Satu Pintu [SELESAI]**:
+    - Dibuat service tunggal `App\Services\Kegiatan\KelayakanSertifikatService` sebagai satu-satunya sumber kebenaran evaluasi kelayakan sertifikat.
+    - Aturan evaluasi kelayakan:
+      - **Peserta Luring/Offline**: Tiket terkonfirmasi (Free/Paid), check-in awal fase 1 tercatat, dan presensi akhir fase 2 tercatat via QR atau manual admin.
+      - **Peserta Daring**: Tiket terkonfirmasi, kehadiran awal via `kegiatan_gabung`, presensi akhir fase 2 tercatat (+ tangkapan layar jika diwajibkan).
+      - **Peserta Hybrid**: Tiket terkonfirmasi, kehadiran awal via check-in fase 1 ATAU `kegiatan_gabung`, presensi akhir fase 2 tercatat.
+      - **Peserta Lomba**: Syarat kehadiran di atas ditambah karya wajib sudah dikumpulkan di `kegiatan_submissions`.
+      - **Juri**: Terdaftar di pivot `kegiatan_penilai`; menyertakan statistik penilaian karya (jumlah karya dinilai dibanding total); default tercentang jika telah menilai minimal 1 karya.
+      - **Pembicara**: Penerima manual atau impor (tidak ada kelayakan otomatis).
+      - **Juara**: Usulan peringkat berbasis skor akhir penjurian `kegiatan_submissions` dengan pemetaan predikat ("Juara 1", "Juara 2", "Juara 3", "Harapan 1", dst.). Peringatan jika masih ada karya yang belum dinilai.
+    - Seluruh evaluasi mengembalikan status boolean dan alasan berbahasa Indonesia informatif.
+    - Data swafoto legacy (`Attendance`) tidak dihitung sebagai presensi sah.
+    - Suite pengujian `KelayakanSertifikatTest` (9 tes, 55 assertions) lulus 100%.
+  - **BAGIAN 4: Cabut Penerbitan Otomatis dan Pensiun Formulir Lama [SELESAI]**:
+    - **Cabut Pemicu Otomatis**:
+      - `PresensiController::submitSelfAttendance()`: Dihapus baris `$certificateGenerator->generate(...)`. Presensi tetap tercatat dan tersimpan rapi, izin QR dihapus, dan pesan konfirmasi menyatakan: *"Presensi mandiri berhasil dicatat. Sertifikat akan diterbitkan dan diverifikasi oleh panitia."*.
+      - `Admin\PresensiScannerController::manualPresensiAkhir()`: Dihapus auto-generate sertifikat. Presensi manual admin dicatat tanpa memicu pembuatan sertifikat otomatis.
+    - **Pensiunkan Formulir Swafoto Mandiri**:
+      - `DashboardController::storeAbsensi()` tidak lagi menulis ke `kegiatan_presensi` dan tidak lagi mengubah status kehadiran. Menghasilkan respons ramah bahwa formulir swafoto telah dipensiunkan demi akurasi dan presensi resmi dicatat melalui alur 2-tahap (Check-in Tiket/Gabung + Presensi Akhir QR).
+      - Halaman `/dashboard/absensi` diubah menjadi riwayat kehadiran hanya-baca yang memuat kartu edukasi alur 2-tahap resmi dan tabel riwayat kehadiran berpenanda sumber ("Presensi Resmi" vs "Legacy").
+    - **Peningkatan Dashboard Siswa**:
+      - Pada `DashboardController::kegiatanSaya()`, `kegiatan-saya.blade.php`, dan `KegiatanSaya.jsx`:
+        - Status sertifikat ditampilkan jelas: jika sertifikat sudah terbit, muncul tombol *"Unduh Sertifikat"* dengan nomor seri; jika sudah presensi fase 2 tetapi belum terbit, muncul status *"Menunggu verifikasi panitia"*.
+      - Pada `DashboardController::sertifikat()` dan `resources/views/dashboard/sertifikat.blade.php`:
+        - Sertifikat dikelompokkan per jenis peran (`Peserta`, `Juri`, `Pembicara`, `Juara`) sehingga pengguna yang memiliki multi-peran (misal: peserta sekaligus juri lomba) dapat melihat sertifikatnya di kelompok yang sesuai.
+    - **Pengujian & Verifikasi Frontend & Backend**:
+      - PHPUnit: `PensiunPresensiDanSertifikatSiswaTest` (5 tes, 17 assertions), `AbsensiDashboardPesertaTest` (5 tes, 18 assertions), `TwoPhaseAttendanceAndCertificateTest` (6 tes, 32 assertions), dan `AlurKegiatanPesertaTest` (3 tes, 33 assertions) semuanya lulus 100%.
+      - Node test: `laravel-app/tests/js/kegiatanSayaSertifikatStatus.test.mjs` (4 tes) memverifikasi integritas komponen `KegiatanSaya.jsx` dan perilaku SSR untuk berbagai variasi status sertifikat (`terbit`, `menunggu_verifikasi`, `belum_tersedia`). Total 14 JS tests lulus via `node --test tests/js`.
+      - Build assets: `npm run build` berhasil 100% tanpa galat.
 
 

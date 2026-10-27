@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\AttendanceStatus;
 use App\Enums\KegiatanStatus;
+use App\Enums\StatusSertifikat;
 use App\Enums\UserRole;
 use App\Models\Activity;
 use App\Models\ActivityRegistration;
@@ -333,6 +334,42 @@ class DashboardController extends Controller
                     $reg->setAttribute('pertama_gabung_pada', $reg->gabung?->pertama_pada ? Wib::format($reg->gabung->pertama_pada) : null);
                     $reg->setAttribute('jumlah_gabung', (int) ($reg->gabung?->jumlah ?? 0));
                 }
+
+                // Status Sertifikat
+                $sertifikat = Sertifikat::where('kegiatan_id', $reg->kegiatan_id)
+                    ->where(function ($q) use ($userId, $reg) {
+                        $q->where('user_id', $userId);
+                        if ($reg->id) {
+                            $q->orWhere('registration_id', $reg->id);
+                        }
+                    })
+                    ->where('status', StatusSertifikat::Aktif)
+                    ->latest('id')
+                    ->first();
+
+                if ($sertifikat) {
+                    $reg->setAttribute('sertifikat_status', 'terbit');
+                    $reg->setAttribute('sertifikat_url', $sertifikat->file_url);
+                    $reg->setAttribute('sertifikat_nomor', $sertifikat->nomor_sertifikat);
+                    $reg->setAttribute('sertifikat_verification_url', url('/verifikasi?code='.$sertifikat->nomor_sertifikat));
+                } else {
+                    $hasAttended = KegiatanPresensi::where('kegiatan_id', $reg->kegiatan_id)
+                        ->where(function ($q) use ($userId, $reg) {
+                            $q->where('user_id', $userId);
+                            if ($reg->id) {
+                                $q->orWhere('registration_id', $reg->id);
+                            }
+                        })
+                        ->exists();
+
+                    if ($hasAttended || $reg->status_kehadiran === AttendanceStatus::CheckedIn) {
+                        $reg->setAttribute('sertifikat_status', 'menunggu_verifikasi');
+                        $reg->setAttribute('sertifikat_pesan', 'Menunggu verifikasi panitia');
+                    } else {
+                        $reg->setAttribute('sertifikat_status', 'belum_tersedia');
+                        $reg->setAttribute('sertifikat_pesan', 'Belum presensi');
+                    }
+                }
             });
 
         $registrations = ActivityRegistration::with('activity')
@@ -415,7 +452,15 @@ class DashboardController extends Controller
 
         // Ambil dari tabel sertifikat alur baru
         $sertifikats = Sertifikat::with('kegiatan')
-            ->where('user_id', $userId)
+            ->where(function ($q) use ($userId, $user) {
+                $q->where('user_id', $userId);
+                if ($user?->email) {
+                    $q->orWhere('email_penerima', $user->email);
+                }
+                if ($user?->nim) {
+                    $q->orWhere('nim_penerima', $user->nim);
+                }
+            })
             ->latest('id')
             ->get();
 
@@ -432,14 +477,18 @@ class DashboardController extends Controller
                 'id' => $st->id,
                 'code' => $st->nomor_sertifikat,
                 'title' => $st->kegiatan->nama_kegiatan ?? 'Sertifikat Kegiatan SEMADIKSI',
-                'recipient_name' => $st->recipient_name,
+                'recipient_name' => $st->nama_penerima ?: ($st->recipient_name ?: ($user?->name ?? 'Peserta')),
                 'category' => $st->kegiatan->kategori ?? 'Kegiatan',
                 'organizer' => 'SEMADIKSI Panitia Pelaksana',
                 'date' => Carbon::parse($st->issued_at)->translatedFormat('d F Y'),
                 'duration' => '8 JP (Jam Pelajaran)',
-                'status' => 'Selesai',
+                'status' => $st->status === StatusSertifikat::Dicabut ? 'Dicabut' : 'Aktif',
+                'is_active' => $st->status === StatusSertifikat::Aktif,
+                'jenis' => $st->jenis?->value ?? 'peserta',
+                'jenis_label' => $st->jenis?->label() ?? 'Peserta',
+                'predikat' => $st->predikat,
                 'document_hash' => $st->document_hash,
-                'file_url' => route('sertifikat.download', $st->id),
+                'file_url' => $st->file_pdf_path ? route('sertifikat.download', $st->id) : null,
                 'verification_url' => url('/verifikasi?code='.$st->nomor_sertifikat),
                 'is_legacy' => false,
             ]);
@@ -455,7 +504,11 @@ class DashboardController extends Controller
                 'organizer' => 'SEMADIKSI Divisi Kemahasiswaan',
                 'date' => Carbon::parse($lc->issued_date)->translatedFormat('d F Y'),
                 'duration' => '8 JP',
-                'status' => 'Selesai',
+                'status' => 'Aktif',
+                'is_active' => true,
+                'jenis' => 'peserta',
+                'jenis_label' => 'Peserta',
+                'predikat' => null,
                 'document_hash' => hash('sha256', $lc->code.$lc->user_name),
                 'file_url' => null,
                 'verification_url' => url('/verifikasi?code='.$lc->code),
@@ -463,73 +516,30 @@ class DashboardController extends Controller
             ]);
         }
 
+        $groupedCertificates = $mergedCertificates->groupBy('jenis_label');
+
         return view('dashboard.sertifikat', [
             'certificates' => $mergedCertificates,
+            'groupedCertificates' => $groupedCertificates,
             'user' => $user,
         ]);
     }
 
     /**
-     * Attendances Log & Form.
+     * Attendances Log & Form (Read-only riwayat kehadiran alur 2-tahap).
      */
     public function absensi(): View
     {
         $user = Auth::user();
 
-        // 1. Dapatkan kegiatan yang diikuti peserta dengan status pembayaran terkonfirmasi (Free / Paid)
-        $confirmedKegiatanIds = KegiatanRegistration::where('kegiatan_id', '>', 0)
-            ->where(function ($q) use ($user) {
-                if ($user) {
-                    $q->where('participant_user_id', $user->id)
-                        ->orWhere('booker_user_id', $user->id);
-                    if ($user->is_unusa && $user->nim) {
-                        $q->orWhere('participant_identity', $user->nim);
-                    }
-                }
-            })
-            ->confirmed()
-            ->pluck('kegiatan_id')
-            ->unique()
-            ->all();
-
-        // 2. Dapatkan kegiatan yang sudah pernah dicatat presensinya oleh user agar tidak ganda
-        $alreadyPresensiKegiatanIds = KegiatanPresensi::where(function ($q) use ($user) {
-            if ($user) {
-                $q->where('user_id', $user->id)
-                    ->orWhere('email', $user->email);
-                if ($user->nim) {
-                    $q->orWhere('nim', $user->nim);
-                }
-            }
-        })
-            ->pluck('kegiatan_id')
-            ->unique()
-            ->all();
-
-        // 3. Dropdown hanya memuat kegiatan yang diikuti (confirmed), berstatus Published/Ongoing, dan belum presensi
-        $activities = Kegiatan::whereIn('id', $confirmedKegiatanIds)
-            ->whereNotIn('id', $alreadyPresensiKegiatanIds)
-            ->whereIn('status', [
-                KegiatanStatus::Published,
-                KegiatanStatus::Ongoing,
-            ])
-            ->latest('tanggal_mulai')
-            ->get()
-            ->map(function (Kegiatan $k) {
-                return (object) [
-                    'id' => $k->id,
-                    'title' => $k->nama_kegiatan,
-                    'nama_kegiatan' => $k->nama_kegiatan,
-                    'date_text' => $k->tanggal_mulai ? Wib::dari($k->tanggal_mulai)->translatedFormat('d F Y') : '-',
-                ];
-            });
-
         $newPresensis = KegiatanPresensi::with('kegiatan')
             ->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)
-                    ->orWhere('email', $user->email);
-                if ($user->nim) {
-                    $q->orWhere('nim', $user->nim);
+                if ($user) {
+                    $q->where('user_id', $user->id)
+                        ->orWhere('email', $user->email);
+                    if ($user->nim) {
+                        $q->orWhere('nim', $user->nim);
+                    }
                 }
             })
             ->latest('check_in_at')
@@ -542,11 +552,12 @@ class DashboardController extends Controller
                     'location_name' => $kp->kegiatan?->lokasi_nama ?? 'Kampus B UNUSA',
                     'proof_image_url' => $kp->signature_url,
                     'status' => 'Hadir',
+                    'sumber' => 'Presensi Resmi',
                     'is_legacy' => false,
                 ];
             });
 
-        $legacyAttendances = Attendance::where('user_id', $user->id)
+        $legacyAttendances = Attendance::where('user_id', $user?->id)
             ->latest('submitted_at')
             ->get()
             ->map(function ($att) {
@@ -556,126 +567,33 @@ class DashboardController extends Controller
                     'submitted_at' => $att->submitted_at,
                     'location_name' => $att->location_name ?? 'Kampus B UNUSA',
                     'proof_image_url' => $att->proof_image_url,
-                    'status' => $att->status,
+                    'status' => $att->status ?? 'Hadir',
+                    'sumber' => 'Legacy',
                     'is_legacy' => true,
                 ];
             });
 
         $attendances = $newPresensis->concat($legacyAttendances);
 
-        return view('dashboard.absensi', compact('attendances', 'activities', 'user'));
+        return view('dashboard.absensi', compact('attendances', 'user'));
     }
 
     /**
-     * Submit Attendance from student dashboard.
+     * Submit Attendance from student dashboard (DIPENSIUNKAN).
+     * Formulir swafoto mandiri tidak lagi menulis ke kegiatan_presensi atau mengubah status kehadiran.
      */
     public function storeAbsensi(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'activity_id' => ['required'],
-            'proof_image' => ['required', 'image', 'max:5120'],
-            'location_name' => ['nullable', 'string', 'max:255'],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $msg = 'Formulir presensi swafoto mandiri telah dipensiunkan. Kehadiran resmi dicatat melalui alur 2 tahap: Check-in Tiket/Gabung Acara dan Presensi Akhir QR saat kegiatan berlangsung.';
 
-        $kegiatan = Kegiatan::find($validated['activity_id']);
-        if (! $kegiatan) {
-            $activity = Activity::find($validated['activity_id']);
-            if ($activity) {
-                $kegiatan = Kegiatan::where('legacy_activity_id', $activity->id)->first();
-            }
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => $msg,
+            ], 422);
         }
 
-        if (! $kegiatan) {
-            $msg = 'Kegiatan tidak valid atau tidak ditemukan.';
-            if ($request->wantsJson()) {
-                return response()->json(['success' => false, 'message' => $msg], 422);
-            }
-
-            return back()->withInput()->withErrors(['activity_id' => $msg])->with('error', $msg);
-        }
-
-        // a. Tolak kegiatan draft atau dibatalkan
-        if (! in_array($kegiatan->status, [KegiatanStatus::Published, KegiatanStatus::Ongoing], true)) {
-            $msg = 'Kegiatan ini belum dibuka atau telah dibatalkan.';
-            if ($request->wantsJson()) {
-                return response()->json(['success' => false, 'message' => $msg], 422);
-            }
-
-            return back()->withInput()->withErrors(['activity_id' => $msg])->with('error', $msg);
-        }
-
-        $user = Auth::user();
-        if (! $user) {
-            abort(401);
-        }
-
-        // a. Peserta hanya boleh mencatat presensi untuk kegiatan yang punya registrasi miliknya sendiri dengan status pembayaran terkonfirmasi (Free atau Paid)
-        $registration = KegiatanRegistration::where('kegiatan_id', $kegiatan->id)
-            ->where(function ($q) use ($user) {
-                $q->where('participant_user_id', $user->id)
-                    ->orWhere('booker_user_id', $user->id);
-                if ($user->is_unusa && $user->nim) {
-                    $q->orWhere('participant_identity', $user->nim);
-                }
-            })
-            ->confirmed()
-            ->first();
-
-        if (! $registration) {
-            $msg = 'Anda tidak terdaftar dalam kegiatan ini dengan tiket yang sah.';
-            if ($request->wantsJson()) {
-                return response()->json(['success' => false, 'message' => $msg], 422);
-            }
-
-            return back()->withInput()->withErrors(['activity_id' => $msg])->with('error', $msg);
-        }
-
-        // c. Cegah presensi ganda untuk kegiatan yang sama
-        $existingPresensi = KegiatanPresensi::where('kegiatan_id', $kegiatan->id)
-            ->where(function ($q) use ($user, $registration) {
-                $q->where('user_id', $user->id)
-                    ->orWhere('email', $user->email);
-                if ($user->is_unusa && $user->nim) {
-                    $q->orWhere('nim', $user->nim);
-                }
-                if ($registration?->participant_identity) {
-                    $q->orWhere('nim', $registration->participant_identity);
-                }
-            })
-            ->exists();
-
-        if ($existingPresensi) {
-            $msg = 'Anda sudah mencatat presensi untuk kegiatan ini.';
-            if ($request->wantsJson()) {
-                return response()->json(['success' => false, 'message' => $msg], 422);
-            }
-
-            return back()->withInput()->withErrors(['activity_id' => $msg])->with('error', $msg);
-        }
-
-        $path = $request->file('proof_image')->store('attendances', 'public');
-
-        if ($registration->status_kehadiran !== AttendanceStatus::CheckedIn) {
-            $registration->status_kehadiran = AttendanceStatus::CheckedIn;
-            $registration->checked_in_at = $registration->checked_in_at ?? now();
-            $registration->save();
-        }
-
-        KegiatanPresensi::create([
-            'kegiatan_id' => $kegiatan->id,
-            'user_id' => $user->id,
-            'registration_id' => $registration->id,
-            'nama_lengkap' => $user->name,
-            'nim' => $user->nim ?? ($registration->participant_identity ?? '-'),
-            'prodi' => $user->programStudi?->nama ?? ($user->university ?? 'Umum'),
-            'email' => $user->email,
-            'nomor_telepon' => $user->phone ?? ($registration->participant_phone ?? '-'),
-            'signature_path' => $path,
-            'check_in_at' => now(),
-        ]);
-
-        return back()->with('success', 'Presensi berhasil dicatat.');
+        return redirect()->route('dashboard.absensi')->with('info', $msg);
     }
 
     /**

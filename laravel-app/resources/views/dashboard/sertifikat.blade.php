@@ -33,76 +33,101 @@
             </div>
         </div>
 
-        {{-- Certificate Cards Grid --}}
-        <div>
-            <div class="flex items-center justify-between mb-4">
+        {{-- Certificate Cards Grouped By Type --}}
+        <div class="space-y-8">
+            <div class="flex items-center justify-between">
                 <h3 class="text-lg font-bold text-on-surface">Daftar Sertifikat Terbit</h3>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                @forelse($certificates as $cert)
-                    <div class="bg-surface rounded-3xl border border-surface-variant/40 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4">
-                        <div class="space-y-3">
-                            <div class="flex items-start justify-between gap-2">
-                                <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-bold border border-emerald-100">
-                                    <span class="material-symbols-outlined text-2xl">workspace_premium</span>
+            @if($certificates->isEmpty())
+                <div class="text-center py-16 bg-surface rounded-3xl border border-surface-variant/40 text-outline text-sm space-y-3">
+                    <span class="material-symbols-outlined text-5xl text-outline/40">workspace_premium</span>
+                    <p class="font-bold text-on-surface text-base">Belum ada sertifikat yang diterbitkan atas nama Anda.</p>
+                    <p class="text-xs max-w-md mx-auto text-on-surface-variant">
+                        Sertifikat kegiatan resmi akan diterbitkan oleh panitia setelah diverifikasi kelayakannya.
+                    </p>
+                </div>
+            @else
+                @foreach($groupedCertificates as $jenisLabel => $certs)
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2.5 border-b border-surface-variant/40 pb-2">
+                            <span class="material-symbols-outlined text-xl text-primary">
+                                {{ $jenisLabel === 'Juara' ? 'military_tech' : ($jenisLabel === 'Juri' ? 'gavel' : ($jenisLabel === 'Pembicara' ? 'record_voice_over' : 'school')) }}
+                            </span>
+                            <h4 class="text-base font-bold text-on-surface">Sertifikat {{ $jenisLabel }}</h4>
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary">
+                                {{ count($certs) }}
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            @foreach($certs as $cert)
+                                <div class="bg-surface rounded-3xl border border-surface-variant/40 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4">
+                                    <div class="space-y-3">
+                                        <div class="flex items-start justify-between gap-2">
+                                            <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-bold border border-emerald-100">
+                                                <span class="material-symbols-outlined text-2xl">
+                                                    {{ $cert->jenis_label === 'Juara' ? 'military_tech' : ($cert->jenis_label === 'Juri' ? 'gavel' : ($cert->jenis_label === 'Pembicara' ? 'record_voice_over' : 'workspace_premium')) }}
+                                                </span>
+                                            </div>
+                                            <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                                                @if(!empty($cert->predikat))
+                                                    <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                                        {{ $cert->predikat }}
+                                                    </span>
+                                                @endif
+                                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold {{ $cert->status === 'Aktif' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200' }}">
+                                                    {{ $cert->status }}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <h3 class="text-base font-bold text-on-surface line-clamp-2">{{ $cert->title }}</h3>
+                                        <p class="text-xs text-on-surface-variant">{{ $cert->organizer }}</p>
+
+                                        <div class="p-3 bg-surface-container rounded-xl text-xs font-mono text-outline space-y-1">
+                                            <p><span class="font-bold text-on-surface">No Seri:</span> <span class="text-emerald-800 font-bold">{{ $cert->code }}</span></p>
+                                            <p><span class="font-bold text-on-surface">Tanggal:</span> {{ $cert->date }}</p>
+                                        </div>
+                                    </div>
+
+                                    {{-- Card Actions --}}
+                                    <div class="pt-4 border-t border-surface-variant/30 flex items-center gap-2">
+                                        <button 
+                                            type="button"
+                                            @click="selectedCert = {{ json_encode($cert) }}"
+                                            class="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 rounded-xl font-bold text-xs cursor-pointer transition-all active:scale-95"
+                                        >
+                                            <span class="material-symbols-outlined text-base">visibility</span>
+                                            <span>Lihat Sertifikat</span>
+                                        </button>
+
+                                        @if($cert->file_url)
+                                            <a 
+                                                href="{{ $cert->file_url }}" 
+                                                class="flex items-center justify-center gap-1 py-2.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-xs cursor-pointer transition-all active:scale-95 shadow-sm"
+                                                title="Unduh PDF Resmi"
+                                            >
+                                                <span class="material-symbols-outlined text-base">download</span>
+                                                <span>Unduh</span>
+                                            </a>
+                                        @else
+                                            <a 
+                                                href="{{ $cert->verification_url }}" 
+                                                target="_blank"
+                                                class="flex items-center justify-center gap-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs cursor-pointer transition-all active:scale-95 shadow-sm"
+                                                title="Cek Verifikasi"
+                                            >
+                                                <span class="material-symbols-outlined text-base">verified</span>
+                                            </a>
+                                        @endif
+                                    </div>
                                 </div>
-                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                    {{ $cert->status }}
-                                </span>
-                            </div>
-
-                            <h3 class="text-base font-bold text-on-surface line-clamp-2">{{ $cert->title }}</h3>
-                            <p class="text-xs text-on-surface-variant">{{ $cert->organizer }}</p>
-
-                            <div class="p-3 bg-surface-container rounded-xl text-xs font-mono text-outline space-y-1">
-                                <p><span class="font-bold text-on-surface">No Seri:</span> <span class="text-emerald-800 font-bold">{{ $cert->code }}</span></p>
-                                <p><span class="font-bold text-on-surface">Tanggal:</span> {{ $cert->date }}</p>
-                            </div>
-                        </div>
-
-                        {{-- Card Actions --}}
-                        <div class="pt-4 border-t border-surface-variant/30 flex items-center gap-2">
-                            <button 
-                                type="button"
-                                @click="selectedCert = {{ json_encode($cert) }}"
-                                class="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 rounded-xl font-bold text-xs cursor-pointer transition-all active:scale-95"
-                            >
-                                <span class="material-symbols-outlined text-base">visibility</span>
-                                <span>Lihat Sertifikat</span>
-                            </button>
-
-                            @if($cert->file_url)
-                                <a 
-                                    href="{{ $cert->file_url }}" 
-                                    class="flex items-center justify-center gap-1 py-2.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-xs cursor-pointer transition-all active:scale-95 shadow-sm"
-                                    title="Unduh PDF Resmi"
-                                >
-                                    <span class="material-symbols-outlined text-base">download</span>
-                                    <span>Unduh</span>
-                                </a>
-                            @else
-                                <a 
-                                    href="{{ $cert->verification_url }}" 
-                                    target="_blank"
-                                    class="flex items-center justify-center gap-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs cursor-pointer transition-all active:scale-95 shadow-sm"
-                                    title="Cek Verifikasi"
-                                >
-                                    <span class="material-symbols-outlined text-base">verified</span>
-                                </a>
-                            @endif
+                            @endforeach
                         </div>
                     </div>
-                @empty
-                    <div class="col-span-full text-center py-16 bg-surface rounded-3xl border border-surface-variant/40 text-outline text-sm space-y-3">
-                        <span class="material-symbols-outlined text-5xl text-outline/40">workspace_premium</span>
-                        <p class="font-bold text-on-surface text-base">Belum ada sertifikat yang diterbitkan atas nama Anda.</p>
-                        <p class="text-xs max-w-md mx-auto text-on-surface-variant">
-                            Sertifikat e-kehadiran akan otomatis terbit setelah Anda menyelesaikan presensi mandiri atau setelah diterbitkan langsung oleh admin kegiatan.
-                        </p>
-                    </div>
-                @endforelse
-            </div>
+                @endforeach
+            @endif
         </div>
 
         {{-- MODAL: Interactive High-Fidelity Certificate Viewer (Persis Desain Asli) --}}

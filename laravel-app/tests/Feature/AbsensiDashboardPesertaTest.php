@@ -6,10 +6,10 @@ use App\Enums\AttendanceStatus;
 use App\Enums\KegiatanStatus;
 use App\Enums\RegistrationPaymentStatus;
 use App\Enums\UserRole;
+use App\Models\Attendance;
 use App\Models\Kegiatan;
 use App\Models\KegiatanPresensi;
 use App\Models\KegiatanRegistration;
-use App\Models\Sertifikat;
 use App\Models\User;
 use App\Support\Wib;
 use Carbon\Carbon;
@@ -27,8 +27,6 @@ class AbsensiDashboardPesertaTest extends TestCase
     protected User $userLain;
 
     protected Kegiatan $kegiatanDiikuti;
-
-    protected Kegiatan $kegiatanTidakDiikuti;
 
     protected KegiatanRegistration $registrasiLunas;
 
@@ -68,22 +66,6 @@ class AbsensiDashboardPesertaTest extends TestCase
             'status' => KegiatanStatus::Published,
         ]);
 
-        $this->kegiatanTidakDiikuti = Kegiatan::create([
-            'nama_kegiatan' => 'Workshop UI/UX Terapan',
-            'deskripsi' => 'Deskripsi.',
-            'kategori' => 'workshop',
-            'metode_pelaksanaan' => 'offline',
-            'sasaran_peserta' => 'umum',
-            'tanggal_mulai' => Wib::keUtc('2026-11-10 09:00'),
-            'tanggal_selesai' => Wib::keUtc('2026-11-10 13:00'),
-            'lokasi_type' => 'unusa_campus',
-            'lokasi_nama' => 'Lab Komputer',
-            'file_panduan_pdf' => 'kegiatan/panduan.pdf',
-            'biaya' => 0,
-            'kuota' => 50,
-            'status' => KegiatanStatus::Published,
-        ]);
-
         $this->registrasiLunas = KegiatanRegistration::create([
             'kegiatan_id' => $this->kegiatanDiikuti->id,
             'booker_user_id' => $this->peserta->id,
@@ -98,167 +80,112 @@ class AbsensiDashboardPesertaTest extends TestCase
     }
 
     /**
-     * 1. Dropdown pada /dashboard/absensi HANYA memuat kegiatan yang diikuti peserta
-     * dengan status pembayaran terkonfirmasi (Free atau Paid).
-     * Kegiatan yang belum didaftar peserta TIDAK boleh muncul di dropdown.
+     * 1. Halaman /dashboard/absensi menampilkan penjelasan alur dua tahap dan tautan Kegiatan Saya.
      */
-    public function test_dropdown_absensi_hanya_memuat_kegiatan_yang_diikuti_dengan_pembayaran_terkonfirmasi(): void
+    public function test_halaman_absensi_menampilkan_penjelasan_alur_dua_tahap(): void
     {
         $response = $this->actingAs($this->peserta)->get(route('dashboard.absensi'));
 
         $response->assertOk();
-        // Kegiatan yang diikuti harus ada di dalam dropdown
-        $response->assertSee('Seminar AI Modern 2026');
-        // Kegiatan yang TIDAK diikuti TIDAK boleh ada di dalam opsi dropdown
-        $response->assertDontSee('Workshop UI/UX Terapan');
-    }
-
-    /**
-     * 2. Bila tidak ada kegiatan yang memenuhi, halaman /dashboard/absensi menampilkan
-     * keadaan kosong "Belum ada kegiatan yang sedang membuka presensi untuk Anda" dengan tautan ke Kegiatan Saya.
-     */
-    public function test_halaman_absensi_menampilkan_keadaan_kosong_bila_tidak_ada_kegiatan_yang_diikuti(): void
-    {
-        $response = $this->actingAs($this->userLain)->get(route('dashboard.absensi'));
-
-        $response->assertOk();
-        $response->assertSee('Belum ada kegiatan yang sedang membuka presensi untuk Anda');
+        $response->assertSee('Alur Presensi Resmi 2-Tahap');
+        $response->assertSee('Tahap 1: Check-in Awal');
+        $response->assertSee('Tahap 2: Presensi Akhir');
         $response->assertSee(route('dashboard.kegiatan.saya'));
     }
 
     /**
-     * 3. Pengiriman presensi untuk kegiatan yang TIDAK diikuti ditolak server (IDOR / manual ID).
+     * 2. Riwayat kehadiran menampilkan presensi alur baru dan lama (legacy) dengan penanda sumber.
      */
-    public function test_kirim_presensi_kegiatan_yang_tidak_diikuti_ditolak_server_idor(): void
+    public function test_riwayat_kehadiran_menampilkan_presensi_baru_dan_legacy(): void
+    {
+        // Presensi alur baru
+        KegiatanPresensi::create([
+            'kegiatan_id' => $this->kegiatanDiikuti->id,
+            'user_id' => $this->peserta->id,
+            'registration_id' => $this->registrasiLunas->id,
+            'nama_lengkap' => $this->peserta->name,
+            'nim' => $this->peserta->nim,
+            'prodi' => 'Sistem Informasi',
+            'email' => $this->peserta->email,
+            'nomor_telepon' => '081234567890',
+            'signature_path' => 'signatures/presensi-1.png',
+            'check_in_at' => now(),
+        ]);
+
+        // Presensi legacy
+        Attendance::create([
+            'user_id' => $this->peserta->id,
+            'student_name' => $this->peserta->name,
+            'student_nim' => $this->peserta->nim,
+            'activity_title' => 'Webinar Nasional Legacy 2024',
+            'submitted_at' => now()->subYear(),
+            'location_name' => 'Kampus B UNUSA',
+            'proof_image_url' => 'https://example.com/legacy.jpg',
+            'status' => 'Hadir',
+        ]);
+
+        $response = $this->actingAs($this->peserta)->get(route('dashboard.absensi'));
+
+        $response->assertOk();
+        $response->assertSee('Seminar AI Modern 2026');
+        $response->assertSee('Webinar Nasional Legacy 2024');
+        $response->assertSee('Presensi Resmi');
+        $response->assertSee('Legacy');
+    }
+
+    /**
+     * 3. Formulir swafoto mandiri lama telah dipensiunkan; POST ke /dashboard/absensi
+     * TIDAK lagi menulis ke kegiatan_presensi atau mengubah status kehadiran.
+     */
+    public function test_formulir_swafoto_dipensiunkan_tidak_menulis_ke_kegiatan_presensi(): void
     {
         $fakeImage = UploadedFile::fake()->image('selfie.jpg', 600, 600);
 
         $response = $this->actingAs($this->peserta)->post(route('dashboard.absensi.store'), [
-            'activity_id' => $this->kegiatanTidakDiikuti->id,
+            'activity_id' => $this->kegiatanDiikuti->id,
             'proof_image' => $fakeImage,
             'location_name' => 'Auditorium Tower',
         ]);
 
-        $this->assertTrue($response->isRedirection() || $response->status() === 422 || $response->status() === 403);
+        $response->assertRedirect(route('dashboard.absensi'));
+        $response->assertSessionHas('info');
+
+        // Pastikan TIDAK ADA row kegiatan_presensi yang ditulis
         $this->assertDatabaseMissing('kegiatan_presensi', [
-            'kegiatan_id' => $this->kegiatanTidakDiikuti->id,
+            'kegiatan_id' => $this->kegiatanDiikuti->id,
             'user_id' => $this->peserta->id,
         ]);
+
+        // Status registrasi tidak berubah
+        $this->registrasiLunas->refresh();
+        $this->assertEquals(AttendanceStatus::Registered, $this->registrasiLunas->status_kehadiran);
     }
 
     /**
-     * 4. Registrasi belum lunas (Pending) atau dibatalkan (Cancelled) ditolak server.
+     * 4. Halaman /dashboard/absensi menampilkan keadaan kosong jika belum ada catatan presensi.
      */
-    public function test_kirim_presensi_registrasi_pending_atau_dibatalkan_ditolak_server(): void
+    public function test_halaman_absensi_menampilkan_keadaan_kosong_bila_belum_ada_catatan(): void
     {
-        // Ubah pembayaran menjadi pending
-        $this->registrasiLunas->update([
-            'status_pembayaran' => RegistrationPaymentStatus::Pending,
-        ]);
+        $response = $this->actingAs($this->userLain)->get(route('dashboard.absensi'));
 
-        $fakeImage = UploadedFile::fake()->image('selfie.jpg', 600, 600);
-
-        $responsePending = $this->actingAs($this->peserta)->post(route('dashboard.absensi.store'), [
-            'activity_id' => $this->kegiatanDiikuti->id,
-            'proof_image' => $fakeImage,
-            'location_name' => 'Auditorium Tower',
-        ]);
-
-        $this->assertTrue($responsePending->isRedirection() || $responsePending->status() === 422 || $responsePending->status() === 403);
-        $this->assertDatabaseMissing('kegiatan_presensi', [
-            'kegiatan_id' => $this->kegiatanDiikuti->id,
-            'user_id' => $this->peserta->id,
-        ]);
-
-        // Ubah pembayaran menjadi kedaluwarsa/batal
-        $this->registrasiLunas->update([
-            'status_pembayaran' => RegistrationPaymentStatus::Expired,
-        ]);
-
-        $responseCancelled = $this->actingAs($this->peserta)->post(route('dashboard.absensi.store'), [
-            'activity_id' => $this->kegiatanDiikuti->id,
-            'proof_image' => $fakeImage,
-            'location_name' => 'Auditorium Tower',
-        ]);
-
-        $this->assertTrue($responseCancelled->isRedirection() || $responseCancelled->status() === 422 || $responseCancelled->status() === 403);
-        $this->assertDatabaseMissing('kegiatan_presensi', [
-            'kegiatan_id' => $this->kegiatanDiikuti->id,
-            'user_id' => $this->peserta->id,
-        ]);
+        $response->assertOk();
+        $response->assertSee('Belum ada riwayat presensi yang tercatat.');
     }
 
     /**
-     * 5. Kegiatan draft ditolak server.
-     */
-    public function test_kirim_presensi_kegiatan_draft_ditolak_server(): void
-    {
-        $this->kegiatanDiikuti->update(['status' => KegiatanStatus::Draft]);
-
-        $fakeImage = UploadedFile::fake()->image('selfie.jpg', 600, 600);
-
-        $response = $this->actingAs($this->peserta)->post(route('dashboard.absensi.store'), [
-            'activity_id' => $this->kegiatanDiikuti->id,
-            'proof_image' => $fakeImage,
-            'location_name' => 'Auditorium Tower',
-        ]);
-
-        $this->assertTrue($response->isRedirection() || $response->status() === 422 || $response->status() === 403);
-        $this->assertDatabaseMissing('kegiatan_presensi', [
-            'kegiatan_id' => $this->kegiatanDiikuti->id,
-            'user_id' => $this->peserta->id,
-        ]);
-    }
-
-    /**
-     * 6. Presensi ganda untuk kegiatan yang sama ditolak server.
-     */
-    public function test_kirim_presensi_ganda_untuk_kegiatan_yang_sama_ditolak_server(): void
-    {
-        $fakeImage1 = UploadedFile::fake()->image('selfie1.jpg', 600, 600);
-        $fakeImage2 = UploadedFile::fake()->image('selfie2.jpg', 600, 600);
-
-        // Presensi pertama: sukses
-        $res1 = $this->actingAs($this->peserta)->post(route('dashboard.absensi.store'), [
-            'activity_id' => $this->kegiatanDiikuti->id,
-            'proof_image' => $fakeImage1,
-            'location_name' => 'Auditorium Tower',
-        ]);
-        $res1->assertSessionHas('success');
-
-        $this->assertDatabaseHas('kegiatan_presensi', [
-            'kegiatan_id' => $this->kegiatanDiikuti->id,
-            'user_id' => $this->peserta->id,
-        ]);
-
-        // Presensi kedua untuk kegiatan yang sama: ditolak
-        $res2 = $this->actingAs($this->peserta)->post(route('dashboard.absensi.store'), [
-            'activity_id' => $this->kegiatanDiikuti->id,
-            'proof_image' => $fakeImage2,
-            'location_name' => 'Auditorium Tower',
-        ]);
-
-        $this->assertTrue($res2->isRedirection() || $res2->status() === 422);
-        // Presensi di DB tetap hanya ada 1 baris
-        $this->assertEquals(1, KegiatanPresensi::where('kegiatan_id', $this->kegiatanDiikuti->id)->where('user_id', $this->peserta->id)->count());
-    }
-
-    /**
-     * 7. Formulir /dashboard/absensi TIDAK memicu pembuatan sertifikat otomatis.
+     * 5. POST ke /dashboard/absensi TIDAK memicu pembuatan sertifikat.
      */
     public function test_kirim_presensi_dashboard_tidak_memicu_pembuatan_sertifikat(): void
     {
         $fakeImage = UploadedFile::fake()->image('selfie.jpg', 600, 600);
 
-        $res = $this->actingAs($this->peserta)->post(route('dashboard.absensi.store'), [
+        $response = $this->actingAs($this->peserta)->post(route('dashboard.absensi.store'), [
             'activity_id' => $this->kegiatanDiikuti->id,
             'proof_image' => $fakeImage,
             'location_name' => 'Auditorium Tower',
         ]);
 
-        $res->assertSessionHas('success');
-
-        // Pastikan tidak ada row sertifikat yang dibuat
+        // Pastikan tidak ada sertifikat yang dibuat
         $this->assertDatabaseMissing('sertifikat', [
             'kegiatan_id' => $this->kegiatanDiikuti->id,
             'user_id' => $this->peserta->id,
