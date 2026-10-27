@@ -19,6 +19,7 @@ use App\Rules\ValidMeetingUrl;
 use App\Services\Kegiatan\DenahKursiService;
 use App\Services\Kegiatan\PetaKursiService;
 use App\Services\UnusaFacilityService;
+use App\Support\AksiPersetujuan;
 use App\Support\Wib;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
@@ -93,46 +94,17 @@ class KegiatanController extends Controller
                 ->count();
         }
 
-        $kegiatans->through(function (Kegiatan $item) use ($currentUserId, $isSuperAdmin) {
-            $penyetujuWajib = $item->penyetujuWajib();
-            $totalPenyetuju = $penyetujuWajib->count();
-            $jumlahSetuju = $item->persetujuan->where('keputusan', 'setuju')->count();
+        $kegiatans->through(fn (Kegiatan $item) => $this->barisDaftar($item, $currentUser));
 
-            $statusTeks = match ($item->status) {
-                KegiatanStatus::Draft => 'Draft',
-                KegiatanStatus::Diajukan => "Menunggu persetujuan {$jumlahSetuju} dari {$totalPenyetuju}",
-                KegiatanStatus::Published => 'Terbit',
-                KegiatanStatus::Archived => 'Diarsipkan',
-                KegiatanStatus::Cancelled => 'Dibatalkan',
-                KegiatanStatus::Ongoing => 'Berlangsung',
-                KegiatanStatus::Completed => 'Selesai',
-                default => $item->status?->label() ?? 'Draft',
-            };
-
-            if ($item->status === KegiatanStatus::Draft && ! empty($item->catatan_penolakan)) {
-                $statusTeks = 'Ditolak: '.Str::limit($item->catatan_penolakan, 40);
-            }
-
-            $sudahVote = (bool) $item->persetujuan->firstWhere('user_id', $currentUserId);
-            $perluTindakanAnda = $isSuperAdmin
-                && $item->status === KegiatanStatus::Diajukan
-                && $item->created_by !== $currentUserId
-                && ! $sudahVote;
-
-            $bisaDiajukanOlehAnda = ($item->created_by === $currentUserId || ! $item->created_by)
-                && $item->status === KegiatanStatus::Draft;
-
-            $itemArray = $item->toArray();
-            $itemArray['status_teks'] = $statusTeks;
-            $itemArray['perlu_tindakan_anda'] = $perluTindakanAnda;
-            $itemArray['bisa_diajukan_oleh_anda'] = $bisaDiajukanOlehAnda;
-            $itemArray['catatan_penolakan'] = $item->catatan_penolakan;
-            $itemArray['jumlah_setuju'] = $jumlahSetuju;
-            $itemArray['total_penyetuju'] = $totalPenyetuju;
-            $itemArray['creator_name'] = $item->createdBy?->name;
-
-            return $itemArray;
-        });
+        // Dibuka dari tombol "Edit Kegiatan" di halaman detail: kegiatannya belum tentu ada di halaman daftar ini.
+        $kegiatanEdit = null;
+        if ($request->filled('edit')) {
+            $untukEdit = Kegiatan::query()
+                ->with(['persetujuan.user:id,name,email', 'createdBy:id,name,email'])
+                ->withCount(['seats', 'registrations', 'submissions'])
+                ->find((int) $request->input('edit'));
+            $kegiatanEdit = $untukEdit ? $this->barisDaftar($untukEdit, $currentUser) : null;
+        }
 
         return Inertia::render('Admin/Kegiatan/Index', [
             'title' => 'Manajemen Kegiatan Enterprise',
@@ -142,7 +114,49 @@ class KegiatanController extends Controller
             'statusOptions' => KegiatanStatus::cases(),
             'menungguPersetujuanAnda' => $menungguPersetujuanAnda,
             'adaSuperAdminLain' => $adaSuperAdminLain,
+            'kegiatanEdit' => $kegiatanEdit,
         ]);
+    }
+
+    /**
+     * Satu baris daftar kegiatan: data form edit, status persetujuan, dan tombol alur persetujuan.
+     * Tautan rapat, meeting ID, dan passcode tidak pernah ikut; form edit hanya menerima penanda "sudah diisi".
+     *
+     * @return array<string, mixed>
+     */
+    protected function barisDaftar(Kegiatan $item, ?User $pengguna): array
+    {
+        $penyetujuWajib = $item->penyetujuWajib();
+        $totalPenyetuju = $penyetujuWajib->count();
+        $jumlahSetuju = $item->persetujuan->where('keputusan', 'setuju')->count();
+
+        $statusTeks = match ($item->status) {
+            KegiatanStatus::Draft => 'Draft',
+            KegiatanStatus::Diajukan => "Menunggu persetujuan {$jumlahSetuju} dari {$totalPenyetuju}",
+            KegiatanStatus::Published => 'Terbit',
+            KegiatanStatus::Archived => 'Diarsipkan',
+            KegiatanStatus::Cancelled => 'Dibatalkan',
+            KegiatanStatus::Ongoing => 'Berlangsung',
+            KegiatanStatus::Completed => 'Selesai',
+            default => $item->status?->label() ?? 'Draft',
+        };
+
+        if ($item->status === KegiatanStatus::Draft && ! empty($item->catatan_penolakan)) {
+            $statusTeks = 'Ditolak: '.Str::limit($item->catatan_penolakan, 40);
+        }
+
+        return [
+            ...$item->toArray(),
+            'status_teks' => $statusTeks,
+            'catatan_penolakan' => $item->catatan_penolakan,
+            'jumlah_setuju' => $jumlahSetuju,
+            'total_penyetuju' => $totalPenyetuju,
+            'creator_name' => $item->createdBy?->name,
+            'tautan_rapat_tersimpan' => filled($item->tautan_rapat),
+            'meeting_id_tersimpan' => filled($item->meeting_id),
+            'passcode_rapat_tersimpan' => filled($item->passcode_rapat),
+            ...AksiPersetujuan::untuk($item, $pengguna),
+        ];
     }
 
     /**
@@ -342,7 +356,6 @@ class KegiatanController extends Controller
             ];
         });
 
-        $sudahMemberiSuara = (bool) $persetujuan->firstWhere('user_id', $currentUserId);
         $creatorName = $kegiatan->createdBy?->name ?? 'Pembuat';
 
         $pesanStatus = null;
@@ -388,10 +401,7 @@ class KegiatanController extends Controller
                 'pesan_status' => $pesanStatus,
                 'catatan_penolakan' => $kegiatan->catatan_penolakan,
                 'is_creator' => $currentUserId === $kegiatan->created_by,
-                'can_submit' => ($currentUserId === $kegiatan->created_by || ! $kegiatan->created_by) && $kegiatan->status === KegiatanStatus::Draft,
-                'can_withdraw' => ($currentUserId === $kegiatan->created_by || ! $kegiatan->created_by) && $kegiatan->status === KegiatanStatus::Diajukan,
-                'can_approve' => $currentUserId !== $kegiatan->created_by && $kegiatan->status === KegiatanStatus::Diajukan && ! $sudahMemberiSuara,
-                'can_reject' => $currentUserId !== $kegiatan->created_by && $kegiatan->status === KegiatanStatus::Diajukan,
+                ...AksiPersetujuan::untuk($kegiatan->load('persetujuan'), auth()->user()),
                 'bisa_terbit' => $penyetujuWajib->isNotEmpty(),
                 'penyetuju_wajib' => $daftarPenyetuju,
                 'semua_setuju' => $penyetujuWajib->isNotEmpty() && $daftarPenyetuju->every(fn ($p) => $p['status'] === 'setuju'),
@@ -1019,16 +1029,17 @@ class KegiatanController extends Controller
             $payload['narasumber'] = $this->normalizeNarasumber($validated['narasumber']);
         }
 
-        foreach (['platform_daring', 'meeting_id', 'join_button_mode'] as $key) {
+        foreach (['platform_daring', 'join_button_mode'] as $key) {
             if ($ada($key)) {
                 $payload[$key] = $validated[$key];
             }
         }
-        if ($ada('tautan_rapat')) {
-            $payload['tautan_rapat'] = $validated['tautan_rapat'];
-        }
-        if ($ada('passcode_rapat')) {
-            $payload['passcode_rapat'] = $validated['passcode_rapat'];
+        // Rahasia rapat tidak dikirim balik ke form edit, jadi isian kosong berarti "biarkan yang tersimpan".
+        // Mengosongkan passcode/meeting ID dilakukan lewat Pengaturan Daring di halaman detail.
+        foreach (['tautan_rapat', 'meeting_id', 'passcode_rapat'] as $key) {
+            if ($ada($key) && filled($validated[$key])) {
+                $payload[$key] = $validated[$key];
+            }
         }
         if ($ada('menit_buka_gabung')) {
             $payload['menit_buka_gabung'] = (int) $validated['menit_buka_gabung'];

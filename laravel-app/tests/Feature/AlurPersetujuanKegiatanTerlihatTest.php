@@ -153,7 +153,8 @@ class AlurPersetujuanKegiatanTerlihatTest extends TestCase
         $kegiatans = $resApprover->original->getData()['page']['props']['kegiatans']['data'];
         $itemDiajukan = collect($kegiatans)->firstWhere('id', $diajukan->id);
         $this->assertNotNull($itemDiajukan);
-        $this->assertTrue($itemDiajukan['perlu_tindakan_anda'] ?? false, 'Approver harus ditandai perlu_tindakan_anda');
+        $this->assertTrue($itemDiajukan['can_setujui'] ?? false, 'Approver harus ditandai can_setujui');
+        $this->assertTrue($itemDiajukan['can_tolak'] ?? false, 'Approver harus ditandai can_tolak');
         $this->assertSame('Menunggu persetujuan 0 dari 1', $itemDiajukan['status_teks'] ?? null);
 
         // Cek halaman index untuk Creator Admin
@@ -162,7 +163,7 @@ class AlurPersetujuanKegiatanTerlihatTest extends TestCase
         $kegiatansCreator = $resCreator->original->getData()['page']['props']['kegiatans']['data'];
         $itemDraft = collect($kegiatansCreator)->firstWhere('id', $draft->id);
         $this->assertNotNull($itemDraft);
-        $this->assertTrue($itemDraft['bisa_diajukan_oleh_anda'] ?? false, 'Creator harus ditandai bisa_diajukan_oleh_anda pada draft');
+        $this->assertTrue($itemDraft['can_ajukan'] ?? false, 'Creator harus ditandai can_ajukan pada draft');
     }
 
     /**
@@ -193,7 +194,7 @@ class AlurPersetujuanKegiatanTerlihatTest extends TestCase
         $resCreatorDiajukan = $this->actingAs($creator)->get(route('admin.kegiatan.show', $draft->id));
         $resCreatorDiajukan->assertOk();
         $approvalDiajukanCreator = $resCreatorDiajukan->original->getData()['page']['props']['approval'];
-        $this->assertTrue($approvalDiajukanCreator['can_withdraw'] ?? false, 'Creator harus bisa menarik kembali ke draft');
+        $this->assertTrue($approvalDiajukanCreator['can_tarik_draft'] ?? false, 'Creator harus bisa menarik kembali ke draft');
 
         // Creator menarik kembali ke draft
         $this->actingAs($creator)->post(route('admin.kegiatan.tarik-draft', $draft->id))
