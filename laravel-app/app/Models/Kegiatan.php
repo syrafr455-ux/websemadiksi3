@@ -418,7 +418,7 @@ class Kegiatan extends Model
 
     public function isLomba(): bool
     {
-        return $this->kategori === 'lomba';
+        return strtolower((string) $this->kategori) === 'lomba';
     }
 
     public function acceptsSubmissions(): bool

@@ -790,5 +790,24 @@ Status pelacakan pengerjaan bertahap:
       - PHPUnit: `PensiunPresensiDanSertifikatSiswaTest` (5 tes, 17 assertions), `AbsensiDashboardPesertaTest` (5 tes, 18 assertions), `TwoPhaseAttendanceAndCertificateTest` (6 tes, 32 assertions), dan `AlurKegiatanPesertaTest` (3 tes, 33 assertions) semuanya lulus 100%.
       - Node test: `laravel-app/tests/js/kegiatanSayaSertifikatStatus.test.mjs` (4 tes) memverifikasi integritas komponen `KegiatanSaya.jsx` dan perilaku SSR untuk berbagai variasi status sertifikat (`terbit`, `menunggu_verifikasi`, `belum_tersedia`). Total 14 JS tests lulus via `node --test tests/js`.
       - Build assets: `npm run build` berhasil 100% tanpa galat.
+  - **BAGIAN 5: Tracking Kehadiran per Kegiatan [SELESAI]**:
+    - **Corong Kehadiran & Kelayakan Bertingkat**:
+      - Pada `Admin\DashboardController::attendances()` dan `resources/views/admin/attendances/index.blade.php`, ditampilkan corong visual 6 tahap terpadu:
+        1. *Terdaftar* (`total_registered`): kuota pendaftar terisi dan terkonfirmasi.
+        2. *Check-In / Gabung* (`total_checkin_or_gabung`): peserta yang tervalidasi di pintu (fase 1) atau mengeklik gabung daring.
+        3. *Presensi Akhir* (`phase2_present`): peserta bertanda tangan digital pada fase 2.
+        4. *Karya Kumpul* (`total_karya`): karya lomba terunggah (ditampilkan dinamis jika kegiatan adalah lomba).
+        5. *Layak Sertifikat* (`total_layak`): jumlah peserta yang lolos evaluasi ketat `KelayakanSertifikatService`.
+        6. *Sertifikat Terbit* (`certificates_issued`): sertifikat sah yang telah terbit.
+      - Kartu corong menyertakan indikator persentase konversi kelayakan secara real-time.
+    - **Filter Kelayakan & Kolom Status Tabel**:
+      - Ditambahkan dropdown filter `kelayakan`: `layak`, `belum_layak`, `terbit`, `belum_terbit`, serta `karya_terkumpul` dan `karya_belum` untuk lomba.
+      - Tabel daftar peserta diperluas dengan kolom `Status Kelayakan` (badge `Layak` hijau vs badge `Belum Layak` merah disertai rincian alasan kelayakan spesifik dari mesin) dan kolom `Karya Lomba` (badge `Sudah Kumpul` vs `Belum Kumpul`).
+    - **Ekspor CSV WIB & Penetralan Formula (CWE-1236)**:
+      - Dibuat helper kelas `App\Support\CsvSanitizer` dengan method `netralkan()` dan `netralkanBaris()` yang menambahkan petik tunggal (`'`) pada data sel berawalan `=`, `+`, `-`, `@`, `\t`, `\r` untuk mencegah eksekusi formula jahat di Excel/Calc.
+      - Seluruh kolom ekspor CSV menyertakan kolom `Status Kelayakan Sertifikat`, `Alasan Kelayakan`, `Status Pengumpulan Karya` (untuk lomba), dan stempel waktu WIB.
+    - **Pengujian Fitur**:
+      - `Tests\Feature\AdminTrackingKehadiranTest` (4 tes, 48 assertions) memvalidasi netralisasi formula CSV, corong & filter kelayakan offline, verifikasi karya lomba, dan ekspor CSV berstempel WIB.
+      - Seluruh tes terdampak `AdminPresensiAkhirTest` (5 tes, 63 assertions) tetap lulus 100%.
 
 

@@ -12,11 +12,14 @@ use App\Models\CustomFormSubmission;
 use App\Models\Kegiatan;
 use App\Models\KegiatanPresensi;
 use App\Models\KegiatanRegistration;
+use App\Models\KegiatanSubmission;
 use App\Models\KipkDocument;
 use App\Models\Sertifikat;
 use App\Models\User;
 use App\Services\CertificateGeneratorService;
 use App\Services\EmailProtectionService;
+use App\Services\Kegiatan\KelayakanSertifikatService;
+use App\Support\CsvSanitizer;
 use App\Support\MenuAdmin;
 use App\Support\Wib;
 use Carbon\Carbon;
@@ -363,8 +366,11 @@ class DashboardController extends Controller
         $participants = collect();
         $stats = [
             'total_registered' => 0,
+            'total_checkin_or_gabung' => 0,
             'phase1_checked_in' => 0,
             'phase2_present' => 0,
+            'total_karya' => 0,
+            'total_layak' => 0,
             'certificates_issued' => 0,
             'total_gabung' => 0,
         ];
@@ -372,8 +378,11 @@ class DashboardController extends Controller
         if ($selectedKegiatan) {
             $allParticipants = $this->getAttendanceParticipants($selectedKegiatan, new Request);
             $stats['total_registered'] = $allParticipants->count();
+            $stats['total_checkin_or_gabung'] = $allParticipants->filter(fn ($p) => $p->is_phase1 || $p->is_gabung)->count();
             $stats['phase1_checked_in'] = $allParticipants->where('is_phase1', true)->count();
             $stats['phase2_present'] = $allParticipants->where('is_phase2', true)->count();
+            $stats['total_karya'] = $allParticipants->where('has_submission', true)->count();
+            $stats['total_layak'] = $allParticipants->where('is_layak', true)->count();
             $stats['certificates_issued'] = $allParticipants->where('is_certificate', true)->count();
             $stats['total_gabung'] = $allParticipants->where('is_gabung', true)->count();
 
@@ -389,7 +398,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * Ekspor Rekapitulasi Presensi Kegiatan ke CSV / Excel.
+     * Ekspor Rekapitulasi Presensi Kegiatan ke CSV / Excel (WIB & formula neutralization).
      */
     public function exportAttendances(Request $request): StreamedResponse|RedirectResponse
     {
@@ -405,12 +414,12 @@ class DashboardController extends Controller
         $participants = $this->getAttendanceParticipants($selectedKegiatan, $request);
         $filename = 'rekap_presensi_'.Str::slug($selectedKegiatan->nama_kegiatan).'_'.date('Ymd_His').'.csv';
 
-        return response()->streamDownload(function () use ($participants) {
+        return response()->streamDownload(function () use ($participants, $selectedKegiatan) {
             $handle = fopen('php://output', 'w');
             // BOM UTF-8 agar Excel membuka dengan encoding yang benar
             fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
 
-            fputcsv($handle, [
+            $headers = [
                 'No',
                 'Nama Peserta',
                 'NIM / Identitas',
@@ -423,13 +432,22 @@ class DashboardController extends Controller
                 'Status Presensi Akhir Fase 2',
                 'Waktu Presensi Akhir (WIB)',
                 'Status Tanda Tangan Digital',
-                'Status Sertifikat',
-                'Nomor Sertifikat',
-            ]);
+            ];
+
+            if ($selectedKegiatan->isLomba()) {
+                $headers[] = 'Status Pengumpulan Karya';
+            }
+
+            $headers[] = 'Status Kelayakan Sertifikat';
+            $headers[] = 'Alasan Kelayakan';
+            $headers[] = 'Status Sertifikat';
+            $headers[] = 'Nomor Sertifikat';
+
+            fputcsv($handle, CsvSanitizer::netralkanBaris($headers));
 
             $no = 1;
             foreach ($participants as $p) {
-                fputcsv($handle, [
+                $row = [
                     $no++,
                     $p->name,
                     $p->nim,
@@ -442,9 +460,18 @@ class DashboardController extends Controller
                     $p->phase2_status,
                     $p->phase2_time ?? '-',
                     $p->presensi ? 'Tersedia (Terverifikasi)' : 'Belum Ada',
-                    $p->certificate_status,
-                    $p->certificate_number ?? '-',
-                ]);
+                ];
+
+                if ($selectedKegiatan->isLomba()) {
+                    $row[] = $p->has_submission ? 'Sudah Mengumpulkan' : 'Belum Mengumpulkan';
+                }
+
+                $row[] = $p->is_layak ? 'Layak' : 'Belum Layak';
+                $row[] = $p->alasan_kelayakan;
+                $row[] = $p->certificate_status;
+                $row[] = $p->certificate_number ?? '-';
+
+                fputcsv($handle, CsvSanitizer::netralkanBaris($row));
             }
 
             fclose($handle);
@@ -479,7 +506,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * Helper koleksi peserta kegiatan beserta status fase 1, fase 2, tanda tangan, dan sertifikat (WIB).
+     * Helper koleksi peserta kegiatan beserta status fase 1, fase 2, tanda tangan, kelayakan, dan sertifikat (WIB).
      */
     protected function getAttendanceParticipants(Kegiatan $selectedKegiatan, Request $request)
     {
@@ -492,6 +519,8 @@ class DashboardController extends Controller
             ->get();
 
         $sertifikats = Sertifikat::where('kegiatan_id', $selectedKegiatan->id)->get();
+        $submissions = KegiatanSubmission::where('kegiatan_id', $selectedKegiatan->id)->get()->keyBy('registration_id');
+        $kelayakanService = app(KelayakanSertifikatService::class);
 
         $presensiByRegId = $presensis->whereNotNull('registration_id')->keyBy('registration_id');
         $presensiByNim = $presensis->filter(fn ($p) => ! empty($p->nim))->keyBy('nim');
@@ -544,6 +573,11 @@ class DashboardController extends Controller
             $gabungTime = $gabung?->pertama_pada ? Wib::dari($gabung->pertama_pada)->translatedFormat('d M Y, H:i').' WIB' : null;
             $gabungCount = (int) ($gabung?->jumlah ?? 0);
 
+            $submission = $submissions->get($reg->id);
+            $hasSubmission = $submission !== null;
+
+            $evaluasi = $kelayakanService->evaluasiPeserta($selectedKegiatan, $reg, $presensi, $hasSubmission);
+
             $participants->push((object) [
                 'id' => 'reg-'.$reg->id,
                 'registration_id' => $reg->id,
@@ -570,6 +604,10 @@ class DashboardController extends Controller
                 'is_certificate' => $isCertificateIssued,
                 'certificate_number' => $sertifikat?->nomor_sertifikat,
                 'certificate_download_url' => $sertifikat ? route('sertifikat.download', $sertifikat->id) : null,
+                'is_layak' => $evaluasi['layak'],
+                'alasan_kelayakan' => $evaluasi['alasan'],
+                'has_submission' => $hasSubmission,
+                'submission' => $submission,
             ]);
         }
 
@@ -611,6 +649,10 @@ class DashboardController extends Controller
                 'is_certificate' => $sertifikat !== null,
                 'certificate_number' => $sertifikat?->nomor_sertifikat,
                 'certificate_download_url' => $sertifikat ? route('sertifikat.download', $sertifikat->id) : null,
+                'is_layak' => false,
+                'alasan_kelayakan' => 'Tidak memiliki data registrasi resmi',
+                'has_submission' => false,
+                'submission' => null,
             ]);
         }
 
@@ -653,6 +695,24 @@ class DashboardController extends Controller
                 $participants = $participants->where('is_certificate', true);
             } elseif ($sert === 'not_issued') {
                 $participants = $participants->where('is_certificate', false);
+            }
+        }
+
+        // Filter Kelayakan Sertifikat & Karya
+        if ($request->filled('kelayakan') && $request->input('kelayakan') !== 'all') {
+            $kel = $request->input('kelayakan');
+            if ($kel === 'layak') {
+                $participants = $participants->where('is_layak', true);
+            } elseif ($kel === 'belum_layak') {
+                $participants = $participants->where('is_layak', false);
+            } elseif ($kel === 'terbit') {
+                $participants = $participants->where('is_certificate', true);
+            } elseif ($kel === 'belum_terbit') {
+                $participants = $participants->where('is_certificate', false);
+            } elseif ($kel === 'karya_terkumpul') {
+                $participants = $participants->where('has_submission', true);
+            } elseif ($kel === 'karya_belum') {
+                $participants = $participants->where('has_submission', false);
             }
         }
 

@@ -85,8 +85,12 @@ class KelayakanSertifikatService
      *     }
      * }
      */
-    public function evaluasiPeserta(Kegiatan $kegiatan, KegiatanRegistration $registration): array
-    {
+    public function evaluasiPeserta(
+        Kegiatan $kegiatan,
+        KegiatanRegistration $registration,
+        ?KegiatanPresensi $presensi = null,
+        ?bool $hasSubmission = null
+    ): array {
         // 1. Validasi Status Pembayaran / Registrasi
         $statusReg = strtolower((string) ($registration->status_pembayaran?->value ?? $registration->status_pembayaran ?? $registration->payment_status ?? $registration->status ?? ''));
         $isCancelled = in_array($statusReg, ['cancelled', 'dibatalkan', 'expired', 'failed'], true);
@@ -126,7 +130,9 @@ class KelayakanSertifikatService
 
         // 2. Evaluasi Check-in Awal (Fase 1)
         $hasTicketCheckIn = ! empty($registration->checked_in_at);
-        $hasJoinClick = KegiatanGabung::where('registration_id', $registration->id)->exists();
+        $hasJoinClick = $registration->relationLoaded('gabung')
+            ? ($registration->gabung !== null)
+            : KegiatanGabung::where('registration_id', $registration->id)->exists();
 
         $checkInAwal = false;
         $sumberCheckIn = null;
@@ -168,9 +174,11 @@ class KelayakanSertifikatService
 
         // 3. Evaluasi Presensi Akhir (Fase 2)
         // Data presensi wajib memiliki registration_id yang valid dan signature_path
-        $presensi = KegiatanPresensi::where('registration_id', $registration->id)
-            ->where('kegiatan_id', $kegiatan->id)
-            ->first();
+        if ($presensi === null) {
+            $presensi = KegiatanPresensi::where('registration_id', $registration->id)
+                ->where('kegiatan_id', $kegiatan->id)
+                ->first();
+        }
 
         $hasPresensiAkhir = false;
         $sumberPresensi = null;
@@ -190,12 +198,13 @@ class KelayakanSertifikatService
 
         // 4. Evaluasi Karya Lomba (Bila Kategori Lomba atau Wajib Pengumpulan Karya)
         $isLomba = $kegiatan->isLomba() || (bool) $kegiatan->is_submission_active;
-        $hasSubmission = false;
 
         if ($isLomba) {
-            $hasSubmission = KegiatanSubmission::where('registration_id', $registration->id)
-                ->where('kegiatan_id', $kegiatan->id)
-                ->exists();
+            if ($hasSubmission === null) {
+                $hasSubmission = KegiatanSubmission::where('registration_id', $registration->id)
+                    ->where('kegiatan_id', $kegiatan->id)
+                    ->exists();
+            }
 
             if (! $hasSubmission) {
                 return [
@@ -204,6 +213,8 @@ class KelayakanSertifikatService
                     'detail' => $this->bangunDetailPeserta($registration, $checkInAwal, $sumberCheckIn, true, $sumberPresensi, false),
                 ];
             }
+        } else {
+            $hasSubmission = false;
         }
 
         return [

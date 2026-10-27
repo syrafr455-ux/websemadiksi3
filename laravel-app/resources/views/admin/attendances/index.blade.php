@@ -202,44 +202,97 @@
             </div>
         @endif
 
-        {{-- Stats Cards --}}
-        <div class="grid grid-cols-2 md:grid-cols-{{ $selectedKegiatan->isDaringOrHybrid() ? '5' : '4' }} gap-4">
-            <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
-                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Peserta Terdaftar</div>
-                <div class="text-2xl font-black text-white mt-1">{{ number_format($stats['total_registered']) }}</div>
-                <div class="text-[10px] text-slate-500 mt-1">Seluruh kuota terisi</div>
-            </div>
-
-            @if($selectedKegiatan->isDaringOrHybrid())
-                <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
-                    <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Sudah Bergabung Daring</div>
-                    <div class="text-2xl font-black text-teal-400 mt-1">{{ number_format($stats['total_gabung'] ?? 0) }}</div>
-                    <div class="text-[10px] text-slate-500 mt-1">Peserta klik gabung rapat</div>
+        {{-- Corong Kehadiran & Kelayakan (Funnel) --}}
+        <div class="bg-slate-950 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-4">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-amber-400 text-lg">filter_alt</span>
+                        <h3 class="text-sm font-bold uppercase tracking-wider text-white">Corong Kehadiran &amp; Kelayakan Sertifikat</h3>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-0.5">
+                        Tahapan verifikasi bertingkat: Pendaftaran &rarr; Check-In / Gabung &rarr; Presensi Akhir @if($selectedKegiatan->isLomba()) &rarr; Karya @endif &rarr; Kelayakan &rarr; Penerbitan
+                    </p>
                 </div>
-            @endif
-
-            <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
-                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Check-In Fase 1</div>
-                <div class="text-2xl font-black text-emerald-400 mt-1">{{ number_format($stats['phase1_checked_in']) }}</div>
-                <div class="text-[10px] text-slate-500 mt-1">E-Tiket tervalidasi di pintu</div>
+                <div class="text-[11px] font-mono text-slate-400 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
+                    Konversi: <strong class="text-amber-400">{{ $stats['total_registered'] > 0 ? round(($stats['total_layak'] / $stats['total_registered']) * 100, 1) : 0 }}%</strong> Layak
+                </div>
             </div>
 
-            <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
-                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Presensi Akhir Fase 2</div>
-                <div class="text-2xl font-black text-cyan-400 mt-1">{{ number_format($stats['phase2_present']) }}</div>
-                <div class="text-[10px] text-slate-500 mt-1">Bertanda tangan digital</div>
-            </div>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-{{ $selectedKegiatan->isLomba() ? '6' : '5' }} gap-3">
+                {{-- 1. Terdaftar --}}
+                <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl relative overflow-hidden">
+                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>1. Terdaftar</span>
+                        <span class="material-symbols-outlined text-slate-500 text-sm">person_add</span>
+                    </div>
+                    <div class="text-2xl font-black text-white mt-1.5">{{ number_format($stats['total_registered']) }}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">Pendaftar terkonfirmasi</div>
+                </div>
 
-            <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
-                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Sertifikat Terbit</div>
-                <div class="text-2xl font-black text-amber-400 mt-1">{{ number_format($stats['certificates_issued']) }}</div>
-                <div class="text-[10px] text-slate-500 mt-1">E-Sertifikat terverifikasi hash</div>
+                {{-- 2. Check-In / Gabung --}}
+                <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl relative overflow-hidden">
+                    <div class="text-[10px] font-bold text-teal-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>2. Check-In / Gabung</span>
+                        <span class="material-symbols-outlined text-teal-500 text-sm">how_to_reg</span>
+                    </div>
+                    <div class="text-2xl font-black text-teal-400 mt-1.5">{{ number_format($stats['total_checkin_or_gabung']) }}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">
+                        @if($stats['total_registered'] > 0)
+                            {{ round(($stats['total_checkin_or_gabung'] / $stats['total_registered']) * 100) }}% dari pendaftar
+                        @else
+                            Fase awal hadir
+                        @endif
+                    </div>
+                </div>
+
+                {{-- 3. Presensi Akhir --}}
+                <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl relative overflow-hidden">
+                    <div class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>3. Presensi Akhir</span>
+                        <span class="material-symbols-outlined text-cyan-500 text-sm">draw</span>
+                    </div>
+                    <div class="text-2xl font-black text-cyan-400 mt-1.5">{{ number_format($stats['phase2_present']) }}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">Tanda tangan fase 2</div>
+                </div>
+
+                @if($selectedKegiatan->isLomba())
+                    {{-- 4. Karya Lomba --}}
+                    <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl relative overflow-hidden">
+                        <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center justify-between">
+                            <span>4. Karya Kumpul</span>
+                            <span class="material-symbols-outlined text-indigo-500 text-sm">upload_file</span>
+                        </div>
+                        <div class="text-2xl font-black text-indigo-400 mt-1.5">{{ number_format($stats['total_karya'] ?? 0) }}</div>
+                        <div class="text-[10px] text-slate-500 mt-1">Karya lomba masuk</div>
+                    </div>
+                @endif
+
+                {{-- 5. Layak Sertifikat --}}
+                <div class="bg-slate-900/80 border border-emerald-500/30 p-4 rounded-2xl relative overflow-hidden bg-gradient-to-b from-emerald-950/20 to-slate-900/80">
+                    <div class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>{{ $selectedKegiatan->isLomba() ? '5' : '4' }}. Layak</span>
+                        <span class="material-symbols-outlined text-emerald-400 text-sm">verified</span>
+                    </div>
+                    <div class="text-2xl font-black text-emerald-400 mt-1.5">{{ number_format($stats['total_layak'] ?? 0) }}</div>
+                    <div class="text-[10px] text-emerald-500/80 mt-1">Lolos aturan mesin</div>
+                </div>
+
+                {{-- 6. Sertifikat Terbit --}}
+                <div class="bg-slate-900/80 border border-amber-500/30 p-4 rounded-2xl relative overflow-hidden bg-gradient-to-b from-amber-950/20 to-slate-900/80">
+                    <div class="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>{{ $selectedKegiatan->isLomba() ? '6' : '5' }}. Terbit</span>
+                        <span class="material-symbols-outlined text-amber-400 text-sm">workspace_premium</span>
+                    </div>
+                    <div class="text-2xl font-black text-amber-400 mt-1.5">{{ number_format($stats['certificates_issued']) }}</div>
+                    <div class="text-[10px] text-amber-500/80 mt-1">Sertifikat aktif</div>
+                </div>
             </div>
         </div>
 
         {{-- Filter & Search Bar --}}
         <div class="bg-slate-950 border border-slate-800 p-5 rounded-2xl">
-            <form action="{{ route('admin.attendances') }}" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <form action="{{ route('admin.attendances') }}" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                 <input type="hidden" name="kegiatan_id" value="{{ $selectedKegiatan->id }}">
 
                 {{-- Input Cari --}}
@@ -277,13 +330,29 @@
                     </select>
                 </div>
 
+                {{-- Filter Kelayakan & Sertifikat --}}
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Status Kelayakan</label>
+                    <select name="kelayakan" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500 font-medium">
+                        <option value="all">Semua Kelayakan</option>
+                        <option value="layak" {{ request('kelayakan') === 'layak' ? 'selected' : '' }}>Layak Sertifikat</option>
+                        <option value="belum_layak" {{ request('kelayakan') === 'belum_layak' ? 'selected' : '' }}>Belum Layak</option>
+                        <option value="terbit" {{ request('kelayakan') === 'terbit' ? 'selected' : '' }}>Sertifikat Terbit</option>
+                        <option value="belum_terbit" {{ request('kelayakan') === 'belum_terbit' ? 'selected' : '' }}>Belum Terbit</option>
+                        @if($selectedKegiatan->isLomba())
+                            <option value="karya_terkumpul" {{ request('kelayakan') === 'karya_terkumpul' ? 'selected' : '' }}>Karya Terkumpul</option>
+                            <option value="karya_belum" {{ request('kelayakan') === 'karya_belum' ? 'selected' : '' }}>Karya Belum Kumpul</option>
+                        @endif
+                    </select>
+                </div>
+
                 {{-- Tombol Terapkan --}}
                 <div class="flex items-end gap-2">
                     <button type="submit" class="flex-1 py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors">
                         <span class="material-symbols-outlined text-sm">filter_alt</span>
                         Filter
                     </button>
-                    @if(request()->hasAny(['q', 'fase1', 'fase2', 'sertifikat']))
+                    @if(request()->hasAny(['q', 'fase1', 'fase2', 'sertifikat', 'kelayakan']))
                         <a href="{{ route('admin.attendances', ['kegiatan_id' => $selectedKegiatan->id]) }}" class="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-bold" title="Reset filter">
                             <span class="material-symbols-outlined text-sm">restart_alt</span>
                         </a>
@@ -316,6 +385,10 @@
                             @endif
                             <th class="px-5 py-3.5">Presensi Fase 2</th>
                             <th class="px-5 py-3.5">Tanda Tangan &amp; Bukti</th>
+                            @if($selectedKegiatan->isLomba())
+                                <th class="px-5 py-3.5">Karya Lomba</th>
+                            @endif
+                            <th class="px-5 py-3.5">Status Kelayakan</th>
                             <th class="px-5 py-3.5">Status Sertifikat</th>
                             <th class="px-5 py-3.5 text-right">Tindakan</th>
                         </tr>
@@ -411,6 +484,35 @@
                                             <span class="text-slate-600 text-xs italic">-</span>
                                         @endif
                                     </div>
+                                </td>
+                                @if($selectedKegiatan->isLomba())
+                                    <td class="px-5 py-4">
+                                        @if($p->has_submission)
+                                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 inline-flex items-center gap-1">
+                                                <span class="material-symbols-outlined text-[12px]">upload_file</span>
+                                                Sudah Kumpul
+                                            </span>
+                                        @else
+                                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700 inline-flex items-center gap-1">
+                                                <span class="material-symbols-outlined text-[12px]">pending</span>
+                                                Belum Kumpul
+                                            </span>
+                                        @endif
+                                    </td>
+                                @endif
+                                <td class="px-5 py-4">
+                                    @if($p->is_layak)
+                                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                                            <span class="material-symbols-outlined text-[12px]">verified</span>
+                                            Layak
+                                        </span>
+                                    @else
+                                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 inline-flex items-center gap-1">
+                                            <span class="material-symbols-outlined text-[12px]">cancel</span>
+                                            Belum Layak
+                                        </span>
+                                        <div class="text-[10px] text-rose-400/90 mt-1 font-medium">{{ $p->alasan_kelayakan }}</div>
+                                    @endif
                                 </td>
                                 <td class="px-5 py-4">
                                     @if($p->is_certificate)
