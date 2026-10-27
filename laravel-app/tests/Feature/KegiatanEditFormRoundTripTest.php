@@ -261,7 +261,7 @@ class KegiatanEditFormRoundTripTest extends TestCase
         $form['narasumber'] = [$form['narasumber'][0], ['nama' => 'Rina Kusuma', 'gelar' => 'M.Kom.', 'instansi' => '']];
         $this->simpanForm($kegiatan, $form);
 
-        $this->assertSame([
+        $this->assertSamaTanpaUrutanKunci([
             ['nama' => 'Siti Aminah', 'gelar' => 'Dr.', 'instansi' => 'UNUSA', 'foto' => 'narasumber/siti.jpg'],
             ['nama' => 'Rina Kusuma', 'gelar' => 'M.Kom.', 'instansi' => null],
         ], $kegiatan->fresh()->narasumber);

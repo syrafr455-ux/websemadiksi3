@@ -11,6 +11,7 @@ use App\Models\SertifikatRiwayatPerubahan;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SertifikatModelDanDataLamaTest extends TestCase
@@ -132,8 +133,10 @@ class SertifikatModelDanDataLamaTest extends TestCase
         $this->assertNotNull($sertifikatJuri->id);
 
         // 3. Duplikat sertifikat peserta untuk orang yang sama pada kegiatan yang sama -> GAGAL (Unique violation)
+        // Dibungkus savepoint: PostgreSQL membatalkan seluruh transaksi tes setelah galat, sehingga query
+        // sesudahnya (termasuk auditor kolom di tearDown) gagal dengan SQLSTATE 25P02. SQLite tidak begitu.
         $this->expectException(QueryException::class);
-        Sertifikat::create([
+        DB::transaction(fn () => Sertifikat::create([
             'nomor_sertifikat' => 'CERT-SMD-2026-P02',
             'kegiatan_id' => $kegiatan->id,
             'user_id' => $user->id,
@@ -142,7 +145,7 @@ class SertifikatModelDanDataLamaTest extends TestCase
             'jenis' => JenisSertifikat::Peserta,
             'file_pdf_path' => 'sample3.pdf',
             'document_hash' => 'hash3',
-        ]);
+        ]));
     }
 
     public function test_pencabutan_sertifikat_mencatat_alasan_dan_tidak_menghapus_data(): void

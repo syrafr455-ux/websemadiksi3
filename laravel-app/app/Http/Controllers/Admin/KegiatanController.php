@@ -137,7 +137,6 @@ class KegiatanController extends Controller
             KegiatanStatus::Draft => 'Draft',
             KegiatanStatus::Diajukan => "Menunggu persetujuan {$jumlahSetuju} dari {$totalPenyetuju}",
             KegiatanStatus::Published => 'Terbit',
-            KegiatanStatus::Archived => 'Diarsipkan',
             KegiatanStatus::Cancelled => 'Dibatalkan',
             KegiatanStatus::Ongoing => 'Berlangsung',
             KegiatanStatus::Completed => 'Selesai',

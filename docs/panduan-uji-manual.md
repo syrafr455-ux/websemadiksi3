@@ -707,3 +707,28 @@ Tes biasa memakai SQLite di memori yang meloloskan kolom salah. Untuk memeriksa 
 4. Penjaga menolak berjalan (exception di `tests/bootstrap-pgsql.php` dan `TestCase::setUpTraits`) bila driver bukan `pgsql`, nama database tidak berakhiran `_test`, atau sama dengan `DB_DATABASE_DEV` bila variabel itu diisi.
 5. Kegagalan yang tidak terkait modul sertifikat dicatat di `docs/status-tugas.md`, tidak diperbaiki di tugas ini.
 
+### F. Syarat selesai: dua suite, SQLite dan PostgreSQL
+Sebuah tugas baru dianggap selesai bila `php artisan test` (SQLite) DAN `php artisan test --configuration=phpunit.pgsql.xml` (PostgreSQL) keduanya lulus; tuliskan keluaran ringkasan keduanya di laporan akhir.
+
+Cara menjalankan, dari folder `laravel-app/`:
+1. SQLite (di memori, tanpa persiapan): `php artisan test`
+2. PostgreSQL: lakukan langkah E di atas sekali (database kosong `semadiksi_test` dan kredensial di lingkungan shell), lalu `php artisan test --configuration=phpunit.pgsql.xml`. Suite ini memakan sekitar 3 menit.
+
+Mengapa dua suite: SQLite menelan kesalahan yang ditolak PostgreSQL (batasan CHECK enum, panjang varchar, kunci asing dengan id tetap, kolom salah). Pola yang sudah terbukti:
+- `$table->enum(...)` menjadi batasan CHECK di PostgreSQL. Nilai baru di enum PHP harus disertai migrasi yang memperbarui batasan, dan daftar `batasanEnum()` di `tests/Feature/NilaiEnumDanBatasanKolomTest.php` harus diperbarui (tes katalog gagal bila ada batasan yang belum terdaftar).
+- `varchar(n)` menolak nilai lebih panjang; validasi input dan impor harus membatasi panjang sesuai kolom.
+- Kolom `jsonb` mengurutkan ulang kunci objek; bandingkan dengan `assertSamaTanpaUrutanKunci`.
+- Setelah galat database yang diharapkan, transaksi tes PostgreSQL batal. Bungkus pernyataan penyebabnya dengan `DB::transaction(...)` (savepoint) di dalam tes.
+- Jangan menulis id tetap (`user_id => 1`) di tes; sequence PostgreSQL tidak direset antar tes.
+
+Memeriksa database pengembangan (hanya baca, dijalankan pemilik di psql): bandingkan batasan CHECK dengan enum kode.
+```sql
+select t.relname as tabel, a.attname as kolom, pg_get_constraintdef(c.oid) as definisi
+from pg_constraint c
+join pg_class t on t.oid = c.conrelid
+join pg_namespace n on n.oid = t.relnamespace
+join pg_attribute a on a.attrelid = t.oid and a.attnum = c.conkey[1]
+where c.contype = 'c' and n.nspname = current_schema() and array_length(c.conkey, 1) = 1
+order by 1, 2;
+```
+Migrasi `2026_10_29_000002_selaraskan_batasan_check_enum.php` (dijalankan pemilik lewat `php artisan migrate`) menyelaraskan batasan yang berbeda dan tidak menyentuh yang sudah benar.

@@ -27,8 +27,8 @@ class LandingPageCleanupAndAdminStatsTest extends TestCase
     public function test_landing_page_does_not_contain_statistics_or_removed_navigation_items(): void
     {
         // Buat dummy data di database
-        User::factory()->create(['role' => UserRole::MahasiswaKipk, 'is_blocked' => false]);
-        Activity::create([
+        $mahasiswa = User::factory()->create(['role' => UserRole::MahasiswaKipk, 'is_blocked' => false]);
+        $activity = Activity::create([
             'title' => 'Seminar Teknologi Nasional',
             'category' => 'Seminar',
             'type' => 'Online',
@@ -40,8 +40,8 @@ class LandingPageCleanupAndAdminStatsTest extends TestCase
             'is_closed' => false,
         ]);
         Certificate::create([
-            'user_id' => 1,
-            'activity_id' => 1,
+            'user_id' => $mahasiswa->id,
+            'activity_id' => $activity->id,
             'user_name' => 'Peserta Uji',
             'activity_title' => 'Seminar Teknologi Nasional',
             'code' => 'CERT-LANDING-001',
@@ -49,8 +49,8 @@ class LandingPageCleanupAndAdminStatsTest extends TestCase
             'issued_date' => now()->toDateString(),
         ]);
         Attendance::create([
-            'user_id' => 1,
-            'activity_id' => 1,
+            'user_id' => $mahasiswa->id,
+            'activity_id' => $activity->id,
             'activity_title' => 'Seminar Teknologi Nasional',
             'activity_category' => 'Seminar',
             'activity_date' => '20 Oktober 2026',
@@ -106,7 +106,7 @@ class LandingPageCleanupAndAdminStatsTest extends TestCase
         User::factory()->create(['role' => UserRole::MahasiswaKipk, 'is_blocked' => true]);
 
         // Buat 2 kegiatan
-        Activity::create([
+        $kegiatanSatu = Activity::create([
             'title' => 'Kegiatan 1',
             'category' => 'Workshop',
             'type' => 'Offline',
@@ -132,7 +132,7 @@ class LandingPageCleanupAndAdminStatsTest extends TestCase
         // Buat sertifikat
         Certificate::create([
             'user_id' => $admin->id,
-            'activity_id' => 1,
+            'activity_id' => $kegiatanSatu->id,
             'user_name' => 'Mahasiswa Contoh',
             'activity_title' => 'Kegiatan 1',
             'code' => 'CERT-ADMIN-TEST',

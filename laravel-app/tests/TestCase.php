@@ -49,6 +49,29 @@ abstract class TestCase extends BaseTestCase
         return json_decode($m[1] ?? '{}', true);
     }
 
+    /**
+     * Seperti assertSame, tetapi urutan kunci objek (array asosiatif) diabaikan; urutan elemen daftar tetap dihitung.
+     * Kolom jsonb di PostgreSQL mengurutkan ulang kunci objek (kunci pendek dulu, lalu alfabet), sedangkan kolom
+     * json/teks di SQLite mempertahankan urutan simpan. Aplikasi tidak bergantung pada urutan kunci itu.
+     */
+    protected function assertSamaTanpaUrutanKunci(array $diharapkan, array $aktual, string $pesan = ''): void
+    {
+        $urutkan = function (array $nilai) use (&$urutkan): array {
+            foreach ($nilai as $kunci => $isi) {
+                if (is_array($isi)) {
+                    $nilai[$kunci] = $urutkan($isi);
+                }
+            }
+            if (! array_is_list($nilai)) {
+                ksort($nilai);
+            }
+
+            return $nilai;
+        };
+
+        $this->assertSame($urutkan($diharapkan), $urutkan($aktual), $pesan);
+    }
+
     protected function tearDown(): void
     {
         // Diperiksa sebelum aplikasi dibongkar; kegagalan dilaporkan sebagai kegagalan tes yang bersangkutan.

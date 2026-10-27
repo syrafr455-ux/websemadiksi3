@@ -170,7 +170,7 @@ class AdminTrackingKehadiranTest extends TestCase
         $lomba = $this->buatKegiatan([
             'nama_kegiatan' => 'Lomba UI/UX Nasional',
             'deskripsi' => 'Deskripsi lomba',
-            'kategori' => 'Lomba',
+            'kategori' => 'lomba',
             'is_submission_active' => true,
             'tanggal_mulai' => now()->subHours(4),
             'tanggal_selesai' => now()->subHour(),

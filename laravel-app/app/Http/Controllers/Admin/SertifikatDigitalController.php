@@ -590,6 +590,21 @@ class SertifikatDigitalController extends Controller
                     continue;
                 }
 
+                // Batas panjang kolom sertifikat; PostgreSQL menolak nilai yang lebih panjang (SQLite diam-diam menerimanya).
+                $melebihiBatas = array_keys(array_filter([
+                    'Nama' => mb_strlen($nama) > 255,
+                    'Asal institusi' => mb_strlen($institusi) > 255,
+                    'Predikat' => mb_strlen($predikat) > 100,
+                    'Email' => mb_strlen($email) > 255,
+                    'NIM' => mb_strlen($nim) > 50,
+                ]));
+                if ($melebihiBatas !== []) {
+                    $dilewati++;
+                    $alasanDilewati[] = "Baris {$barisNo}: ".implode(', ', $melebihiBatas).' melebihi batas panjang.';
+
+                    continue;
+                }
+
                 $jenisEnum = JenisSertifikat::tryFrom($jenisStr) ?? JenisSertifikat::Peserta;
                 if ($jenisEnum === JenisSertifikat::Juara && empty($predikat)) {
                     $dilewati++;
@@ -946,7 +961,7 @@ class SertifikatDigitalController extends Controller
 
         $validated = $request->validate([
             'kegiatan_id' => ['required', 'exists:kegiatan,id'],
-            'jenis_sertifikat' => ['required', 'string'],
+            'jenis_sertifikat' => ['required', 'string', 'in:semua,'.implode(',', JenisSertifikat::values())],
             'penandatangan_ids' => ['required', 'array', 'min:1', 'max:4'],
             'penandatangan_ids.*' => ['required', 'exists:penandatangan,id'],
         ]);

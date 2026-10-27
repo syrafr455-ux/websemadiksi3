@@ -15,6 +15,7 @@ use App\Services\AktivasiMahasiswaService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\StrayRequestException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -116,8 +117,10 @@ class PenyelarasanPenggunaTest extends TestCase
         User::factory()->userUmum()->create(['nim' => '2241019999']);
         $this->assertSame(3, User::where('nim', '2241019999')->count());
 
+        // Dibungkus savepoint: PostgreSQL membatalkan seluruh transaksi tes setelah galat (SQLSTATE 25P02 pada
+        // query berikutnya, termasuk auditor kolom di tearDown). SQLite tidak begitu.
         $this->expectException(QueryException::class);
-        User::factory()->userUmum()->create(['nim' => '2241019999', 'is_unusa' => true]);
+        DB::transaction(fn () => User::factory()->userUmum()->create(['nim' => '2241019999', 'is_unusa' => true]));
     }
 
     public function test_validation_matches_the_nim_rule(): void

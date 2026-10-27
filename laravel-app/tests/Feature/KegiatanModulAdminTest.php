@@ -262,7 +262,7 @@ class KegiatanModulAdminTest extends TestCase
         $this->assertSame(12, $kegiatan->seats()->count());
         $this->assertSame(0, $kegiatan->seats()->where('tier', 'vip')->count(), 'vip_rows null = tanpa baris VIP.');
         $this->assertSame(1, $kegiatan->venue_change_count);
-        $this->assertSame(['rows' => ['A', 'B', 'C'], 'cols_per_row' => 4, 'vip_rows' => [], 'panitia_rows' => []], $kegiatan->seat_layout_config);
+        $this->assertSamaTanpaUrutanKunci(['rows' => ['A', 'B', 'C'], 'cols_per_row' => 4, 'vip_rows' => [], 'panitia_rows' => []], $kegiatan->seat_layout_config);
 
         $this->assertNull($reg->seat_id);
         $this->assertTrue($reg->needs_seat_reselection);
