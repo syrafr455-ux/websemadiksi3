@@ -488,7 +488,7 @@ class DashboardController extends Controller
                 'jenis_label' => $st->jenis?->label() ?? 'Peserta',
                 'predikat' => $st->predikat,
                 'document_hash' => $st->document_hash,
-                'file_url' => $st->file_pdf_path ? route('sertifikat.download', $st->id) : null,
+                'file_url' => $st->isAktif() ? route('sertifikat.download', $st->id) : null,
                 'verification_url' => url('/verifikasi?code='.$st->nomor_sertifikat),
                 'is_legacy' => false,
             ]);

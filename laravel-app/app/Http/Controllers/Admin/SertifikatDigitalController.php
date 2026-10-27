@@ -1054,6 +1054,7 @@ class SertifikatDigitalController extends Controller
                 'institusi' => $p->institusi,
                 'mode_tampil' => $p->mode_tampil,
                 'identitas_terformat' => $p->identitas_terformat,
+                'tanda_tangan_path' => $p->tanda_tangan_path,
             ];
         })->all();
     }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\MasterMahasiswaController;
 use App\Http\Controllers\Admin\PenerimaKipkController;
 use App\Http\Controllers\Admin\PresensiScannerController;
 use App\Http\Controllers\Admin\SertifikatDigitalController;
+use App\Http\Controllers\Admin\SertifikatTemplatController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Auth\KeycloakController;
 use App\Http\Controllers\Auth\TwoFactorController;
@@ -42,7 +43,7 @@ Route::match(['get', 'post'], '/verifikasi', [CertificateController::class, 'ver
 Route::match(['get', 'post'], '/verifikasi-sertifikat', [CertificateController::class, 'verify'])
     ->middleware('throttle:15,1')
     ->name('verifikasi');
-Route::get('/sertifikat/{id}/download', [CertificateController::class, 'download'])->name('sertifikat.download');
+Route::get('/sertifikat/{id}/download', [CertificateController::class, 'download'])->middleware('throttle:30,1')->name('sertifikat.download');
 
 // Two-Phase Attendance Routes
 Route::post('/presensi/check-in-ticket', [PresensiController::class, 'checkInTicket'])->name('presensi.check-in-ticket');
@@ -227,6 +228,15 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/penerbitan-sertifikat', [SertifikatDigitalController::class, 'index'])->name('certificates');
         Route::get('/sertifikat', [SertifikatDigitalController::class, 'alihkanDariUrlLama'])->name('certificates.lama');
         Route::get('/kegiatan/{id}/sertifikat', [KegiatanSertifikatController::class, 'show'])->whereNumber('id')->name('kegiatan.sertifikat');
+        Route::put('/kegiatan/{id}/sertifikat/templat', [SertifikatTemplatController::class, 'simpan'])->whereNumber('id')->name('kegiatan.sertifikat.templat');
+        Route::delete('/kegiatan/{id}/sertifikat/templat', [SertifikatTemplatController::class, 'reset'])->whereNumber('id')->name('kegiatan.sertifikat.templat.reset');
+        Route::post('/kegiatan/{id}/sertifikat/latar', [SertifikatTemplatController::class, 'unggahLatar'])->whereNumber('id')->name('kegiatan.sertifikat.latar.unggah');
+        Route::delete('/kegiatan/{id}/sertifikat/latar', [SertifikatTemplatController::class, 'hapusLatar'])->whereNumber('id')->name('kegiatan.sertifikat.latar.hapus');
+        Route::get('/kegiatan/{id}/sertifikat/latar', [SertifikatTemplatController::class, 'tampilLatar'])->whereNumber('id')->name('kegiatan.sertifikat.latar');
+        Route::post('/kegiatan/{id}/sertifikat/salin', [SertifikatTemplatController::class, 'salin'])->whereNumber('id')->name('kegiatan.sertifikat.salin');
+        Route::post('/kegiatan/{id}/sertifikat/pratinjau', [SertifikatTemplatController::class, 'pratinjau'])->whereNumber('id')->name('kegiatan.sertifikat.pratinjau');
+        Route::post('/kegiatan/{id}/sertifikat/berkas', [SertifikatTemplatController::class, 'buatBerkasBatch'])->whereNumber('id')->name('kegiatan.sertifikat.berkas');
+        Route::post('/sertifikat/{id}/buat-ulang-berkas', [SertifikatTemplatController::class, 'buatUlangBerkas'])->whereNumber('id')->name('certificates.rebuild-file');
         Route::post('/sertifikat/terbitkan-massal', [SertifikatDigitalController::class, 'batchIssue'])->name('certificates.batch-issue');
         Route::post('/sertifikat/manual', [SertifikatDigitalController::class, 'storeManual'])->name('certificates.manual');
         Route::post('/sertifikat/impor', [SertifikatDigitalController::class, 'importRecipients'])->name('certificates.import');

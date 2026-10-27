@@ -10,6 +10,7 @@ use App\Models\Penandatangan;
 use App\Models\PengaturanVerifikasi;
 use App\Models\Sertifikat;
 use App\Services\CertificateGeneratorService;
+use App\Services\Sertifikat\BerkasSertifikatService;
 use App\Support\Masking;
 use App\Support\Wib;
 use Carbon\CarbonInterface;
@@ -149,10 +150,10 @@ class CertificateController extends Controller
             $isAktif = ($sertifikat->status === StatusSertifikat::Aktif);
 
             // Periksa integritas berkas fisik bila ada di penyimpanan server
+            // Tanpa berkas (belum dibuat) bukan "tidak valid"; hanya berkas yang ada dan hash-nya berbeda yang gagal.
             $fileHashMatches = true;
-            if ($sertifikat->file_pdf_path && Storage::disk('public')->exists($sertifikat->file_pdf_path)) {
-                $diskHash = hash_file('sha256', Storage::disk('public')->path($sertifikat->file_pdf_path));
-                $fileHashMatches = ($diskHash === $sertifikat->document_hash);
+            if ($sertifikat->adaBerkas()) {
+                $fileHashMatches = ($sertifikat->hashBerkasSaatIni() === $sertifikat->document_hash);
             }
             $validity = $isAktif && $fileHashMatches;
 
@@ -275,11 +276,12 @@ class CertificateController extends Controller
                 'asal_institusi' => $sertifikat->asal_institusi ?: 'Universitas Nahdlatul Ulama Surabaya',
                 'nim_samar' => $nimSamar,
                 'author' => $sertifikat->kegiatan?->penyelenggara ?: 'Divisi Penyelenggara / SEMADIKSI',
-                'hash' => $sertifikat->document_hash,
+                'hash' => $sertifikat->document_hash ?? 'Berkas belum dibuat (hash dihitung saat berkas pertama kali dibuat)',
                 'date' => $formattedDate,
                 'keterangan_publik' => $sertifikat->keterangan_publik,
                 'terakhir_diedit' => $terakhirDieditText,
-                'download_url' => $sertifikat->file_pdf_path && Storage::disk('public')->exists($sertifikat->file_pdf_path) ? route('sertifikat.download', $sertifikat->id) : null,
+                // Halaman publik hanya menautkan berkas lama di disk publik; berkas baru bersifat privat.
+                'download_url' => $sertifikat->adaBerkas() && $sertifikat->diskBerkas() === 'public' ? route('sertifikat.download', $sertifikat->id) : null,
                 'certified' => $certified,
                 'validity' => $validity,
                 'signatories' => $signatories,
@@ -362,11 +364,21 @@ class CertificateController extends Controller
     {
         $sertifikat = Sertifikat::with('kegiatan')->findOrFail($id);
 
-        if (! $sertifikat->file_pdf_path || ! Storage::disk('public')->exists($sertifikat->file_pdf_path)) {
-            return back()->with('error', 'Berkas PDF sertifikat tidak ditemukan di penyimpanan server.');
+        // Berkas lama di disk publik tetap dapat diunduh seperti sebelumnya. Berkas baru (privat) hanya untuk
+        // pemilik sertifikat dan super_admin, dan dibuat lazy saat pertama diunduh.
+        $legacyPublik = $sertifikat->diskBerkas() === 'public' && $sertifikat->adaBerkas();
+        if (! $legacyPublik) {
+            $pengguna = auth()->user();
+            abort_unless($pengguna !== null, 401);
+            abort_unless($pengguna->isSuperAdmin() || ((int) $sertifikat->user_id === $pengguna->id && $sertifikat->isAktif()), 403);
+            $sertifikat = app(BerkasSertifikatService::class)->pastikan($sertifikat);
         }
 
-        $fullPath = Storage::disk('public')->path($sertifikat->file_pdf_path);
+        if (! $sertifikat->adaBerkas()) {
+            return back()->with('error', 'Berkas PDF sertifikat belum dapat dibuat. Coba lagi nanti atau hubungi admin.');
+        }
+
+        $fullPath = Storage::disk($sertifikat->diskBerkas())->path($sertifikat->file_pdf_path);
         $downloadName = "Sertifikat-{$sertifikat->nomor_sertifikat}.pdf";
 
         return response()->download($fullPath, $downloadName, [

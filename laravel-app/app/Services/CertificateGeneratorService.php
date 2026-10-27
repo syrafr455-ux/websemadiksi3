@@ -10,6 +10,7 @@ use App\Models\KegiatanPresensi;
 use App\Models\KegiatanRegistration;
 use App\Models\Sertifikat;
 use App\Models\User;
+use App\Services\Sertifikat\BerkasSertifikatService;
 use App\Support\Wib;
 use BaconQrCode\Common\ErrorCorrectionLevel;
 use BaconQrCode\Encoder\Encoder;
@@ -146,58 +147,65 @@ class CertificateGeneratorService
             $nomorSertifikat = 'CERT-'.ltrim($nomorSertifikat, '-');
         }
 
-        // 2. Tentukan berkas template PDF
-        $tempPath = null;
+        // Berkas PDF dibuat lazy (BerkasSertifikatService) saat pertama diunduh; penerbitan hanya mencatat sertifikat.
+        // Hanya PDF yang diunggah admin yang langsung disimpan (jalur lama).
+        $storageFilePath = null;
+        $documentHash = null;
         if ($uploadedPdf instanceof UploadedFile) {
-            $tempPath = $uploadedPdf->getRealPath();
-            // Simpan juga sebagai template resmi kegiatan jika belum ada
-            if (! $kegiatan->certificate_template_path) {
-                $savedTpl = $uploadedPdf->store("kegiatan/templates/{$kegiatan->id}", 'public');
-                $kegiatan->update(['certificate_template_path' => $savedTpl]);
+            // 2. Tentukan berkas template PDF
+            $tempPath = null;
+            if ($uploadedPdf instanceof UploadedFile) {
+                $tempPath = $uploadedPdf->getRealPath();
+                // Simpan juga sebagai template resmi kegiatan jika belum ada
+                if (! $kegiatan->certificate_template_path) {
+                    $savedTpl = $uploadedPdf->store("kegiatan/templates/{$kegiatan->id}", 'public');
+                    $kegiatan->update(['certificate_template_path' => $savedTpl]);
+                }
+            } elseif ($kegiatan->certificate_template_path && Storage::disk('public')->exists($kegiatan->certificate_template_path)) {
+                $tempPath = Storage::disk('public')->path($kegiatan->certificate_template_path);
             }
-        } elseif ($kegiatan->certificate_template_path && Storage::disk('public')->exists($kegiatan->certificate_template_path)) {
-            $tempPath = Storage::disk('public')->path($kegiatan->certificate_template_path);
+
+            // 3. Stamping atau Fallback DomPDF
+            if ($tempPath && strtolower(pathinfo($tempPath, PATHINFO_EXTENSION)) === 'pdf') {
+                $pdfContent = $this->stampPdfTemplateContent(
+                    $tempPath,
+                    $nomorSertifikat,
+                    $namaPenerima,
+                    $kegiatan->nama_kegiatan,
+                    $kegiatan->certificate_schema_config
+                );
+            } else {
+                // Fallback jika tidak ada template PDF
+                $viewName = view()->exists('certificates.template') ? 'certificates.template' : 'certificates.dynamic';
+                $pdf = Pdf::loadView($viewName, [
+                    'sertifikat' => new Sertifikat(['nomor_sertifikat' => $nomorSertifikat, 'peran_sertifikat' => $peran]),
+                    'kegiatan' => $kegiatan,
+                    'namaLengkap' => $namaPenerima,
+                    'nim' => $nimPenerima ?: ($user?->nim ?? '-'),
+                    'prodi' => $user?->prodi ?? '-',
+                    'qrCodeBase64' => 'data:image/svg+xml;base64,'.base64_encode(
+                        QrCode::format('svg')->size(130)->margin(1)->generate(url("/verifikasi?code={$nomorSertifikat}"))
+                    ),
+                    'backgroundBase64' => null,
+                    'tanggalTerbit' => Wib::sekarang()->translatedFormat('d F Y'),
+                    'tanggalKegiatan' => $kegiatan->tanggal_mulai ? Wib::dari($kegiatan->tanggal_mulai)->translatedFormat('d F Y') : Wib::sekarang()->translatedFormat('d F Y'),
+                ])->setPaper('a4', 'landscape')
+                    ->setOption('isRemoteEnabled', true)
+                    ->setOption('isHtml5ParserEnabled', true);
+                $pdfContent = $pdf->output();
+            }
+
+            // 4. Simpan file PDF ke storage public
+            $folderPath = "certificates/{$kegiatan->id}";
+            $fileName = "{$nomorSertifikat}.pdf";
+            $storageFilePath = "{$folderPath}/{$fileName}";
+            Storage::disk('public')->put($storageFilePath, $pdfContent);
+
+            // 5. Hitung hash SHA-256 dokumen akhir
+            $absolutePath = Storage::disk('public')->path($storageFilePath);
+            $documentHash = hash_file('sha256', $absolutePath);
+
         }
-
-        // 3. Stamping atau Fallback DomPDF
-        if ($tempPath && strtolower(pathinfo($tempPath, PATHINFO_EXTENSION)) === 'pdf') {
-            $pdfContent = $this->stampPdfTemplateContent(
-                $tempPath,
-                $nomorSertifikat,
-                $namaPenerima,
-                $kegiatan->nama_kegiatan,
-                $kegiatan->certificate_schema_config
-            );
-        } else {
-            // Fallback jika tidak ada template PDF
-            $viewName = view()->exists('certificates.template') ? 'certificates.template' : 'certificates.dynamic';
-            $pdf = Pdf::loadView($viewName, [
-                'sertifikat' => new Sertifikat(['nomor_sertifikat' => $nomorSertifikat, 'peran_sertifikat' => $peran]),
-                'kegiatan' => $kegiatan,
-                'namaLengkap' => $namaPenerima,
-                'nim' => $nimPenerima ?: ($user?->nim ?? '-'),
-                'prodi' => $user?->prodi ?? '-',
-                'qrCodeBase64' => 'data:image/svg+xml;base64,'.base64_encode(
-                    QrCode::format('svg')->size(130)->margin(1)->generate(url("/verifikasi?code={$nomorSertifikat}"))
-                ),
-                'backgroundBase64' => null,
-                'tanggalTerbit' => Wib::sekarang()->translatedFormat('d F Y'),
-                'tanggalKegiatan' => $kegiatan->tanggal_mulai ? Wib::dari($kegiatan->tanggal_mulai)->translatedFormat('d F Y') : Wib::sekarang()->translatedFormat('d F Y'),
-            ])->setPaper('a4', 'landscape')
-                ->setOption('isRemoteEnabled', true)
-                ->setOption('isHtml5ParserEnabled', true);
-            $pdfContent = $pdf->output();
-        }
-
-        // 4. Simpan file PDF ke storage public
-        $folderPath = "certificates/{$kegiatan->id}";
-        $fileName = "{$nomorSertifikat}.pdf";
-        $storageFilePath = "{$folderPath}/{$fileName}";
-        Storage::disk('public')->put($storageFilePath, $pdfContent);
-
-        // 5. Hitung hash SHA-256 dokumen akhir
-        $absolutePath = Storage::disk('public')->path($storageFilePath);
-        $documentHash = hash_file('sha256', $absolutePath);
 
         // 6. Simpan record sertifikat ke tabel sertifikat
         $jenisEnum = $jenis ?? JenisSertifikat::tryFrom($peran->value) ?? JenisSertifikat::Peserta;
@@ -223,6 +231,7 @@ class CertificateGeneratorService
             'status' => StatusSertifikat::Aktif,
             'penandatangan_snapshot' => $penandatanganSnapshot,
             'file_pdf_path' => $storageFilePath,
+            'file_disk' => $storageFilePath ? 'public' : BerkasSertifikatService::DISK,
             'document_hash' => $documentHash,
             'is_valid' => true,
             'issued_at' => now(),

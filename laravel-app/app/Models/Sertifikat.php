@@ -38,6 +38,11 @@ class Sertifikat extends Model
         'dicabut_oleh',
         'penandatangan_snapshot',
         'file_pdf_path',
+        'file_disk',
+        'file_status',
+        'file_alasan_gagal',
+        'file_dibuat_pada',
+        'file_templat_versi',
         'document_hash',
         'is_valid',
         'issued_at',
@@ -107,17 +112,40 @@ class Sertifikat extends Model
         return $this->status === StatusSertifikat::Dicabut || $this->status === 'dicabut';
     }
 
+    /** Kolom berkas PDF; dicocokkan dengan skema oleh tes (Schema::hasColumn). */
+    public const KOLOM_BERKAS = ['file_pdf_path', 'file_disk', 'file_status', 'file_alasan_gagal', 'file_dibuat_pada', 'file_templat_versi', 'document_hash'];
+
+    public function diskBerkas(): string
+    {
+        return $this->file_disk ?: 'public';
+    }
+
+    public function adaBerkas(): bool
+    {
+        return ! empty($this->file_pdf_path)
+            && preg_match('#^https?://#i', $this->file_pdf_path) !== 1
+            && Storage::disk($this->diskBerkas())->exists($this->file_pdf_path);
+    }
+
+    /** SHA-256 berkas yang ada di penyimpanan sekarang; null bila berkas belum ada. */
+    public function hashBerkasSaatIni(): ?string
+    {
+        return $this->adaBerkas() ? hash_file('sha256', Storage::disk($this->diskBerkas())->path($this->file_pdf_path)) : null;
+    }
+
     public function getFileUrlAttribute(): ?string
     {
-        if (empty($this->file_pdf_path)) {
-            return null;
-        }
-
-        if (preg_match('#^https?://#i', $this->file_pdf_path) === 1) {
+        if (! empty($this->file_pdf_path) && preg_match('#^https?://#i', $this->file_pdf_path) === 1) {
             return $this->file_pdf_path;
         }
 
-        return Storage::disk('public')->url($this->file_pdf_path);
+        // Sertifikat lama: berkas di disk publik, tautannya tidak berubah.
+        if (! empty($this->file_pdf_path) && $this->diskBerkas() === 'public') {
+            return Storage::disk('public')->url($this->file_pdf_path);
+        }
+
+        // Sertifikat baru: berkas privat dibuat saat pertama diunduh lewat rute terotorisasi.
+        return $this->exists && $this->isAktif() ? route('sertifikat.download', $this->id) : null;
     }
 
     public function getVerificationUrlAttribute(): string
