@@ -1207,6 +1207,20 @@ export default function KegiatanIndex({
                                             >
                                                 Lanjut ke Langkah {currentStep + 1}
                                             </button>
+                                        ) : editingItem ? (
+                                            <div className="flex flex-col items-end gap-1">
+                                                <button
+                                                    type="button"
+                                                    disabled={processing}
+                                                    onClick={() => simpanDenganAksi('draft')}
+                                                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-black shadow-lg shadow-emerald-600/30 transition-all disabled:opacity-50"
+                                                >
+                                                    Simpan Perubahan
+                                                </button>
+                                                <p className="text-[11px] text-slate-400">
+                                                    Untuk mengajukan persetujuan, gunakan tombol Ajukan di daftar kegiatan
+                                                </p>
+                                            </div>
                                         ) : (
                                             <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
                                                 <button
