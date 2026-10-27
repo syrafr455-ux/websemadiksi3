@@ -153,7 +153,8 @@ class PresensiAkhirQrLockTest extends TestCase
             'nim' => $this->participant->nim,
         ]);
 
-        $this->assertDatabaseHas('sertifikat', [
+        // Sertifikat tidak terbit otomatis pada presensi mandiri (Tugas T2a Bagian 4)
+        $this->assertDatabaseMissing('sertifikat', [
             'kegiatan_id' => $this->kegiatan->id,
             'user_id' => $this->participant->id,
         ]);

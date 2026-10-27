@@ -50,4 +50,23 @@ class CsvSanitizer
     {
         return array_map([self::class, 'netralkan'], $row);
     }
+
+    /**
+     * Alias bahasa Inggris untuk netralkan.
+     */
+    public static function sanitize(mixed $value): string
+    {
+        return self::netralkan($value);
+    }
+
+    /**
+     * Alias bahasa Inggris untuk netralkanBaris.
+     *
+     * @param  array<int|string, mixed>  $row
+     * @return array<int|string, string>
+     */
+    public static function sanitizeRow(array $row): array
+    {
+        return self::netralkanBaris($row);
+    }
 }

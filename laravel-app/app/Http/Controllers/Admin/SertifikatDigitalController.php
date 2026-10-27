@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class SertifikatDigitalController extends Controller
 {
@@ -670,7 +670,7 @@ class SertifikatDigitalController extends Controller
     /**
      * Unduh templat berkas impor penerima (.csv).
      */
-    public function downloadTemplate(): StreamedResponse
+    public function downloadTemplate(): Response
     {
         Gate::authorize('viewAny', Sertifikat::class);
 
@@ -692,16 +692,19 @@ class SertifikatDigitalController extends Controller
 
         $filename = 'templat_impor_penerima_sertifikat.csv';
 
-        return response()->streamDownload(function () use ($headers, $sampleRows) {
-            $output = fopen('php://output', 'w');
-            fputcsv($output, $headers);
-            foreach ($sampleRows as $row) {
-                $sanitized = array_map(fn ($val) => CsvSanitizer::sanitize((string) $val), $row);
-                fputcsv($output, $sanitized);
-            }
-            fclose($output);
-        }, $filename, [
+        $output = fopen('php://temp', 'r+');
+        fputcsv($output, $headers);
+        foreach ($sampleRows as $row) {
+            $sanitized = array_map(fn ($val) => CsvSanitizer::sanitize((string) $val), $row);
+            fputcsv($output, $sanitized);
+        }
+        rewind($output);
+        $csvContent = (string) stream_get_contents($output);
+        fclose($output);
+
+        return response($csvContent, 200, [
             'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 

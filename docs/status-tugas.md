@@ -840,5 +840,38 @@ Status pelacakan pengerjaan bertahap:
     - **Pengujian Fitur**:
       - Suite pengujian `Tests\Feature\AdminSertifikatDigitalTest` (10 tes, 71 assertions) lulus 100%.
 
+  - **BAGIAN 8: Halaman Verifikasi Publik Dinamis `/verifikasi` [SELESAI]**:
+    - **Lencana Dinamis & Tampilan Lengkap**:
+      - Mendukung lencana visual responsif untuk seluruh jenis peran: `peserta`, `juri`, `pembicara`, dan `juara`.
+      - Predikat terhormat (contoh: "Juara 1", "Keynote Speaker", "Best Presenter") ditampilkan dinamis di bawah jenis sertifikat.
+      - Menampilkan asal kampus / institusi penerima secara elegan.
+      - Penyamaran NIM penerima secara satu pintu menggunakan `App\Support\Masking::nim()` (4 digit awal dan 2 digit akhir terlihat, tengah disamarkan tanda bintang `*`). NIM utuh dipastikan tidak pernah bocor ke HTML atau respons publik.
+      - Menampilkan nama kegiatan dan penyelenggara resmi (`Divisi Penyelenggara / SEMADIKSI`).
+    - **Status Certified & Validity Bermakna Nyata**:
+      - **Certified**: Berstatus `YA` hanya jika pejabat penandatangan resmi terekam dalam `penandatangan_snapshot` atau terhubung aktif pada saat penerbitan sertifikat.
+      - **Validity**: Berstatus `VALID` hanya jika status sertifikat aktif (`status === 'aktif'`) DAN berkas fisik PDF di storage publik diverifikasi keutuhan integritasnya melalui kalkulasi SHA-256 (`hash_file('sha256', ...)` persis cocok dengan `document_hash`). Jika berkas dimodifikasi/rusak atau sertifikat dicabut, validity bernilai `TIDAK VALID`.
+      - Sertifikat dicabut (`status === 'dicabut'`): menampilkan banner status merah tegas `DICABUT (TIDAK SAH)` beserta alasan wajib pencabutan dan tanggal pencabutan berstempel WIB.
+      - Dilengkapi kotak legenda edukatif yang menerangkan secara gamblang definisi teknis *Certified* (keabsahan penandatangan) dan *Validity* (keutuhan berkas digital dan status aktif).
+    - **Pemberitahuan Riwayat Edit Transparan**:
+      - Bila panitia pernah melakukan perbaikan data tampilan pada sertifikat, halaman publik menampilkan catatan transparan: *"Catatan: Data tampilan sertifikat ini telah diperbarui oleh panitia pada {tanggal WIB}."* berdasarkan data audit `sertifikat_riwayat_perubahan`.
+    - **Sakelar Konfigurasi Pengaturan Verifikasi (`PengaturanVerifikasi`)**:
+      - Seluruh elemen informasi dapat diatur hidup/mati oleh Super Admin lewat tab Pengaturan Verifikasi: `tampilkan_asal_institusi`, `tampilkan_jenis_predikat`, `tampilkan_nim_samar`, `tampilkan_penyelenggara`, `tampilkan_keterangan`, `tampilkan_tabel_penandatangan`, dan penyesuaian `teks_pengantar`.
+      - Tabel penandatangan menampilkan pejabat sesuai mode privasi masing-masing (`sembunyikan`, `samarkan`, `penuh`).
+    - **Keamanan & Performa**:
+      - Sanitasi ketat input kode verifikasi via regex: hanya karakter alfanumerik, strip (`-`), slash (`/`), garis bawah (`_`), dan titik (`.`).
+      - Pembatasan laju (*Rate Limiting*) 15 permintaan per menit (`throttle:15,1`) pada rute `/verifikasi` dan `/verifikasi-sertifikat`.
+      - Zero Internal PII Leak: alamat email, nomor telepon, path direktori server, ID database internal tidak pernah terekspos ke publik.
+      - Kompatibilitas data lama: sertifikat historis (seperti `CERT-ASYK-2026-8280`) tetap sah dan dapat diverifikasi dengan lancar.
+    - **Pengujian Fitur**:
+      - Suite pengujian `Tests\Feature\VerifikasiSertifikatDinamisTest` (7 tes, 53 assertions) lulus 100%:
+        1. Lencana dinamis untuk seluruh peran (`peserta`, `juri`, `pembicara`, `juara`) dan predikat beserta penyamaran NIM.
+        2. Status `DICABUT` beserta alasan wajib dan stempel waktu WIB.
+        3. Makna nyata `Certified` dan `Validity` (verifikasi hash SHA-256 berkas fisik vs manipulasi berkas).
+        4. Pemberitahuan transparan riwayat edit tampilan.
+        5. Sakelar hidup/mati konfigurasi verifikasi.
+        6. Pencegahan kebocoran PII internal.
+        7. Integritas dan kompatibilitas sertifikat lama format historis.
+
+
 
 

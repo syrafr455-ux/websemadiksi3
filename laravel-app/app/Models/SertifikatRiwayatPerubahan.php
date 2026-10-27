@@ -19,6 +19,11 @@ class SertifikatRiwayatPerubahan extends Model
         'nilai_lama',
         'nilai_baru',
         'alasan',
+        'created_at',
+    ];
+
+    protected $casts = [
+        'created_at' => 'datetime',
     ];
 
     public function sertifikat(): BelongsTo

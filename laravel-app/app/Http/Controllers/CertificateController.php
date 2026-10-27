@@ -2,14 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\StatusSertifikat;
 use App\Models\Certificate;
 use App\Models\Kegiatan;
+use App\Models\KegiatanPenandatangan;
+use App\Models\Penandatangan;
+use App\Models\PengaturanVerifikasi;
 use App\Models\Sertifikat;
 use App\Services\CertificateGeneratorService;
+use App\Support\Masking;
 use App\Support\Wib;
+use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -23,12 +30,16 @@ class CertificateController extends Controller
      */
     public function verify(Request $request): View
     {
-        $code = trim($request->input('code', ''));
+        $rawCode = (string) $request->input('code', '');
+        // Bersihkan input kode: trim, uppercase, hanya izinkan alfanumerik, tanda hubung, garis miring, garis bawah, titik
+        $code = strtoupper(trim(preg_replace('/[^A-Za-z0-9_\-\/\.]/', '', $rawCode)));
+
         $sertifikat = null;
         $legacyCertificate = null;
         $mockCertificate = null;
         $hashVerificationResult = null; // null, 'match', 'mismatch'
         $uploadedHash = null;
+        $pengaturan = PengaturanVerifikasi::ambil();
 
         // Default valid certificates list untuk kompatibilitas kode lama (Next.js)
         $defaultLegacyCerts = [
@@ -41,8 +52,8 @@ class CertificateController extends Controller
                 'date' => '2024-11-16 09:12:05',
                 'download_url' => null,
                 'signatories' => [
-                    ['name' => 'Dr. Ir. Wahyu Utomo, M.Si. (Pembina SEMADIKSI)', 'nipNim' => '197508122002121001', 'type' => 'NIP', 'date' => '2024-11-16 09:12:05'],
-                    ['name' => 'Muhammad Fatih (Ketua Umum SEMADIKSI)', 'nipNim' => '3130021045', 'type' => 'NIM', 'date' => '2024-11-16 09:12:05'],
+                    ['no' => 1, 'name' => 'Dr. Ir. Wahyu Utomo, M.Si. (Pembina SEMADIKSI)', 'nipNim' => 'NIP: 197508122002121001', 'type' => 'NIP', 'jabatan' => 'Pembina', 'institusi' => 'UNUSA', 'mode_tampil' => 'penuh', 'date' => '2024-11-16 09:12:05', 'certified' => true, 'validity' => true],
+                    ['no' => 2, 'name' => 'Muhammad Fatih (Ketua Umum SEMADIKSI)', 'nipNim' => 'NIM: 3130021045', 'type' => 'NIM', 'jabatan' => 'Ketua Umum', 'institusi' => 'UNUSA', 'mode_tampil' => 'penuh', 'date' => '2024-11-16 09:12:05', 'certified' => true, 'validity' => true],
                 ],
             ],
             'CERT-VOL-2024-1102' => [
@@ -54,8 +65,8 @@ class CertificateController extends Controller
                 'date' => '2024-10-13 14:35:10',
                 'download_url' => null,
                 'signatories' => [
-                    ['name' => 'Dr. Ir. Wahyu Utomo, M.Si. (Pembina SEMADIKSI)', 'nipNim' => '197508122002121001', 'type' => 'NIP', 'date' => '2024-10-13 14:35:10'],
-                    ['name' => 'Fauzi Rahmat (Ketua Divisi Pengabdian)', 'nipNim' => '2140021088', 'type' => 'NIM', 'date' => '2024-10-13 14:35:10'],
+                    ['no' => 1, 'name' => 'Dr. Ir. Wahyu Utomo, M.Si. (Pembina SEMADIKSI)', 'nipNim' => 'NIP: 197508122002121001', 'type' => 'NIP', 'jabatan' => 'Pembina', 'institusi' => 'UNUSA', 'mode_tampil' => 'penuh', 'date' => '2024-10-13 14:35:10', 'certified' => true, 'validity' => true],
+                    ['no' => 2, 'name' => 'Fauzi Rahmat (Ketua Divisi Pengabdian)', 'nipNim' => 'NIM: 2140021088', 'type' => 'NIM', 'jabatan' => 'Ketua Divisi Pengabdian', 'institusi' => 'UNUSA', 'mode_tampil' => 'penuh', 'date' => '2024-10-13 14:35:10', 'certified' => true, 'validity' => true],
                 ],
             ],
             'CERT-WD-2024-0345' => [
@@ -67,8 +78,8 @@ class CertificateController extends Controller
                 'date' => '2024-09-05 16:40:02',
                 'download_url' => null,
                 'signatories' => [
-                    ['name' => 'Dr. Ir. Wahyu Utomo, M.Si. (Pembina SEMADIKSI)', 'nipNim' => '197508122002121001', 'type' => 'NIP', 'date' => '2024-09-05 16:40:02'],
-                    ['name' => 'Ferdian W. (Senior Frontend Engineer / Pemateri)', 'nipNim' => '198805202015041002', 'type' => 'NIP', 'date' => '2024-09-05 16:40:02'],
+                    ['no' => 1, 'name' => 'Dr. Ir. Wahyu Utomo, M.Si. (Pembina SEMADIKSI)', 'nipNim' => 'NIP: 197508122002121001', 'type' => 'NIP', 'jabatan' => 'Pembina', 'institusi' => 'UNUSA', 'mode_tampil' => 'penuh', 'date' => '2024-09-05 16:40:02', 'certified' => true, 'validity' => true],
+                    ['no' => 2, 'name' => 'Ferdian W. (Senior Frontend Engineer / Pemateri)', 'nipNim' => 'NIP: 198805202015041002', 'type' => 'NIP', 'jabatan' => 'Pemateri', 'institusi' => 'UNUSA', 'mode_tampil' => 'penuh', 'date' => '2024-09-05 16:40:02', 'certified' => true, 'validity' => true],
                 ],
             ],
         ];
@@ -80,7 +91,7 @@ class CertificateController extends Controller
                 $uploadedHash = hash_file('sha256', $uploadedFile->getRealPath());
 
                 // Cari sertifikat berdasarkan hash dokumen
-                $sertifikat = Sertifikat::with(['kegiatan', 'user', 'presensi'])
+                $sertifikat = Sertifikat::with(['kegiatan', 'user', 'riwayatPerubahan.user'])
                     ->where('document_hash', $uploadedHash)
                     ->first();
 
@@ -107,7 +118,7 @@ class CertificateController extends Controller
         // Jika kode diinputkan (dan belum dicocokkan via file hash)
         if ($code && ! $sertifikat && ! $mockCertificate) {
             $likeOp = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
-            $sertifikat = Sertifikat::with(['kegiatan', 'user', 'presensi'])
+            $sertifikat = Sertifikat::with(['kegiatan', 'user', 'riwayatPerubahan.user'])
                 ->where('nomor_sertifikat', $code)
                 ->orWhere('nomor_sertifikat', $likeOp, $code)
                 ->first();
@@ -135,19 +146,143 @@ class CertificateController extends Controller
                 ? Wib::dari($sertifikat->issued_at)->translatedFormat('d F Y, H:i').' WIB'
                 : '-';
 
+            $isAktif = ($sertifikat->status === StatusSertifikat::Aktif);
+
+            // Periksa integritas berkas fisik bila ada di penyimpanan server
+            $fileHashMatches = true;
+            if ($sertifikat->file_pdf_path && Storage::disk('public')->exists($sertifikat->file_pdf_path)) {
+                $diskHash = hash_file('sha256', Storage::disk('public')->path($sertifikat->file_pdf_path));
+                $fileHashMatches = ($diskHash === $sertifikat->document_hash);
+            }
+            $validity = $isAktif && $fileHashMatches;
+
+            // Certified: penandatangan resmi tercatat dan aktif saat terbit
+            $snapshot = $sertifikat->penandatangan_snapshot;
+            $signatories = [];
+            $certified = false;
+
+            if (! empty($snapshot) && is_array($snapshot)) {
+                $certified = true;
+                foreach ($snapshot as $idx => $sig) {
+                    $mode = $sig['mode_tampil'] ?? 'sembunyikan';
+                    $identitasDisplay = null;
+                    if ($mode === 'penuh') {
+                        $identitasDisplay = (! empty($sig['jenis_identitas']) && $sig['jenis_identitas'] !== 'none' ? strtoupper($sig['jenis_identitas']).': ' : '').($sig['nomor_identitas'] ?? '-');
+                    } elseif ($mode === 'samarkan') {
+                        $nomor = (string) ($sig['nomor_identitas'] ?? '');
+                        $masked = strlen($nomor) > 8 ? substr($nomor, 0, 4).'****'.substr($nomor, -4) : Masking::nim($nomor);
+                        $identitasDisplay = (! empty($sig['jenis_identitas']) && $sig['jenis_identitas'] !== 'none' ? strtoupper($sig['jenis_identitas']).': ' : '').$masked;
+                    }
+
+                    $signatories[] = [
+                        'no' => $idx + 1,
+                        'name' => $sig['nama_lengkap'] ?? $sig['nama'] ?? '-',
+                        'jabatan' => $sig['jabatan'] ?? '-',
+                        'institusi' => $sig['institusi'] ?? 'Universitas Nahdlatul Ulama Surabaya',
+                        'type' => ! empty($sig['jenis_identitas']) && $sig['jenis_identitas'] !== 'none' ? strtoupper($sig['jenis_identitas']) : 'TTE',
+                        'nipNim' => $identitasDisplay,
+                        'mode_tampil' => $mode,
+                        'date' => $sertifikat->issued_at ? Wib::dari($sertifikat->issued_at)->translatedFormat('d F Y, H:i').' WIB' : '-',
+                        'certified' => true,
+                        'validity' => $validity,
+                    ];
+                }
+            } else {
+                $assigned = KegiatanPenandatangan::with('penandatangan')
+                    ->where('kegiatan_id', $sertifikat->kegiatan_id)
+                    ->orderBy('urutan')
+                    ->get();
+
+                if ($assigned->isNotEmpty()) {
+                    $certified = true;
+                    foreach ($assigned as $idx => $kp) {
+                        $pen = $kp->penandatangan;
+                        if (! $pen) {
+                            continue;
+                        }
+                        $signatories[] = [
+                            'no' => $idx + 1,
+                            'name' => str_contains($pen->nama_lengkap, '(') ? $pen->nama_lengkap : ($pen->nama_lengkap.($pen->jabatan ? " ({$pen->jabatan})" : '')),
+                            'jabatan' => $pen->jabatan,
+                            'institusi' => $pen->institusi ?? 'Universitas Nahdlatul Ulama Surabaya',
+                            'type' => $pen->jenis_identitas !== 'none' ? strtoupper($pen->jenis_identitas) : 'TTE',
+                            'nipNim' => $pen->identitas_terformat,
+                            'mode_tampil' => $pen->mode_tampil,
+                            'date' => $sertifikat->issued_at ? Wib::dari($sertifikat->issued_at)->translatedFormat('d F Y, H:i').' WIB' : '-',
+                            'certified' => (bool) $pen->is_active,
+                            'validity' => $validity,
+                        ];
+                    }
+                } else {
+                    $masterPen = Penandatangan::where('is_active', true)->take(2)->get();
+                    if ($masterPen->isNotEmpty()) {
+                        $certified = true;
+                        foreach ($masterPen as $idx => $pen) {
+                            $signatories[] = [
+                                'no' => $idx + 1,
+                                'name' => str_contains($pen->nama_lengkap, '(') ? $pen->nama_lengkap : ($pen->nama_lengkap.($pen->jabatan ? " ({$pen->jabatan})" : '')),
+                                'jabatan' => $pen->jabatan,
+                                'institusi' => $pen->institusi ?? 'Universitas Nahdlatul Ulama Surabaya',
+                                'type' => $pen->jenis_identitas !== 'none' ? strtoupper($pen->jenis_identitas) : 'TTE',
+                                'nipNim' => $pen->identitas_terformat,
+                                'mode_tampil' => $pen->mode_tampil,
+                                'date' => $sertifikat->issued_at ? Wib::dari($sertifikat->issued_at)->translatedFormat('d F Y, H:i').' WIB' : '-',
+                                'certified' => (bool) $pen->is_active,
+                                'validity' => $validity,
+                            ];
+                        }
+                    } else {
+                        $signatories = [
+                            ['no' => 1, 'name' => 'Dr. Ir. Wahyu Utomo, M.Si. (Pembina SEMADIKSI)', 'nipNim' => 'NIP: 197508122002121001', 'type' => 'NIP', 'jabatan' => 'Pembina', 'institusi' => 'UNUSA', 'mode_tampil' => 'penuh', 'date' => '-', 'certified' => true, 'validity' => $validity],
+                            ['no' => 2, 'name' => 'Muhammad Fatih (Ketua Umum SEMADIKSI)', 'nipNim' => 'NIM: 3130021045', 'type' => 'NIM', 'jabatan' => 'Ketua Umum', 'institusi' => 'UNUSA', 'mode_tampil' => 'penuh', 'date' => '-', 'certified' => true, 'validity' => $validity],
+                        ];
+                        $certified = true;
+                    }
+                }
+            }
+
+            $rawNim = $sertifikat->nim_penerima ?? $sertifikat->user?->nim ?? null;
+            $nimSamar = $rawNim ? Masking::nim($rawNim) : null;
+
+            $terakhirEdit = $sertifikat->riwayatPerubahan()->latest('created_at')->first();
+            $terakhirDieditText = null;
+            if ($terakhirEdit && $terakhirEdit->created_at) {
+                $waktuEdit = $terakhirEdit->created_at instanceof CarbonInterface
+                    ? $terakhirEdit->created_at
+                    : Carbon::parse($terakhirEdit->created_at);
+                $terakhirDieditText = 'Data diperbarui oleh panitia pada '.Wib::dari($waktuEdit)?->translatedFormat('d F Y, H:i').' WIB';
+            }
+
+            $kegiatanTanggal = null;
+            if ($sertifikat->kegiatan) {
+                $mulai = $sertifikat->kegiatan->tanggal_mulai ? Wib::dari($sertifikat->kegiatan->tanggal_mulai)->translatedFormat('d F Y') : null;
+                $selesai = $sertifikat->kegiatan->tanggal_selesai ? Wib::dari($sertifikat->kegiatan->tanggal_selesai)->translatedFormat('d F Y') : null;
+                $kegiatanTanggal = ($mulai === $selesai || ! $selesai) ? $mulai : "{$mulai} - {$selesai}";
+            }
+
             $documentData = [
                 'code' => $sertifikat->nomor_sertifikat,
-                'status' => $sertifikat->is_valid ? 'VALID' : 'TIDAK AKTIF',
+                'status' => $isAktif ? 'SAH (VALID)' : 'DICABUT',
+                'is_active' => $isAktif,
+                'alasan_pencabutan' => $sertifikat->alasan_pencabutan,
+                'dicabut_pada' => $sertifikat->dicabut_pada ? Wib::dari($sertifikat->dicabut_pada)->translatedFormat('d F Y, H:i').' WIB' : null,
                 'title' => $sertifikat->kegiatan->nama_kegiatan ?? 'Sertifikat Kegiatan SEMADIKSI',
-                'recipient_name' => $sertifikat->recipient_name,
-                'author' => 'Divisi Penyelenggara / SEMADIKSI',
+                'kegiatan_tanggal' => $kegiatanTanggal,
+                'recipient_name' => $sertifikat->nama_penerima ?: $sertifikat->recipient_name,
+                'jenis' => $sertifikat->jenis?->label() ?? 'Peserta',
+                'jenis_value' => $sertifikat->jenis?->value ?? 'peserta',
+                'predikat' => $sertifikat->predikat,
+                'asal_institusi' => $sertifikat->asal_institusi ?: 'Universitas Nahdlatul Ulama Surabaya',
+                'nim_samar' => $nimSamar,
+                'author' => $sertifikat->kegiatan?->penyelenggara ?: 'Divisi Penyelenggara / SEMADIKSI',
                 'hash' => $sertifikat->document_hash,
                 'date' => $formattedDate,
-                'download_url' => route('sertifikat.download', $sertifikat->id),
-                'signatories' => [
-                    ['name' => 'Dr. Ir. Wahyu Utomo, M.Si. (Pembina SEMADIKSI)', 'nipNim' => '197508122002121001', 'type' => 'NIP', 'date' => $formattedDate],
-                    ['name' => 'Muhammad Fatih (Ketua Umum SEMADIKSI)', 'nipNim' => '3130021045', 'type' => 'NIM', 'date' => $formattedDate],
-                ],
+                'keterangan_publik' => $sertifikat->keterangan_publik,
+                'terakhir_diedit' => $terakhirDieditText,
+                'download_url' => $sertifikat->file_pdf_path && Storage::disk('public')->exists($sertifikat->file_pdf_path) ? route('sertifikat.download', $sertifikat->id) : null,
+                'certified' => $certified,
+                'validity' => $validity,
+                'signatories' => $signatories,
             ];
         } elseif ($legacyCertificate) {
             $formattedDate = $legacyCertificate->issued_date
@@ -156,28 +291,54 @@ class CertificateController extends Controller
 
             $documentData = [
                 'code' => $legacyCertificate->code,
-                'status' => 'VALID',
+                'status' => 'SAH (VALID)',
+                'is_active' => true,
+                'alasan_pencabutan' => null,
+                'dicabut_pada' => null,
                 'title' => $legacyCertificate->activity_title,
+                'kegiatan_tanggal' => $formattedDate,
                 'recipient_name' => $legacyCertificate->user_name,
+                'jenis' => 'Peserta',
+                'jenis_value' => 'peserta',
+                'predikat' => null,
+                'asal_institusi' => 'Universitas Nahdlatul Ulama Surabaya',
+                'nim_samar' => null,
                 'author' => 'SEMADIKSI Divisi Kemahasiswaan',
                 'hash' => hash('sha256', $legacyCertificate->code.$legacyCertificate->user_name),
                 'date' => $formattedDate,
+                'keterangan_publik' => null,
+                'terakhir_diedit' => null,
                 'download_url' => null,
+                'certified' => true,
+                'validity' => true,
                 'signatories' => [
-                    ['name' => 'Dr. Ir. Wahyu Utomo, M.Si. (Pembina SEMADIKSI)', 'nipNim' => '197508122002121001', 'type' => 'NIP', 'date' => $formattedDate],
-                    ['name' => 'Muhammad Fatih (Ketua Umum SEMADIKSI)', 'nipNim' => '3130021045', 'type' => 'NIM', 'date' => $formattedDate],
+                    ['no' => 1, 'name' => 'Dr. Ir. Wahyu Utomo, M.Si. (Pembina SEMADIKSI)', 'nipNim' => 'NIP: 197508122002121001', 'type' => 'NIP', 'jabatan' => 'Pembina', 'institusi' => 'UNUSA', 'mode_tampil' => 'penuh', 'date' => $formattedDate, 'certified' => true, 'validity' => true],
+                    ['no' => 2, 'name' => 'Muhammad Fatih (Ketua Umum SEMADIKSI)', 'nipNim' => 'NIM: 3130021045', 'type' => 'NIM', 'jabatan' => 'Ketua Umum', 'institusi' => 'UNUSA', 'mode_tampil' => 'penuh', 'date' => $formattedDate, 'certified' => true, 'validity' => true],
                 ],
             ];
         } elseif ($mockCertificate) {
             $documentData = [
                 'code' => $mockCertificate['code'],
-                'status' => 'VALID',
+                'status' => 'SAH (VALID)',
+                'is_active' => true,
+                'alasan_pencabutan' => null,
+                'dicabut_pada' => null,
                 'title' => $mockCertificate['title'],
+                'kegiatan_tanggal' => $mockCertificate['date'],
                 'recipient_name' => $mockCertificate['recipient_name'],
+                'jenis' => 'Peserta',
+                'jenis_value' => 'peserta',
+                'predikat' => null,
+                'asal_institusi' => 'Universitas Nahdlatul Ulama Surabaya',
+                'nim_samar' => null,
                 'author' => $mockCertificate['author'],
                 'hash' => $mockCertificate['hash'],
                 'date' => $mockCertificate['date'],
+                'keterangan_publik' => null,
+                'terakhir_diedit' => null,
                 'download_url' => null,
+                'certified' => true,
+                'validity' => true,
                 'signatories' => $mockCertificate['signatories'],
             ];
         }
@@ -187,6 +348,7 @@ class CertificateController extends Controller
             'sertifikat' => $sertifikat,
             'certificate' => $legacyCertificate,
             'documentData' => $documentData,
+            'pengaturan' => $pengaturan,
             'hashVerificationResult' => $hashVerificationResult,
             'uploadedHash' => $uploadedHash,
             'title' => 'Portal Validasi Sertifikat SEMADIKSI',

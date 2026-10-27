@@ -82,9 +82,9 @@ return new class extends Migration
         // Pindahkan data penandatangan yang sudah dipakai sertifikat lama ke master dengan mode 'penuh' agar tidak mengubah tampilan lama
         DB::table('penandatangan')->insert([
             [
-                'nama' => 'Dr. Wahyu Utomo',
-                'gelar' => 'M.Kom.',
-                'jabatan' => 'Ketua Panitia / Pembina',
+                'nama' => 'Dr. Ir. Wahyu Utomo',
+                'gelar' => 'M.Si.',
+                'jabatan' => 'Pembina SEMADIKSI',
                 'jenis_identitas' => 'NIP',
                 'nomor_identitas' => '197508122002121001',
                 'institusi' => 'Universitas Nahdlatul Ulama Surabaya',
@@ -97,7 +97,7 @@ return new class extends Migration
             [
                 'nama' => 'Muhammad Fatih',
                 'gelar' => null,
-                'jabatan' => 'Ketua Pelaksana',
+                'jabatan' => 'Ketua Umum SEMADIKSI',
                 'jenis_identitas' => 'NIM',
                 'nomor_identitas' => '3130021045',
                 'institusi' => 'Universitas Nahdlatul Ulama Surabaya',

@@ -34,8 +34,12 @@ Route::get('/profil-semadiksi', [HomeController::class, 'profil'])->name('profil
 Route::get('/berita-acara', [HomeController::class, 'beritaAcaraIndex'])->name('berita.acara.index');
 Route::get('/berita-acara/{id}', [HomeController::class, 'beritaAcaraShow'])->name('berita.acara.show');
 // Public Verification & Dynamic Certificate
-Route::match(['get', 'post'], '/verifikasi', [CertificateController::class, 'verify'])->name('verifikasi.sertifikat');
-Route::match(['get', 'post'], '/verifikasi-sertifikat', [CertificateController::class, 'verify'])->name('verifikasi');
+Route::match(['get', 'post'], '/verifikasi', [CertificateController::class, 'verify'])
+    ->middleware('throttle:15,1')
+    ->name('verifikasi.sertifikat');
+Route::match(['get', 'post'], '/verifikasi-sertifikat', [CertificateController::class, 'verify'])
+    ->middleware('throttle:15,1')
+    ->name('verifikasi');
 Route::get('/sertifikat/{id}/download', [CertificateController::class, 'download'])->name('sertifikat.download');
 
 // Two-Phase Attendance Routes
