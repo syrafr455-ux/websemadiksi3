@@ -701,3 +701,53 @@ Status pelacakan pengerjaan bertahap:
     - Peserta (non-staf) yang membuka rute admin dialihkan (302), staf non-super_admin memperoleh 403; tes menerima keduanya.
   - **Uji manual di browser**: lihat laporan akhir tugas ini.
 
+- [ ] **Bagian 24: TUGAS T2a - Kelayakan dan Penerbitan Sertifikat, Penandatangan, dan Halaman Verifikasi Dinamis**
+  - **BAGIAN 0: Tutup Celah Pengamanan Email [SELESAI]**:
+    - Mailable lama (`ResetKataSandiMail`, `TicketIssuedMail`, `SeatReselectionMail`) dialihkan ke satu pintu terpusat `EmailProtectionService::send()` / `kirim()` yang menyalurkan pengiriman via `SendProtectedEmailJob`.
+    - Klasifikasi:
+      - Kritis: `ActivationLinkMail`, `ResetKataSandiMail`, `TicketIssuedMail` (tetap terkirim saat kuota harian tercapai).
+      - Massal: `KegiatanDiajukanMail`, `KegiatanUpdatedMail`, `SeatReselectionMail`, `SertifikatTerbitMail` (ditunda bila kuota terlampaui).
+    - Menghapus pemanggilan duplikat `recordSent()` pada listener dan job.
+    - Ditambahkan tes penjaga statis `test_penjaga_seluruh_pengiriman_email_di_app_lewat_layanan_terpusat()` di `PengamananPengirimanTest` yang memindai seluruh direktori `app/` dan gagal jika ada pemanggilan langsung `Mail::` di luar `SendProtectedEmailJob` dan `TesEmailCommand`.
+    - Kompatibel penuh dengan `QUEUE_CONNECTION=sync`.
+  - **BAGIAN 0B: Rapikan Form Edit Kegiatan [SELESAI]**:
+    - Pada `Admin/Kegiatan/Index.jsx`, langkah 5 footer dikondisikan:
+      - Mode edit (`editingItem` aktif): hanya menampilkan tombol tunggal *"Simpan Perubahan"* (memanggil `simpanDenganAksi('draft')`) disertai teks petunjuk kecil *"Untuk mengajukan persetujuan, gunakan tombol Ajukan di daftar kegiatan"*.
+      - Mode tambah baru (`editingItem === null`): menampilkan dua tombol *"Simpan sebagai Draft"* dan *"Simpan & Ajukan Persetujuan"*.
+    - Diverifikasi lewat tes SSR `tests/js/kegiatanModalButtons.test.mjs` menggunakan `renderToStaticMarkup` bawaan React dan asersi AST string. `node --test tests/js` 10/10 lulus.
+  - **BAGIAN 1: Temuan Investigasi Kode Nyata (Sebelum Perubahan Domain Sertifikat)**:
+    - **1. CertificateGeneratorService**:
+      - Memeriksa apakah kegiatan memiliki template PDF (`$kegiatan->file_sertifikat_template_pdf`). Jika ada, menggunakan `stampPdfTemplateContent` via FPDI untuk mencetak teks penerima dan matriks QR vektor.
+      - Jika tidak ada template, melakukan fallback ke DomPDF HTML view (`certificates.template` atau `certificates.dynamic`).
+      - Menghasilkan SHA-256 berkas PDF fisik via `hash_file('sha256', $storagePath)` dan menyimpan hasilnya di kolom `document_hash`.
+      - QR Code berisi URL publik: `url('/verifikasi?code='.$nomorSertifikat)`.
+      - Nomor sertifikat: format `CERT-{KODE_KEGIATAN}-{TAHUN}-{RANDOM_OR_INC}`.
+      - Berkas PDF disimpan ke disk `public` di direktori `certificates/{kegiatan_id}/{nomor_sertifikat}.pdf`.
+    - **2. Pemicu Pembuatan Sertifikat Saat Ini (Semua Ditemukan via Grep)**:
+      - `App\Http\Controllers\PresensiController::submitSelfAttendance()` (baris 362): otomatis menerbitkan sertifikat saat peserta mengisi presensi mandiri fase 2!
+      - `App\Http\Controllers\Admin\PresensiScannerController::markPresensiAkhirManual()` (baris 389): otomatis menerbitkan sertifikat saat admin menandai presensi akhir manual peserta!
+      - `App\Http\Controllers\Admin\DashboardController::storeCertificate()` (baris 308): formulir penerbitan manual di `/admin/sertifikat`.
+      - `App\Console\Commands\MigrasiAlurLamaCommand::handle()`: penerbitan saat migrasi batch data lama.
+    - **3. Halaman Admin `/admin/sertifikat`**:
+      - Controller: `Admin\DashboardController::certificates()`, view: `admin.certificates.index`.
+      - Masalah performa & privasi: form penerima memuat seluruh pengguna ber-role `mahasiswa_kipk` dan `user_umum` ke dalam `<datalist id="studentList">` (`$students = User::whereIn('role', ...)->get()`).
+      - Penghapusan saat ini bersifat keras (`$certificate->delete()` dan file PDF langsung dihapus dari disk).
+    - **4. Halaman Publik `/verifikasi`**:
+      - Controller: `App\Http\Controllers\CertificateController::verify()`, view: `resources/views/verifikasi-sertifikat.blade.php`.
+      - Sumber Data Penandatangan: **MOCK ARRAY STATIS DI DALAM CONTROLLER** (`$penandatangan = [...]` dengan Dr. Wahyu Utomo NIP `197508122002121001` dan Muhammad Fatih NIM `3130021045`). Belum membaca tabel database master penandatangan apa pun!
+      - Makna Kolom *Certified* dan *Validity*: Di `verifikasi-sertifikat.blade.php` baris 226-231, ikon centang hijau kedua kolom tersebut **100% HARDCODED STATIS** (`<span ... title="Tersertifikasi Sah">check_circle</span>`) tanpa pemeriksaan status database maupun validitas hash berkas!
+    - **5. Kegiatan Presensi & Status 'attended'**:
+      - `AttendanceStatus` enum hanya mendefinisikan `Registered = 'registered'`, `CheckedIn = 'checked_in'`, `Absent = 'absent'`.
+      - Di `DashboardController::storeAbsensi` (baris 659-663), kode sesungguhnya menulis `AttendanceStatus::CheckedIn->value`. Istilah `'attended'` di `docs/status-tugas.md` baris 277 adalah ketidakakuratan penulisan dokumentasi lama, bukan nilai enum yang hilang di kode.
+    - **6. Tabel `kegiatan_gabung`**:
+      - Dibuat pada migrasi `2026_10_26_000001_create_kegiatan_gabung_table.php`. Kolom: `id`, `kegiatan_id`, `registration_id` (unique foreignId), `user_id` (foreignId), `pertama_pada` (timestamp), `terakhir_pada` (timestamp), `jumlah` (integer counter).
+      - Dicatat saat peserta mengklik tombol "Gabung" di `KegiatanGabungController::gabung`. Pada kegiatan hybrid, klik gabung diakui sebagai check-in awal alternatif.
+    - **7. Juri & Penilaian Lomba**:
+      - Pivot table `kegiatan_penilai` (`kegiatan_id`, `user_id`).
+      - Data karya lomba di `kegiatan_submissions`: `nilai` (skor numerik 0-100), `catatan_juri`, `judged_by`, `judged_at`.
+    - **8. Narasumber / Pembicara**:
+      - Tersimpan pada kolom `kegiatan.narasumber` berformat JSONB array `[{nama, gelar, instansi, foto}]`.
+    - **9. Halaman Presensi Admin Yang Ada**:
+      - Rute `/admin/presensi` (`Admin\PresensiScannerController::index()`), view `admin.presensi.index`. Sudah memiliki rekap gabung daring, status check-in tiket fase 1, dan status presensi akhir fase 2.
+
+
