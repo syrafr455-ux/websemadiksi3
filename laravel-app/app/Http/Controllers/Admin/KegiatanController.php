@@ -957,9 +957,12 @@ class KegiatanController extends Controller
             'lokasi_ruangan' => ['nullable', 'string', 'max:255'],
             'lokasi_nama' => [...$wajib, 'string', 'max:255'],
             'lokasi_detail' => ['nullable', 'string', 'max:255'],
-            'biaya' => [...$wajib, 'numeric', 'min:0'],
-            'kuota' => [...$wajib, 'integer', 'min:1'],
-            'poin_xp' => ['nullable', 'integer', 'min:0'],
+            // decimal(12,2) di kegiatan, tetapi amount_paid per tiket decimal(10,2): batas mengikuti kolom yang lebih sempit.
+            'biaya' => [...$wajib, 'numeric', 'min:0', 'max:99999999'],
+            // Batas produk: kapasitas denah terbesar 30 baris x 50 kolom = 1.500; webinar besar jauh di bawah 100.000.
+            'kuota' => [...$wajib, 'integer', 'min:1', 'max:100000'],
+            // Batas produk: poin per kegiatan puluhan sampai ratusan; 10.000 sudah longgar (kolom integer 32-bit).
+            'poin_xp' => ['nullable', 'integer', 'min:0', 'max:10000'],
             // Daftar narasumber kosong dikirim sebagai null (FormData membuang array kosong saat ada unggahan berkas).
             'narasumber' => ['nullable', 'array'],
             'narasumber.*' => ['array'],
@@ -984,7 +987,7 @@ class KegiatanController extends Controller
             'izin_tautan_presensi_akhir' => ['boolean'],
             'wajib_tangkapan_layar' => ['boolean'],
             'seat_layout_config' => ['nullable', 'array'],
-            'seat_layout_config.rows' => ['sometimes', 'array'],
+            'seat_layout_config.rows' => ['sometimes', 'array', 'max:30'],
             'seat_layout_config.rows.*' => ['string', 'max:3'],
             'seat_layout_config.cols_per_row' => ['sometimes', 'integer', 'min:1', 'max:50'],
             // Daftar kosong dikirim sebagai null (FormData membuang array kosong saat ada unggahan berkas).
@@ -1006,6 +1009,11 @@ class KegiatanController extends Controller
     {
         return [
             'tanggal_selesai.after' => 'Waktu selesai harus setelah waktu mulai.',
+            'biaya.max' => 'Biaya maksimal 99.999.999.',
+            'biaya.numeric' => 'Biaya harus berupa angka.',
+            'kuota.max' => 'Kuota maksimal 100.000.',
+            'poin_xp.max' => 'Poin XP maksimal 10.000.',
+            'seat_layout_config.rows.max' => 'Denah maksimal 30 baris.',
             'registration_deadline.before_or_equal' => 'Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.',
         ];
     }

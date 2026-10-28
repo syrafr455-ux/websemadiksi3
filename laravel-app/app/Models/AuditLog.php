@@ -36,7 +36,8 @@ class AuditLog extends Model
             'action' => $action,
             'subject_type' => $subject instanceof Model ? get_class($subject) : (is_string($subject) ? $subject : null),
             'subject_id' => $subject instanceof Model ? $subject->getKey() : null,
-            'description' => $description,
+            // Kolom description varchar(255); PostgreSQL menolak teks lebih panjang (nama + alasan pengguna sering melampauinya).
+            'description' => $description === null ? null : mb_substr($description, 0, 255),
             'metadata' => $metadata,
             'ip_address' => request()?->ip(),
         ]);

@@ -137,7 +137,7 @@ class HomeController extends Controller
     public function storeAbsensiPublic(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'activity_id' => ['required'],
+            'activity_id' => ['required', 'integer', 'min:1'],
             'student_name' => ['required', 'string', 'max:255'],
             'student_nim' => ['required', 'string', 'max:50'],
             'university' => ['required', 'string', 'max:255'],

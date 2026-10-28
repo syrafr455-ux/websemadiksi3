@@ -97,6 +97,14 @@ class ImporPenerimaKipk
                 }
             }
 
+            // Batas kolom daftar_penerima_kipk; PostgreSQL menolak nilai lebih panjang dan seluruh impor gagal.
+            foreach (['nim' => ['NIM', 30], 'nama_lengkap' => ['Nama lengkap', 255], 'program_studi' => ['Program studi', 255], 'status_penetapan' => ['Status penetapan', 50]] as $kolom => [$label, $maks]) {
+                $panjang = mb_strlen((string) ($data[$kolom] ?? ''));
+                if ($panjang > $maks) {
+                    $pesan[] = "{$label} terlalu panjang ({$panjang} dari {$maks} karakter).";
+                }
+            }
+
             if (($data['angkatan'] ?? '') !== '' && ! preg_match('/^\d{4}$/', $data['angkatan'])) {
                 $pesan[] = 'Angkatan harus 4 digit tahun.';
             }

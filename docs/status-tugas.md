@@ -1033,3 +1033,84 @@ Status pelacakan pengerjaan bertahap:
   - **Belum diverifikasi / keterbatasan**: tidak ada alat peramban di sesi ini, jadi tidak ada tangkapan layar di `docs/tangkapan/`; verifikasi visual dilakukan lewat tes HTML, SSR, pembacaan kelas, dan perhitungan kontras. Pemilik perlu memeriksa di peramban: drag-and-drop kanvas, banner "belum disimpan" setelah klik biasa, dialog keluar halaman, dan tampilan halaman `/admin/penerbitan-sertifikat`. Halaman Blade admin lain masih memakai tombol utama `bg-amber-600` di isinya (bukan di layout); halaman Inertia lain (Index, Show, Pengguna, Penilaian) masih memakai `bg-emerald-600` bertulisan putih (3,67:1); keduanya tidak diubah karena di luar tugas.
   - **Migrasi baru**: tidak ada.
   - **Langkah uji manual**: `docs/panduan-uji-manual.md` bagian 9.G.
+
+- [x] **Tugas: Audit Modul Pembayaran (baca-saja) dan Pengerasan Batas Input**
+  - Skill dibaca lebih dulu: `.claude/skills/anti-hallucination.md` dan `.claude/skills/anti-slop-ui.md`. Tidak ada UI baru pada tugas ini; semua klaim di bawah dari membaca berkas yang disebut.
+
+  ### Audit modul pembayaran
+
+  **Daftar titik kode yang menyentuh pembayaran** (berkas:baris, atribut persis):
+
+  | Titik | Menulis | Membaca |
+  |-------|---------|---------|
+  | `app/Services/PaymentGatewayService.php:46-153` `createPaymentTransaction` | `Payment::create` (baris 66-78 mode simulasi, 131-139 mode Tripay): `user_id`, `order_id`, `payment_method`, `gross_amount`, `payment_status`, `expired_at`, `payload_response`. Registrasi (81-84, 142-145): `payment_id`, `status_pembayaran` | `kegiatan_registrations.amount_paid` (57, 97), `kegiatan.nama_kegiatan` (96), `users.phone/name/email` (102-108), `config('payment.expiry_minutes')`, `services.tripay.*` |
+  | `PaymentGatewayService.php:158-168` `verifyWebhookSignature` | - | HMAC-SHA256 isi mentah dengan kunci privat; `hash_equals` |
+  | `PaymentGatewayService.php:175-261` `processWebhook` | `payments.payment_status`, `paid_at`, `payload_response` (192-196, 231-234); `kegiatan_registrations.status_pembayaran` (202, 239); `kegiatan_seats.status` (208, 245); `kegiatan.kuota_terisi` decrement (252); e-tiket via `EmailProtectionService` (217) | `merchant_ref`, `status` dari payload; `Payment where order_id` (184) |
+  | `app/Http/Controllers/Api/PaymentWebhookController.php:17-44`, `routes/api.php:6`, `bootstrap/app.php:27-29` | - | header `X-Callback-Signature`; rute `POST /api/payment/webhook` dikecualikan dari CSRF |
+  | `app/Models/Payment.php:57-153` | alias mutator `amount`, `status`, `payload`, `expires_at`, `external_reference` ke kolom nyata (84-132) | `registrations()` memakai `payment_id` (139-142) |
+  | `app/Http/Controllers/KegiatanBookingController.php:196, 209, 213-214, 338-339, 358, 387, 392-396` | `amount_paid` = `kegiatan.biaya` (338), `status_pembayaran` (339), `kuota_terisi` increment (358), memanggil layanan pembayaran (387) | `payment_method` dari klien (196, 214), `kuota_total` (209) |
+  | `app/Models/Kegiatan.php:621` | - | accessor `getKuotaTerisiAttribute` = `registrations()->count()` |
+  | Tampilan: `DashboardController.php:161, 317`, `Admin/KegiatanController.php:335-337`, `KelayakanSertifikatService.php:241`, `DenahKursiService.php:118-125` | - | `status_pembayaran` / `payment_status` |
+  | Konfigurasi: `config/payment.php`, `config/services.php:38-43`, `.env.example:66-73` | - | kunci Tripay dari lingkungan |
+  | Tes yang sudah ada: `PenilaianAndWebhookTest.php:177-345` | - | PAID, tanda tangan salah, EXPIRED |
+
+  **Jawaban poin 2**:
+  1. (a) Model `Payment` dipakai di jalur yang hidup: hanya `Payment::create([...])` (mass assignment) di `PaymentGatewayService.php:66` dan `:131`, diperbarui lewat `$payment->update([...])` di `:192`, `:231`; tidak ada `forceFill`, penugasan properti, atau `updateOrCreate`.
+  2. (b) Semua atribut yang diisi layanan (`user_id`, `order_id`, `payment_method`, `gross_amount`, `payment_status`, `expired_at`, `payload_response`) ada di `$fillable` (`Payment.php:57-71`) dan merupakan kolom nyata, sehingga INSERT tidak melanggar NOT NULL (kolom wajib `order_id`, `user_id`, `gross_amount`, `payment_method` semuanya diisi); `amount/status/payload/expires_at/external_reference` di `$fillable` hanyalah alias mutator ke kolom yang sama, bukan kolom palsu.
+  3. (c) Data transaksi tersimpan di tabel `payments`: referensi merchant = `order_id`, jumlah = `gross_amount` (jumlah hitungan server, bukan jumlah konfirmasi Tripay), status = `payment_status`, kedaluwarsa = `expired_at`, waktu lunas = `paid_at`, dan seluruh respons Tripay (`reference`, `pay_code`, `checkout_url`, `qr_url`) serta payload callback digabung ke kolom `payload_response` (jsonb); referensi Tripay tidak punya kolom sendiri; tautan ke peserta lewat `kegiatan_registrations.payment_id`.
+  4. (d) Tidak ada kolom yang dirujuk kode tetapi tidak ada di skema (`payments`: 11 kolom, `kegiatan_registrations.payment_id/amount_paid/status_pembayaran` ada di migrasi `2026_10_13_000004` dan `_000005`); satu-satunya ketidaksesuaian adalah semantik, bukan nama kolom: accessor `kuota_terisi` (temuan 4 di bawah).
+  5. (e) Sebelum tugas ini hanya callback yang diuji (`PenilaianAndWebhookTest.php:177-345`, dibuat langsung lewat `Payment::create`); pembuatan pembayaran lewat checkout berbayar tidak diuji sama sekali (tes checkout memakai kegiatan `biaya` 0), kini dicakup `KarakterisasiModulPembayaranTest` di kedua suite, termasuk PostgreSQL (mode simulasi tanpa kredensial Tripay; panggilan HTTP Tripay asli tidak diuji karena `Http::preventStrayRequests()`).
+
+  **Ketahanan alur uang** (dibaca dari kode, dibuktikan oleh `KarakterisasiModulPembayaranTest`): tanda tangan HMAC diperiksa sebelum payload dipercaya (`PaymentWebhookController.php:24`) dan tanda tangan salah/kosong ditolak 403 tanpa mengubah data (tes lulus); harga dihitung server dari `kegiatan.biaya` (`KegiatanBookingController.php:338`) dan nilai `amount`/`biaya` dari klien diabaikan (tes lulus); pesanan tak dikenal, tanpa `merchant_ref`, atau `merchant_ref` 400 karakter dijawab 200 `success:false` tanpa 500 (tes lulus); callback ganda, kedaluwarsa, dan galat checkout tidak aman (temuan di bawah).
+
+  **Temuan terurut dari paling berisiko** (tes bukti ada di `KarakterisasiModulPembayaranTest`, dilewati dengan alasan "menunggu keputusan pemilik proyek: perbaikan modul pembayaran"; jalankan `UJI_BUKTI_PEMBAYARAN=1 php artisan test --filter=KarakterisasiModulPembayaranTest` untuk melihat kegagalannya):
+
+  | # | Risiko | Bukti | Dampak bagi pengguna | Usulan perbaikan minimal | Ukuran |
+  |---|--------|-------|----------------------|--------------------------|--------|
+  | 1 | Tinggi | Kunci privat bawaan tertulis di kode: `PaymentGatewayService.php:33` dan `:160` (`'sandbox_private_key_semadiksi'`); tes `test_tanpa_kunci_privat_terkonfigurasi_...` menerima callback PAID bertanda tangan kunci itu (200, seharusnya 403) | Bila `TRIPAY_PRIVATE_KEY` lupa diisi di produksi, siapa pun yang membaca repositori dapat memalsukan callback "PAID" dan mendapat tiket tanpa membayar | Hapus kunci bawaan; tolak callback (dan checkout bersertifikat Tripay) bila kunci kosong di luar `local`/`testing` | S (~10 baris + tes) |
+  | 2 | Tinggi | Callback tanpa penjaga status: `processWebhook` `:190-257` tidak memeriksa `payment_status` awal. Tes: dua callback EXPIRED pada 2 registrasi menurunkan `kuota_terisi` dari 5 ke 1 (seharusnya 3); dua callback PAID mengirim 4 e-tiket (seharusnya 2); PAID setelah EXPIRED menghidupkan kembali pesanan tanpa memeriksa kursi sudah dilepas | Tripay mengirim ulang callback bila tidak mendapat 200 cepat: kuota kegiatan bisa jadi negatif, peserta menerima e-tiket berulang, kursi dobel | Di dalam transaksi: `lockForUpdate` pada baris `payments`; bila status sudah bukan `pending`, jawab sukses tanpa efek | S (~15 baris + tes) |
+  | 3 | Tinggi | Jumlah tidak diverifikasi: `processWebhook` `:191` melunasi hanya berdasarkan `status`. Tes: callback PAID `total_amount` 1.000 untuk tagihan 100.000 melunasi pesanan | Pembayaran kurang (atau payload dari sandbox) dianggap lunas | Bandingkan `total_amount`/`amount_received` dengan `gross_amount`; selisih dicatat dan tidak melunasi | XS |
+  | 4 | Sedang | Dua sumber kebenaran kuota: cek kuota checkout memakai accessor `Kegiatan.php:621` (`registrations()->count()`, termasuk registrasi expired/failed) sedangkan callback hanya mengurangi kolom `kuota_terisi` (`PaymentGatewayService.php:252`). Tes: setelah EXPIRED, kuota yang dibaca checkout tetap 2 (seharusnya 0) | Kuota yang seharusnya lepas karena kedaluwarsa tidak pernah terbuka lagi bagi pendaftar baru; kegiatan tampak penuh | Accessor hanya menghitung registrasi aktif (`RegistrationPaymentStatus::activeValues()`), kolom dijadikan satu-satunya yang diubah atau dibuang | M (menyentuh model Kegiatan dan tes lama) |
+  | 5 | Sedang | Tidak ada kedaluwarsa lokal: `routes/console.php` tidak menjadwalkan apa pun (tes `..._tugas_terjadwal_...`: daftar jadwal kosong); `expired_at` hanya dibaca di tampilan | Bila callback EXPIRED tidak pernah datang (Tripay gagal kirim, URL berubah), kursi dan kuota tertahan selamanya | Perintah terjadwal tiap menit: `payments` pending dengan `expired_at` lewat ditandai expired lewat jalur yang sama dengan callback | M (~40 baris + tes) |
+  | 6 | Sedang | `payment_method` hanya `string` (`KegiatanBookingController.php:196`) dan galat apa pun ditampilkan mentah (`:392-396`). Bukti PostgreSQL: metode 300 karakter menghasilkan pesan ke pengguna "Terjadi kesalahan saat memproses pendaftaran: SQLSTATE[22001] ... Connection: pgsql, Host: 127.0.0.1, Port: 5432, Database: semadiksi_test, SQL: insert into "payments" ..." | Peserta melihat host, nama database, dan SQL; metode sembarang diteruskan ke Tripay | `Rule::in` terhadap kode di `config('payment.methods')`; pesan generik ke pengguna, rinci ke log | S |
+  | 7 | Sedang | Panggilan HTTP Tripay berjalan di dalam `DB::beginTransaction()` yang memegang kunci kursi (`KegiatanBookingController.php:216`..`:387`); bila `Payment::create` atau commit gagal setelah Tripay sukses, transaksi Tripay yatim (`PaymentGatewayService.php:117-139`) | Kunci baris lama saat Tripay lambat; tagihan Tripay tanpa pesanan di sisi kita | Buat transaksi Tripay setelah commit pesanan (status "menunggu tagihan") atau catat dan batalkan transaksi yatim | M |
+  | 8 | Rendah | Webhook tanpa batas laju; `Log::warning` menulis nilai header tanda tangan (`PaymentWebhookController.php:25-28`) | Kebocoran kecil di log; beban bila diserang | `throttle` pada rute; jangan log nilai tanda tangan | XS |
+  | 9 | Rendah | `(int) $reg->amount_paid` memotong pecahan (`:57`, `:97`); `biaya` boleh pecahan | Biaya Rp 25.000,50 ditagih Rp 25.000 | Wajibkan `biaya` bilangan bulat di form kegiatan | XS |
+  | 10 | Rendah | `PAYMENT_FALLBACK_PHONE` kosong (`config/payment.php:177`); Tripay mewajibkan nomor | Akun tanpa nomor telepon gagal checkout dengan pesan galat Tripay | Wajibkan nomor di profil atau isi nilai bawaan yang diterima Tripay | XS |
+
+  Tidak satu pun temuan diterapkan. `git diff --stat` terhadap berkas modul pembayaran kosong (perintahnya di laporan akhir).
+
+  ### Pengerasan batas input (validasi form)
+
+  Tabel ketidakcocokan aturan validasi dibanding kolom:
+
+  | Form | Bidang | Aturan lama | Kolom | Hasil | Perbaikan |
+  |------|--------|-------------|-------|-------|-----------|
+  | Kegiatan (wizard dan edit) | `biaya` | `numeric min:0` | `kegiatan.biaya` decimal(12,2); `kegiatan_registrations.amount_paid` decimal(10,2) | **Tidak cocok**: nilai besar menjadi 500 | `max:99999999` (kolom tersempit amount_paid memuat 99.999.999,99); pesan "Biaya maksimal 99.999.999." |
+  | Kegiatan | `kuota` | `integer min:1` | integer 32-bit | **Tidak cocok** | `max:100000` (denah terbesar 30 x 50 = 1.500 kursi; 100.000 sangat longgar); "Kuota maksimal 100.000." |
+  | Kegiatan | `poin_xp` | `integer min:0` | integer 32-bit | **Tidak cocok** | `max:10000`; "Poin XP maksimal 10.000." |
+  | Kegiatan | `seat_layout_config.rows` (jumlah baris) | tanpa batas jumlah | jsonb | Tidak cocok dengan pengaturan ruangan yang membatasi 30 | `max:30`; "Denah maksimal 30 baris." |
+  | Kegiatan | `nama_kegiatan`, `lokasi_*`, `lokasi_nama`, `lokasi_detail` (255), `meeting_id`/`passcode_rapat` (100), `tautan_rapat` (500), `menit_buka_gabung` (0-180), `platform_daring`, `join_button_mode`, `narasumber.*` | `max` sesuai | varchar(255)/text/jsonb | Cocok (0) | - |
+  | Pengaturan ruangan | `total_seats` | `integer min:1` | dipakai sebagai kapasitas | **Tidak cocok** | `max:100000`; "Kapasitas kursi maksimal 100.000." |
+  | Pengaturan ruangan | `layout_config.*`, `lokasi_*` | `max` sesuai | - | Cocok (0) | - |
+  | Berkas KIP-K | `category` | `string` | `kipk_documents.category` varchar(255) | **Tidak cocok** | `max:100` |
+  | Berkas KIP-K | `title` (255), `tahap`, file | sesuai | - | Cocok (0) | - |
+  | Sertifikat manual dan massal | `email_penerima`, `recipients.*.email` | `email` | `sertifikat.email_penerima` varchar(255); alamat RFC bisa 318 karakter | **Tidak cocok** | `max:255` |
+  | Sertifikat (manual, impor, tampilan, pencabutan, penandatangan, templat) | nama/institusi/predikat/NIM/alasan/teks | `max` sesuai | - | Cocok (0), dituntaskan pada tugas sebelumnya | - |
+  | Presensi publik `/absensi` | `activity_id` | `required` saja | dicari ke `kegiatan.id` (bigint) | **Tidak cocok**: nilai bukan angka menjadi galat tipe di PostgreSQL | `integer min:1` |
+  | Impor daftar penerima KIP-K (CSV) | `nim`, `nama_lengkap`, `program_studi`, `status_penetapan` | tidak ada batas panjang | varchar 30 / 255 / 255 / 50 | **Tidak cocok**: satu baris panjang membuat seluruh impor 500 | Baris ditandai galat "NIM terlalu panjang (31 dari 30 karakter)" dan dilewati |
+  | Impor penerima KIP-K dan master mahasiswa | nama berkas | tanpa batas | `sumber` varchar(150) ("Impor daftar UNUSA (nama berkas)") | **Tidak cocok** | nama berkas maksimal 100 karakter |
+  | Impor master mahasiswa (CSV) | `nim` 30, `nama_lengkap` 255, `email_kampus` 255, `angkatan`, `semester`, `status_aktif` | sudah divalidasi per baris | sesuai | Cocok (0) | - |
+  | Catatan audit (dipakai hampir semua aksi admin) | `audit_logs.description` | tanpa pemotongan | varchar(255) | **Tidak cocok**: nama kegiatan/pengguna 255 karakter + kalimat tetap, atau alasan hingga 500 karakter, melampaui kolom; aksi gagal 500 di PostgreSQL (kadang setelah data tersimpan) | Dipotong 255 karakter di `AuditLog::record` (satu titik; **satu-satunya perubahan di luar aturan validasi**, alternatifnya menurunkan batas puluhan bidang menjadi sekitar 150) |
+  | Pengguna (semua peran), `/daftar` umum, pendaftaran UNUSA, profil, ganti kata sandi | name/email/nim/phone/angkatan/prodi/university/asal_kampus/program_studi_teks | `max` 255/50/20/10/100/150/30 | varchar(255) | Cocok (0) | - |
+  | Penilaian karya (nilai dan catatan, impor CSV/XLSX) | `final_score`, `judge_notes` | `numeric 0-100`, `max:2000` | `nilai` decimal(5,2), `catatan_juri` text | Cocok (0) | - |
+  | Presensi mandiri, check-in tiket, pemindai, karya peserta, klaim KIP-K | nama/NIM/prodi/email/telepon/alasan/judul/deskripsi/nomor | `max` sesuai | varchar(255)/text | Cocok (0) | - |
+  | Pengaturan verifikasi | `teks_pengantar` | `max:500` | text | Cocok (0) | - |
+  | Formulir masuk (pencairan, pelaporan, monev) | seluruh isian | **tidak ada validasi**; `request->except('_token')` disimpan ke kolom `answers` | `custom_form_submissions.answers` | Tidak berisiko panjang kolom (json/teks); tidak diubah karena struktur isian dinamis; lihat catatan | - |
+  | `Admin\DashboardController::storeKegiatan` (kegiatan lama `activities`) | category/type/date_text/location/price/quota/xp_points | tanpa batas | varchar(255)/integer | Tidak cocok, tetapi **tidak dirutekan** (tidak ada di `route:list`) | tidak diubah |
+
+  Catatan di luar cakupan perbaikan: isian waktu bebas (`waktu_mulai`/`waktu_selesai` pemindai presensi, `PresensiScannerController.php:188-191`) hanya divalidasi sebagai `string` lalu dikonversi `Wib::keUtc`; perilaku untuk teks yang bukan tanggal belum diuji dan tidak diubah.
+
+  **Tes** (SQLite dan PostgreSQL): `PengerasanBatasInputTest` (14 tes) mengirim batas tepat (lolos) dan batas+1 (galat validasi, bukan 500) untuk setiap bidang yang diperbaiki; pada eksekusi pertama sebelum perbaikan 12 dari 14 gagal (satu di antaranya karena salah nama rute di tes, segera diperbaiki; dua yang lulus adalah tes presensi publik dan impor nilai terpanjang yang kebetulan lulus di SQLite) dan semuanya lulus sesudahnya di kedua database. `KarakterisasiModulPembayaranTest` (13 tes): 6 lulus dan 7 dilewati dengan alasan "menunggu keputusan pemilik proyek: perbaikan modul pembayaran".
+  - **Perubahan tes lama**: tidak ada.
+  - **Migrasi baru**: tidak ada.

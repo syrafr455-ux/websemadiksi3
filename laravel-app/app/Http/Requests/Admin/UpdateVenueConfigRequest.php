@@ -33,7 +33,7 @@ class UpdateVenueConfigRequest extends FormRequest
     {
         return [
             // Kapasitas eksplisit; bila kosong dihitung dari denah (kursi non-panitia, tidak diblokir).
-            'total_seats' => ['nullable', 'integer', 'min:1'],
+            'total_seats' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'booking_opens_at' => ['nullable', 'date'],
             'booking_closes_at' => [
                 'nullable',
@@ -77,6 +77,7 @@ class UpdateVenueConfigRequest extends FormRequest
         return [
             'total_seats.integer' => 'Jumlah kapasitas kursi harus berupa angka bulat.',
             'total_seats.min' => 'Kapasitas kursi minimal adalah 1.',
+            'total_seats.max' => 'Kapasitas kursi maksimal 100.000.',
             'layout_changed.required' => 'Flag perubahan denah (layout_changed) wajib ditentukan.',
             'is_seat_booking_active.required' => 'Status aktif booking kursi wajib ditentukan.',
             'layout_config.required_if' => 'Konfigurasi denah kursi (layout_config) wajib diisi ketika denah diubah.',

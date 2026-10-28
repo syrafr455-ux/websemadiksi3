@@ -714,7 +714,7 @@ class DashboardController extends Controller
         Gate::authorize('create', KipkDocument::class);
 
         $request->validate([
-            'category' => ['required', 'string'],
+            'category' => ['required', 'string', 'max:100'],
             'tahap' => ['required', 'integer', 'in:1,2,3'],
             'title' => ['required', 'string', 'max:255'],
             'document_file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],

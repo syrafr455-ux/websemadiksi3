@@ -34,7 +34,12 @@ trait AlurImporCsv
     public function unggah(Request $request): RedirectResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'],
+            'file' => ['required', 'file', 'mimes:csv,txt', 'max:5120', function ($atribut, $nilai, $gagal) {
+                // Nama berkas dicatat pada kolom sumber (varchar 150) bersama awalan keterangan impor.
+                if (mb_strlen($nilai->getClientOriginalName()) > 100) {
+                    $gagal('Nama berkas terlalu panjang (maksimal 100 karakter). Ubah nama berkas lalu unggah ulang.');
+                }
+            }],
         ], [
             'file.required' => 'Pilih file CSV yang akan diimpor.',
             'file.mimes' => 'File harus berformat CSV (simpan dari Excel sebagai "CSV UTF-8").',

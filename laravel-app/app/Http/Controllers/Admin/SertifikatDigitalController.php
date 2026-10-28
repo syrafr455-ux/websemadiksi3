@@ -213,7 +213,7 @@ class SertifikatDigitalController extends Controller
             'recipients.*.nama' => ['required', 'string', 'max:255'],
             'recipients.*.asal_institusi' => ['required', 'string', 'max:255'],
             'recipients.*.predikat' => ['nullable', 'string', 'max:100'],
-            'recipients.*.email' => ['nullable', 'email'],
+            'recipients.*.email' => ['nullable', 'email', 'max:255'],
             'recipients.*.nim' => ['nullable', 'string', 'max:50'],
         ]);
 
@@ -395,7 +395,7 @@ class SertifikatDigitalController extends Controller
             'asal_institusi' => ['required', 'string', 'max:255'],
             'jenis' => ['required', 'in:peserta,juri,pembicara,juara'],
             'predikat' => ['nullable', 'string', 'max:100'],
-            'email_penerima' => ['nullable', 'email'],
+            'email_penerima' => ['nullable', 'email', 'max:255'],
             'nim_penerima' => ['nullable', 'string', 'max:50'],
             'keterangan_publik' => ['nullable', 'string', 'max:500'],
             'certificate_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
