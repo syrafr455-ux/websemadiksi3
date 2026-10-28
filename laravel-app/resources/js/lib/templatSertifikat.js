@@ -5,7 +5,6 @@ export const HALAMAN_MM = { landscape: [297, 210], portrait: [210, 297] };
 export const QR_MIN_MM = 18;
 export const QR_MAKS_MM = 60;
 export const MARGIN_QR_MM = 5;
-export const WAJIB = ['nama', 'qr', 'nomor_seri'];
 export const LANGKAH_PANAH = 0.5;
 export const LANGKAH_PANAH_SHIFT = 2;
 export const AMBANG_SNAP = 1.2;
@@ -47,6 +46,11 @@ export function pikselKePersen(px, ukuranPx) {
 export function jepitElemen(el, kunci, orientasi) {
     const [w, h] = HALAMAN_MM[orientasi] ?? HALAMAN_MM.landscape;
     const salinan = { ...el, x: Number(el.x), y: Number(el.y), lebar: Number(el.lebar), tinggi: Number(el.tinggi) };
+    const tampil = el.tampil !== undefined ? Boolean(el.tampil) : true;
+
+    if (!tampil) {
+        return { ...salinan, tampil: false };
+    }
 
     if (kunci === 'qr') {
         const sisi = batas((salinan.lebar / 100) * w, QR_MIN_MM, QR_MAKS_MM);
@@ -70,7 +74,7 @@ export function jepitElemen(el, kunci, orientasi) {
         tinggi,
         x: bulat(batas(salinan.x, 0, 100 - lebar)),
         y: bulat(batas(salinan.y, 0, 100 - tinggi)),
-        tampil: WAJIB.includes(kunci) ? true : salinan.tampil,
+        tampil: true,
     };
 }
 
@@ -152,7 +156,7 @@ export function normalisasiKeadaan({ orientasi, layout, teks }, bawaanTeks = {})
         const el = layout[kunci] ?? {};
         const baku = {
             rata: String(el.rata ?? ''), tebal: Boolean(el.tebal), warna: String(el.warna ?? '').toLowerCase(), font: String(el.font ?? ''),
-            tampil: WAJIB.includes(kunci) ? true : Boolean(el.tampil),
+            tampil: el.tampil !== undefined ? Boolean(el.tampil) : true,
         };
         for (const prop of PROP_ANGKA) baku[prop] = bulat(Number(el[prop] ?? 0));
         tata[kunci] = Object.fromEntries(Object.entries(baku).sort(([a], [b]) => (a < b ? -1 : 1)));
@@ -209,8 +213,40 @@ export function aturSisiQr(el, orientasi, mm) {
     return ubahUkuran(el, 'qr', orientasi, (Number(mm) / w) * 100, (Number(mm) / h) * 100);
 }
 
-/** Sembunyikan elemen opsional. Nama, QR, dan nomor seri tidak pernah bisa disembunyikan. */
+/** Hapus elemen dari sertifikat: hanya menandainya tersembunyi (tampil: false), posisi terakhirnya tetap tersimpan. */
 export function sembunyikanElemen(layout, kunci, orientasi) {
-    if (WAJIB.includes(kunci) || !layout[kunci]) return layout;
+    if (!layout[kunci]) return layout;
     return { ...layout, [kunci]: jepitElemen({ ...layout[kunci], tampil: false }, kunci, orientasi) };
+}
+
+/** Pulihkan elemen yang dihapus; kembali ke posisi terakhirnya (dijepit ke halaman bila perlu). */
+export function pulihkanElemen(layout, kunci, orientasi) {
+    if (!layout[kunci]) return layout;
+    return { ...layout, [kunci]: jepitElemen({ ...layout[kunci], tampil: true }, kunci, orientasi) };
+}
+
+/** Kunci elemen yang sedang dihapus, urut seperti daftar elemen. */
+export function elemenTerhapus(layout) {
+    return Object.keys(LABEL_ELEMEN).filter((kunci) => layout[kunci] && layout[kunci].tampil === false);
+}
+
+const PERINGATAN_VERIFIKASI = 'Tanpa kode QR atau nomor seri, sertifikat ini sulit diverifikasi oleh pihak lain.';
+const PERINGATAN_NAMA = 'Sertifikat tanpa nama penerima tidak bermakna.';
+
+/** Peringatan (bukan penghalang) untuk elemen penting yang dihapus. */
+export function peringatanHapus(layout) {
+    const terhapus = (kunci) => layout[kunci]?.tampil === false;
+    const hasil = [];
+    if (terhapus('qr') || terhapus('nomor_seri')) hasil.push(PERINGATAN_VERIFIKASI);
+    if (terhapus('nama')) hasil.push(PERINGATAN_NAMA);
+    return hasil;
+}
+
+/** Delete atau Backspace menghapus elemen terpilih, kecuali fokus di kolom isian (input, textarea, select, contenteditable). */
+export function tombolHapusDitekan(event) {
+    if (event.key !== 'Delete' && event.key !== 'Backspace') return false;
+    if (event.ctrlKey || event.metaKey || event.altKey) return false;
+    const target = event.target ?? {};
+    const tag = String(target.tagName ?? '').toUpperCase();
+    return !(['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || target.isContentEditable);
 }

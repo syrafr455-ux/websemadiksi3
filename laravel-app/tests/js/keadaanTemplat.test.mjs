@@ -7,9 +7,14 @@ import {
     aturSisiQr,
     adaPerubahan,
     galatTeks,
+    jepitElemen,
     normalisasiKeadaan,
     panjangTeks,
+    elemenTerhapus,
+    peringatanHapus,
+    pulihkanElemen,
     sembunyikanElemen,
+    tombolHapusDitekan,
     sisiQrMm,
     teksUntukDisimpan,
 } from '../../resources/js/lib/templatSertifikat.js';
@@ -124,10 +129,64 @@ test('QR diatur dalam milimeter, tetap persegi dan dalam batas 18 sampai 60 mm',
     }
 });
 
-test('elemen wajib tidak bisa disembunyikan; elemen opsional bisa', () => {
+test('semua elemen bisa dihapus lewat penanda tersembunyi; dipulihkan di posisi terakhir dan tanpa perubahan bersih', () => {
+    // Data dari server sudah dijepit ke halaman (QR persegi, margin); fixture disamakan.
+    const layout = Object.fromEntries(Object.entries(layoutBawaan()).map(([k, el]) => [k, jepitElemen(el, k, 'landscape')]));
+    const awal = normalisasiKeadaan(templat({ layout }), teksBawaan());
+
+    for (const kunci of ELEMEN) {
+        const tampilAsli = layout[kunci].tampil;
+        const terhapus = sembunyikanElemen(layout, kunci, 'landscape');
+        assert.equal(terhapus[kunci].tampil, false, kunci);
+        assert.equal(terhapus[kunci].x, layout[kunci].x, 'posisi terakhir tetap');
+        assert.equal(layout[kunci].tampil, tampilAsli, 'layout asli tidak dimutasi');
+
+        const pulih = pulihkanElemen(terhapus, kunci, 'landscape');
+        assert.equal(pulih[kunci].tampil, true, kunci);
+        assert.equal(pulih[kunci].x, layout[kunci].x);
+        if (layout[kunci].tampil) {
+            assert.equal(adaPerubahan(awal, normalisasiKeadaan(templat({ layout: pulih }), teksBawaan())), false, `hapus lalu pulihkan ${kunci} bukan perubahan`);
+            assert.equal(adaPerubahan(awal, normalisasiKeadaan(templat({ layout: terhapus }), teksBawaan())), true, `hapus ${kunci} adalah perubahan`);
+        }
+    }
+});
+
+test('daftar elemen yang dihapus mengikuti urutan elemen dan kosong bila tidak ada', () => {
     const layout = layoutBawaan();
-    for (const wajib of ['nama', 'qr', 'nomor_seri']) assert.equal(sembunyikanElemen(layout, wajib, 'landscape')[wajib].tampil, true, wajib);
-    assert.equal(sembunyikanElemen(layout, 'tanggal', 'landscape').tanggal.tampil, false);
+    assert.deepEqual(elemenTerhapus(layout).filter((k) => !k.startsWith('penandatangan_')), []);
+    const hapus = sembunyikanElemen(sembunyikanElemen(layout, 'tanggal', 'landscape'), 'asal_institusi', 'landscape');
+    assert.deepEqual(elemenTerhapus(hapus).filter((k) => !k.startsWith('penandatangan_')), ['asal_institusi', 'tanggal']);
+});
+
+test('peringatan hanya muncul saat QR, nomor seri, atau nama dihapus dan hilang saat dipulihkan', () => {
+    const layout = layoutBawaan();
+    assert.deepEqual(peringatanHapus(layout), []);
+
+    const tanpaQr = sembunyikanElemen(layout, 'qr', 'landscape');
+    assert.deepEqual(peringatanHapus(tanpaQr), ['Tanpa kode QR atau nomor seri, sertifikat ini sulit diverifikasi oleh pihak lain.']);
+    assert.deepEqual(peringatanHapus(sembunyikanElemen(tanpaQr, 'nomor_seri', 'landscape')), ['Tanpa kode QR atau nomor seri, sertifikat ini sulit diverifikasi oleh pihak lain.'], 'satu kalimat saja');
+
+    const tanpaNama = sembunyikanElemen(layout, 'nama', 'landscape');
+    assert.deepEqual(peringatanHapus(tanpaNama), ['Sertifikat tanpa nama penerima tidak bermakna.']);
+    assert.equal(peringatanHapus(sembunyikanElemen(sembunyikanElemen(layout, 'nama', 'landscape'), 'qr', 'landscape')).length, 2);
+
+    assert.deepEqual(peringatanHapus(pulihkanElemen(tanpaQr, 'qr', 'landscape')), []);
+    assert.deepEqual(peringatanHapus(sembunyikanElemen(layout, 'tanggal', 'landscape')), [], 'elemen lain tidak memicu peringatan');
+});
+
+test('tombol Delete dan Backspace menghapus elemen, kecuali fokus di kolom input, textarea, select, atau isian yang dapat diedit', () => {
+    const tombol = (key, tag, ekstra = {}) => ({ key, target: { tagName: tag, isContentEditable: false, ...ekstra }, ctrlKey: false, metaKey: false, altKey: false });
+
+    assert.equal(tombolHapusDitekan(tombol('Delete', 'DIV')), true);
+    assert.equal(tombolHapusDitekan(tombol('Backspace', 'DIV')), true);
+    assert.equal(tombolHapusDitekan(tombol('Delete', 'BODY')), true);
+    for (const tag of ['INPUT', 'TEXTAREA', 'SELECT']) {
+        assert.equal(tombolHapusDitekan(tombol('Delete', tag)), false, tag);
+        assert.equal(tombolHapusDitekan(tombol('Backspace', tag)), false, tag);
+    }
+    assert.equal(tombolHapusDitekan(tombol('Delete', 'DIV', { isContentEditable: true })), false);
+    assert.equal(tombolHapusDitekan(tombol('a', 'DIV')), false);
+    assert.equal(tombolHapusDitekan({ ...tombol('Delete', 'DIV'), ctrlKey: true }), false);
 });
 
 test('klik atau geser nol piksel pada elemen tidak dihitung sebagai perubahan (penyebab status berubah palsu)', async () => {

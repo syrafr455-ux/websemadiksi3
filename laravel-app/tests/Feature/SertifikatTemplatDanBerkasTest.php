@@ -90,9 +90,6 @@ class SertifikatTemplatDanBerkasTest extends TestCase
             'warna tidak valid' => [['nama' => ['warna' => 'red; background:url(x)']], 'layout.nama.warna'],
             'font di luar daftar putih' => [['nama' => ['font' => 'Comic Sans']], 'layout.nama.font'],
             'rata asing' => [['nama' => ['rata' => 'justify']], 'layout.nama.rata'],
-            'nama disembunyikan' => [['nama' => ['tampil' => false]], 'layout.nama.tampil'],
-            'qr disembunyikan' => [['qr' => ['tampil' => false]], 'layout.qr.tampil'],
-            'nomor seri disembunyikan' => [['nomor_seri' => ['tampil' => false]], 'layout.nomor_seri.tampil'],
         ];
 
         foreach ($kasus as $nama => [$layout, $kunciGalat]) {
@@ -202,12 +199,14 @@ class SertifikatTemplatDanBerkasTest extends TestCase
 
     public function test_simpan_templat_menolak_data_tidak_sah_dengan_pesan_indonesia(): void
     {
-        $this->actingAs($this->admin)
+        $res = $this->actingAs($this->admin)
             ->putJson(route('admin.kegiatan.sertifikat.templat', $this->kegiatan->id), [
-                'orientasi' => 'landscape', 'layout' => ['qr' => ['tampil' => false]], 'teks' => [],
+                'orientasi' => 'landscape', 'layout' => ['elemen_tidak_dikenal' => ['x' => 10]], 'teks' => [],
             ])
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['layout.qr.tampil']);
+            ->assertJsonValidationErrors(['layout.elemen_tidak_dikenal']);
+
+        $this->assertSame("Elemen 'elemen_tidak_dikenal' tidak dikenal.", $res->json('errors')['layout.elemen_tidak_dikenal'][0]);
     }
 
     public function test_templat_per_jenis_menimpa_tata_letak_dan_teks_hanya_untuk_jenis_itu(): void
@@ -464,5 +463,179 @@ class SertifikatTemplatDanBerkasTest extends TestCase
             $this->assertTrue($berkas->adaBerkas(), "Berkas untuk nama '{$nama}' gagal dibuat: ".$berkas->file_alasan_gagal);
             $this->assertStringStartsWith('%PDF', Storage::disk('local')->get($berkas->file_pdf_path));
         }
+    }
+
+    public function test_semua_elemen_dapat_disembunyikan_dan_nilainya_bertahan_serta_qr_di_luar_batas_tersimpan(): void
+    {
+        $url = route('admin.kegiatan.sertifikat.templat', $this->kegiatan->id);
+
+        // 1. Simpan tata letak dengan tiap elemen tersembunyi secara bergantian lalu muat ulang, nilainya bertahan
+        foreach (TataLetak::ELEMEN as $kunci) {
+            $layout = TataLetak::bawaan();
+            $layout[$kunci]['tampil'] = false;
+
+            $this->actingAs($this->admin)->putJson($url, [
+                'orientasi' => 'landscape',
+                'layout' => $layout,
+                'teks' => [],
+            ])->assertOk();
+
+            $segar = app(TemplatSertifikatService::class)->untukEditor($this->kegiatan);
+            $this->assertFalse($segar['layout'][$kunci]['tampil'], "Elemen '{$kunci}' seharusnya tersembunyi setelah disimpan.");
+        }
+
+        // 2. Kunci tak dikenal ditolak 422 dengan pesan Indonesia
+        $resKunciAsing = $this->actingAs($this->admin)->putJson($url, [
+            'orientasi' => 'landscape',
+            'layout' => ['elemen_tidak_dikenal' => ['x' => 10, 'y' => 10]],
+            'teks' => [],
+        ])->assertStatus(422);
+        $resKunciAsing->assertJsonValidationErrors(['layout.elemen_tidak_dikenal']);
+        $this->assertSame("Elemen 'elemen_tidak_dikenal' tidak dikenal.", $resKunciAsing->json('errors')['layout.elemen_tidak_dikenal'][0]);
+
+        // 3. QR tersembunyi dengan ukuran di luar batas tetap tersimpan
+        $layoutQrDiLuarBatas = TataLetak::bawaan();
+        $layoutQrDiLuarBatas['qr'] = array_merge($layoutQrDiLuarBatas['qr'], [
+            'x' => 150,
+            'y' => 120,
+            'lebar' => 999,
+            'tinggi' => 999,
+            'tampil' => false,
+        ]);
+        $this->actingAs($this->admin)->putJson($url, [
+            'orientasi' => 'landscape',
+            'layout' => $layoutQrDiLuarBatas,
+            'teks' => [],
+        ])->assertOk();
+
+        $templatTersimpan = SertifikatTemplat::where('kegiatan_id', $this->kegiatan->id)->whereNull('jenis')->first();
+        $this->assertFalse($templatTersimpan->layout['qr']['tampil']);
+        $this->assertEquals(999, $templatTersimpan->layout['qr']['lebar']);
+
+        // 4. "Kembalikan ke Bawaan" mengosongkan penanda
+        $this->actingAs($this->admin)->deleteJson(route('admin.kegiatan.sertifikat.templat.reset', $this->kegiatan->id), [
+            'jenis' => null,
+        ])->assertOk();
+        $setelahReset = app(TemplatSertifikatService::class)->untukEditor($this->kegiatan);
+        $this->assertTrue($setelahReset['layout']['nama']['tampil']);
+        $this->assertTrue($setelahReset['layout']['qr']['tampil']);
+        $this->assertTrue($setelahReset['layout']['nomor_seri']['tampil']);
+    }
+
+    public function test_pdf_dan_html_melewati_elemen_tersembunyi_tanpa_gambar_qr_dan_semua_tersembunyi_tetap_berhasil(): void
+    {
+        $pembuat = app(BuatPdfSertifikat::class);
+        $sertifikat = $this->sertifikat(['nama_penerima' => 'Nama Khusus Tersembunyi']);
+
+        // 1. Elemen nama tersembunyi: hasil render tidak memuat teks elemen nama dan elemen lain tetap ada
+        $layoutNamaSembunyi = TataLetak::bawaan();
+        $layoutNamaSembunyi['nama']['tampil'] = false;
+        $htmlNamaSembunyi = $pembuat->html(
+            $layoutNamaSembunyi,
+            ['judul' => 'SERTIFIKAT UJI', 'pengantar' => 'Diberikan kepada', 'penutup' => 'Atas partisipasi'],
+            'landscape',
+            null,
+            ['nama' => 'Nama Khusus Tersembunyi', 'nomor' => 'CERT-999'],
+            $sertifikat->verification_url,
+            [],
+        );
+        $this->assertStringNotContainsString('Nama Khusus Tersembunyi', $htmlNamaSembunyi);
+        $this->assertStringContainsString('SERTIFIKAT UJI', $htmlNamaSembunyi);
+        $this->assertStringContainsString('CERT-999', $htmlNamaSembunyi);
+
+        // 2. Dengan QR tersembunyi, tidak ada gambar QR
+        $layoutQrSembunyi = TataLetak::bawaan();
+        $layoutQrSembunyi['qr']['tampil'] = false;
+        $htmlQrSembunyi = $pembuat->html(
+            $layoutQrSembunyi,
+            ['judul' => 'SERTIFIKAT UJI', 'pengantar' => 'Diberikan kepada', 'penutup' => 'Atas partisipasi'],
+            'landscape',
+            null,
+            ['nama' => 'Budi', 'nomor' => 'CERT-999'],
+            $sertifikat->verification_url,
+            [],
+        );
+        $this->assertStringNotContainsString('data:image/svg+xml', $htmlQrSembunyi);
+
+        // 3. Dengan semua elemen tersembunyi, PDF tetap terbuat tanpa galat
+        $layoutSemuaSembunyi = TataLetak::bawaan();
+        foreach (TataLetak::ELEMEN as $k) {
+            $layoutSemuaSembunyi[$k]['tampil'] = false;
+        }
+        $pdfSemuaSembunyi = $pembuat->pdf(
+            $layoutSemuaSembunyi,
+            ['judul' => 'SERTIFIKAT', 'pengantar' => 'Kepada', 'penutup' => 'Penutup'],
+            'landscape',
+            null,
+            ['nama' => 'Budi', 'nomor' => 'CERT-999'],
+            $sertifikat->verification_url,
+            [],
+        );
+        $this->assertStringStartsWith('%PDF', $pdfSemuaSembunyi);
+    }
+
+    public function test_data_tata_letak_lama_tanpa_penanda_tersembunyi_tetap_terbaca_tampil(): void
+    {
+        // Data lama tanpa kunci 'tampil' pada layout
+        $layoutLama = [
+            'nama' => ['x' => 10, 'y' => 30, 'lebar' => 80, 'tinggi' => 10, 'ukuran_font' => 24, 'rata' => 'tengah', 'tebal' => true, 'warna' => '#000000', 'font' => 'DejaVu Sans'],
+            'qr' => ['x' => 85, 'y' => 75, 'lebar' => 10, 'tinggi' => 14, 'ukuran_font' => 8, 'rata' => 'tengah', 'tebal' => false, 'warna' => '#000000', 'font' => 'DejaVu Sans'],
+        ];
+
+        SertifikatTemplat::create([
+            'kegiatan_id' => $this->kegiatan->id,
+            'jenis' => null,
+            'orientasi' => 'landscape',
+            'layout' => $layoutLama,
+            'teks' => [],
+            'versi' => 1,
+        ]);
+
+        $editor = app(TemplatSertifikatService::class)->untukEditor($this->kegiatan);
+        $this->assertTrue($editor['layout']['nama']['tampil']);
+        $this->assertTrue($editor['layout']['qr']['tampil']);
+        $this->assertTrue($editor['layout']['nomor_seri']['tampil']);
+    }
+
+    public function test_pratinjau_dengan_qr_dan_semua_elemen_tersembunyi_tetap_menghasilkan_pdf(): void
+    {
+        $url = route('admin.kegiatan.sertifikat.pratinjau', $this->kegiatan->id);
+
+        $layoutQr = TataLetak::bawaan();
+        $layoutQr['qr'] = array_merge($layoutQr['qr'], ['tampil' => false, 'lebar' => 999, 'x' => 150]);
+        $this->actingAs($this->admin)->post($url, ['orientasi' => 'landscape', 'layout' => $layoutQr, 'teks' => []])->assertOk();
+
+        $semua = TataLetak::bawaan();
+        foreach (TataLetak::ELEMEN as $kunci) {
+            $semua[$kunci]['tampil'] = false;
+        }
+        $res = $this->actingAs($this->admin)->post($url, ['orientasi' => 'landscape', 'layout' => $semua, 'teks' => []])->assertOk();
+        $this->assertStringStartsWith('%PDF', $res->getContent());
+    }
+
+    public function test_templat_baru_dengan_elemen_dihapus_tidak_mengubah_berkas_yang_sudah_ada_tetapi_berlaku_untuk_berkas_baru(): void
+    {
+        $pemilikLama = User::factory()->mahasiswaKipk()->create();
+        $pemilikBaru = User::factory()->mahasiswaKipk()->create();
+        $lama = $this->sertifikat(['user_id' => $pemilikLama->id, 'penerima_key' => 'user:'.$pemilikLama->id]);
+        $baru = $this->sertifikat(['user_id' => $pemilikBaru->id, 'penerima_key' => 'user:'.$pemilikBaru->id]);
+
+        $this->actingAs($pemilikLama)->get(route('sertifikat.download', $lama->id))->assertOk();
+        $hashLama = $lama->fresh()->document_hash;
+        $nomorBaru = $baru->nomor_sertifikat;
+
+        $layout = TataLetak::bawaan();
+        foreach (['asal_institusi', 'tanggal', 'penandatangan_1', 'nomor_seri', 'qr'] as $kunci) {
+            $layout[$kunci]['tampil'] = false;
+        }
+        $this->actingAs($this->admin)->putJson(route('admin.kegiatan.sertifikat.templat', $this->kegiatan->id), ['orientasi' => 'landscape', 'layout' => $layout, 'teks' => []])->assertOk();
+
+        $this->actingAs($pemilikLama)->get(route('sertifikat.download', $lama->id))->assertOk();
+        $this->assertSame($hashLama, $lama->fresh()->document_hash, 'Berkas yang sudah pernah dibuat tidak diubah oleh templat baru.');
+
+        $this->actingAs($pemilikBaru)->get(route('sertifikat.download', $baru->id))->assertOk();
+        $this->assertNotNull($baru->fresh()->document_hash);
+        $this->assertSame($nomorBaru, $baru->fresh()->nomor_sertifikat, 'Nomor seri tetap tersimpan walau tidak dicetak.');
+        $this->assertSame(StatusSertifikat::Aktif, $baru->fresh()->status);
     }
 }

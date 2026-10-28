@@ -40,6 +40,11 @@ class TemplatSertifikatService
 
         $orientasi = $timpa?->orientasi ?? $dasar?->orientasi ?? 'landscape';
         $layout = array_replace(TataLetak::bawaan($orientasi), $timpa?->layout ?? $dasar?->layout ?? []);
+        foreach ($layout as $k => $el) {
+            if (is_array($el) && ! array_key_exists('tampil', $el)) {
+                $layout[$k]['tampil'] = true;
+            }
+        }
         $teks = array_replace(
             TeksTemplat::bawaan()[$jenis->value],
             $dasar?->teks[$jenis->value] ?? [],
@@ -65,19 +70,35 @@ class TemplatSertifikatService
         $baris = SertifikatTemplat::where('kegiatan_id', $kegiatan->id)->get();
         $dasar = $baris->firstWhere('jenis', null);
 
+        $layoutEditor = array_replace(TataLetak::bawaan($dasar?->orientasi ?? 'landscape'), $dasar?->layout ?? []);
+        foreach ($layoutEditor as $k => $el) {
+            if (is_array($el) && ! array_key_exists('tampil', $el)) {
+                $layoutEditor[$k]['tampil'] = true;
+            }
+        }
+
         return [
             'orientasi' => $dasar?->orientasi ?? 'landscape',
-            'layout' => array_replace(TataLetak::bawaan($dasar?->orientasi ?? 'landscape'), $dasar?->layout ?? []),
+            'layout' => $layoutEditor,
             'teks' => array_replace_recursive(TeksTemplat::bawaan(), $dasar?->teks ?? []),
             'latar_url' => $dasar?->latar_path ? route('admin.kegiatan.sertifikat.latar', [$kegiatan->id]).'?v='.$dasar->versi : null,
             'versi' => $dasar?->versi ?? 0,
             'tersimpan' => $dasar !== null,
-            'penimpa' => $baris->whereNotNull('jenis')->mapWithKeys(fn (SertifikatTemplat $t) => [$t->jenis => [
-                'orientasi' => $t->orientasi,
-                'layout' => array_replace(TataLetak::bawaan($t->orientasi), $t->layout ?? []),
-                'teks' => $t->teks[$t->jenis] ?? [],
-                'versi' => $t->versi,
-            ]])->all(),
+            'penimpa' => $baris->whereNotNull('jenis')->mapWithKeys(function (SertifikatTemplat $t) {
+                $layoutPenimpa = array_replace(TataLetak::bawaan($t->orientasi), $t->layout ?? []);
+                foreach ($layoutPenimpa as $k => $el) {
+                    if (is_array($el) && ! array_key_exists('tampil', $el)) {
+                        $layoutPenimpa[$k]['tampil'] = true;
+                    }
+                }
+
+                return [$t->jenis => [
+                    'orientasi' => $t->orientasi,
+                    'layout' => $layoutPenimpa,
+                    'teks' => $t->teks[$t->jenis] ?? [],
+                    'versi' => $t->versi,
+                ]];
+            })->all(),
             'bawaan' => ['landscape' => TataLetak::bawaan('landscape'), 'portrait' => TataLetak::bawaan('portrait'), 'teks' => TeksTemplat::bawaan()],
             'aturan' => [
                 'font' => TataLetak::FONT,

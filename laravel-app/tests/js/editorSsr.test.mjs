@@ -118,18 +118,85 @@ test('editor SSR: pengeditan teks ada di bagian lipat tertutup dengan penghitung
     assert.doesNotMatch(html, /text-rose-[0-9]+[^"]*">\d+\/\d+/, 'penghitung tidak merah selama tidak melebihi');
 });
 
-test('editor SSR: panel elemen terpilih; nama dan QR tidak punya tombol Sembunyikan, elemen opsional punya', () => {
-    const panel = (kunci) => render(templatContoh(), { terpilihAwal: kunci });
+const semuaTampil = () => {
+    const layout = layoutContoh();
+    for (const el of Object.values(layout)) el.tampil = true;
+    return layout;
+};
+const hitung = (html, teks) => html.split(teks).length - 1;
 
-    assert.match(panel('nama'), /Nama penerima/);
-    assert.ok(!panel('nama').includes('Sembunyikan'));
-    assert.match(panel('qr'), /Ukuran \(mm\)/);
-    assert.ok(!panel('qr').includes('Sembunyikan'));
-    assert.ok(!panel('nomor_seri').includes('Sembunyikan'));
-    assert.match(panel('tanggal'), />Sembunyikan</);
-    assert.match(panel('tanggal'), /Ukuran huruf/);
-    assert.match(panel('tanggal'), /Rata teks/);
-    assert.match(panel('tanggal'), /Warna/);
+test('editor SSR: setiap elemen terpilih punya tombol Hapus di kanvas dan di panel kanan (label teks, bukan ikon saja)', () => {
+    for (const kunci of ELEMEN) {
+        const html = render(templatContoh({ layout: semuaTampil() }), { terpilihAwal: kunci });
+
+        assert.match(html, /data-testid="hapus-kanvas"[^>]*>Hapus<\/button>/, `${kunci}: tombol Hapus pada kanvas`);
+        assert.match(html, /data-testid="hapus-panel"[^>]*>Hapus<\/button>/, `${kunci}: tombol Hapus pada panel`);
+        assert.ok(!html.includes('Sembunyikan'), 'istilah lama tidak dipakai lagi');
+        assert.ok(!html.includes('selalu tampil'), 'tidak ada lagi elemen wajib');
+    }
+});
+
+test('editor SSR: tombol Hapus berukuran sentuh minimal 32 px dan kontras teks putih di atas rose-700 (6,06:1)', () => {
+    const html = render(templatContoh({ layout: semuaTampil() }), { terpilihAwal: 'qr' });
+    const tombol = html.match(/<button[^>]*data-testid="hapus-kanvas"[^>]*>/)[0];
+
+    assert.match(tombol, /min-h-8/, '32 px');
+    assert.match(tombol, /bg-rose-700/);
+    assert.match(tombol, /text-white/);
+});
+
+test('editor SSR: tanpa elemen terpilih, panel tidak menampilkan tombol Hapus', () => {
+    const html = render(templatContoh({ layout: semuaTampil() }), { terpilihAwal: null });
+
+    assert.ok(!html.includes('>Hapus<'));
+});
+
+test('editor SSR: baris "Elemen yang dihapus" hanya tampil bila ada, dengan tombol Tampilkan lagi per elemen', () => {
+    const bersih = render(templatContoh({ layout: semuaTampil() }), { terpilihAwal: null });
+    assert.ok(!bersih.includes('Elemen yang dihapus:'));
+    assert.ok(!bersih.includes('Tampilkan lagi'));
+
+    const layout = semuaTampil();
+    layout.asal_institusi.tampil = false;
+    layout.nomor_seri.tampil = false;
+    const html = render(templatContoh({ layout }), { terpilihAwal: null });
+    assert.match(html, /Elemen yang dihapus:/);
+    assert.match(html, /Tampilkan lagi: Asal institusi/);
+    assert.match(html, /Tampilkan lagi: Nomor seri/);
+    assert.ok(!html.includes('Tampilkan lagi: Tanggal terbit'));
+});
+
+test('editor SSR: peringatan kuning untuk QR, nomor seri, dan nama yang dihapus, hilang saat dipulihkan', () => {
+    const VERIFIKASI = 'Tanpa kode QR atau nomor seri, sertifikat ini sulit diverifikasi oleh pihak lain.';
+    const NAMA = 'Sertifikat tanpa nama penerima tidak bermakna.';
+
+    const utuh = render(templatContoh({ layout: semuaTampil() }), { terpilihAwal: null });
+    assert.ok(!utuh.includes(VERIFIKASI) && !utuh.includes(NAMA));
+
+    const tanpaQr = semuaTampil();
+    tanpaQr.qr.tampil = false;
+    const htmlQr = render(templatContoh({ layout: tanpaQr }), { terpilihAwal: null });
+    assert.equal(hitung(htmlQr, VERIFIKASI), 1);
+    assert.ok(!htmlQr.includes(NAMA));
+
+    const tanpaQrDanSeri = semuaTampil();
+    tanpaQrDanSeri.qr.tampil = false;
+    tanpaQrDanSeri.nomor_seri.tampil = false;
+    assert.equal(hitung(render(templatContoh({ layout: tanpaQrDanSeri }), { terpilihAwal: null }), VERIFIKASI), 1, 'satu kalimat untuk keduanya');
+
+    const tanpaNama = semuaTampil();
+    tanpaNama.nama.tampil = false;
+    const htmlNama = render(templatContoh({ layout: tanpaNama }), { terpilihAwal: null });
+    assert.equal(hitung(htmlNama, NAMA), 1);
+    assert.match(htmlNama, /bg-amber-500\/10[^"]*"[^>]*>Sertifikat tanpa nama penerima/, 'kuning, bukan galat merah');
+    assert.doesNotMatch(htmlNama, /role="alert"/);
+});
+
+test('editor SSR: kalimat bantu di bawah bagian teks menjelaskan cara menghilangkan teks', () => {
+    const html = render(templatContoh(), { terpilihAwal: null });
+
+    assert.match(html, /Mau menghilangkan teks\? Klik elemennya di kanvas lalu tekan Hapus\./);
+    assert.match(html, /Kolom dikosongkan berarti memakai teks bawaan/, 'perilaku kolom kosong tidak berubah');
 });
 
 test('tombol persetujuan SSR: label sesuai peran dan status', () => {

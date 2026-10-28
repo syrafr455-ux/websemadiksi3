@@ -34,11 +34,15 @@ test('elemen biasa dijepit ke dalam halaman tanpa mengubah ukurannya bila masih 
     assert.ok(hasil.x + hasil.lebar <= 100 && hasil.y + hasil.tinggi <= 100);
 });
 
-test('elemen wajib tidak pernah disembunyikan', () => {
-    for (const kunci of ['nama', 'qr', 'nomor_seri']) {
-        assert.equal(jepitElemen({ ...dasar, tampil: false }, kunci, 'landscape').tampil, true, kunci);
+test('semua elemen dapat disembunyikan; elemen tersembunyi tidak dijepit sehingga posisi terakhirnya bertahan', () => {
+    for (const kunci of ['nama', 'qr', 'nomor_seri', 'judul', 'penandatangan_1']) {
+        const hasil = jepitElemen({ ...dasar, tampil: false, x: 150, y: 120, lebar: 999 }, kunci, 'landscape');
+        assert.equal(hasil.tampil, false, kunci);
+        assert.equal(hasil.x, 150, 'posisi terakhir tidak diubah');
+        assert.equal(hasil.lebar, 999);
     }
-    assert.equal(jepitElemen({ ...dasar, tampil: false }, 'judul', 'landscape').tampil, false);
+    assert.equal(jepitElemen({ ...dasar }, 'judul', 'landscape').tampil, true);
+    assert.equal(jepitElemen({ ...dasar, tampil: undefined }, 'judul', 'landscape').tampil, true, 'data lama tanpa penanda tetap tampil');
 });
 
 for (const orientasi of ['landscape', 'portrait']) {

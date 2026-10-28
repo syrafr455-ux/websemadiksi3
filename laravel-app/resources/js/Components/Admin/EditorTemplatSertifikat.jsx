@@ -11,8 +11,8 @@ import {
     LANGKAH_PANAH_SHIFT,
     QR_MAKS_MM,
     QR_MIN_MM,
-    WAJIB,
     adaPerubahan,
+    elemenTerhapus,
     aturSisiQr,
     galatTeks,
     geserElemen,
@@ -21,12 +21,15 @@ import {
     menutupiQr,
     normalisasiKeadaan,
     panjangTeks,
+    peringatanHapus,
     penampungAsing,
     pikselKePersen,
+    pulihkanElemen,
     sembunyikanElemen,
     sisiQrMm,
     snapTengah,
     teksUntukDisimpan,
+    tombolHapusDitekan,
     ubahUkuran,
 } from '@/lib/templatSertifikat';
 
@@ -37,6 +40,8 @@ const MM_PER_PT = 0.3528;
 const kelasInput = 'w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm';
 const kelasTombol = 'px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50';
 const kelasTombolBiasa = `${kelasTombol} bg-slate-800 hover:bg-slate-700 text-slate-100`;
+// Teks putih di atas rose-700 = 6,06:1; tinggi min-h-8 = 32 px (area sentuh).
+const kelasTombolHapus = 'inline-flex items-center justify-center min-h-8 min-w-8 px-3 rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold shadow-sm focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none';
 
 /** Pesan galat dari respons axios; respons berupa Blob (pratinjau PDF) dibaca dulu sebagai JSON. */
 async function pesanGalat(err) {
@@ -114,9 +119,21 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, terpilihA
     const jenisLabel = LABEL_JENIS[jenisTeks];
     const teksAktif = teks[jenisTeks] || {};
     const tumpang = menutupiQr(layout);
-    const tersembunyi = Object.keys(layout).filter((k) => !layout[k].tampil);
+    const terhapus = elemenTerhapus(layout);
+    const peringatanElemen = peringatanHapus(layout);
 
     const setElemen = useCallback((kunci, el) => setLayout((prev) => ({ ...prev, [kunci]: el })), []);
+
+    // Hapus hanya menandai elemen tersembunyi (tampil: false); posisinya tetap tersimpan untuk dipulihkan.
+    const hapusElemen = useCallback((kunci) => {
+        setLayout((prev) => sembunyikanElemen(prev, kunci, orientasi));
+        setTerpilih((sekarang) => (sekarang === kunci ? null : sekarang));
+    }, [orientasi]);
+
+    const pulihkan = (kunci) => {
+        setLayout((prev) => pulihkanElemen(prev, kunci, orientasi));
+        setTerpilih(kunci);
+    };
 
     useEffect(() => {
         const el = kanvasRef.current;
@@ -125,6 +142,17 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, terpilihA
         pengamat.observe(el);
         return () => pengamat.disconnect();
     }, []);
+
+    // Delete atau Backspace menghapus elemen terpilih, kecuali fokus ada di kolom isian.
+    useEffect(() => {
+        const tekan = (e) => {
+            if (!terpilih || !layout[terpilih]?.tampil || !tombolHapusDitekan(e)) return;
+            e.preventDefault();
+            hapusElemen(terpilih);
+        };
+        window.addEventListener('keydown', tekan);
+        return () => window.removeEventListener('keydown', tekan);
+    }, [terpilih, layout, hapusElemen]);
 
     // Peringatan keluar halaman hanya bila ada perubahan nyata dibanding yang tersimpan.
     useEffect(() => {
@@ -269,7 +297,15 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, terpilihA
         window.open(URL.createObjectURL(new Blob([data], { type: 'application/pdf' })), '_blank', 'noopener');
     });
 
-    const el = layout[terpilih];
+    const el = terpilih && layout[terpilih]?.tampil ? layout[terpilih] : null;
+    // Posisi tombol Hapus pada kanvas: di atas sudut kanan atas elemen; bila tidak muat, di bawah sudut kanan bawah.
+    const tinggiKanvas = lebarKanvas * (h / w);
+    const hapusKanvas = el ? (() => {
+        const kananPx = Math.min(Math.max(((el.x + el.lebar) / 100) * lebarKanvas, 64), lebarKanvas);
+        const atasPx = (el.y / 100) * tinggiKanvas;
+        const diAtas = atasPx >= 36;
+        return { left: kananPx, top: diAtas ? atasPx - 34 : Math.min(((el.y + el.tinggi) / 100) * tinggiKanvas + 2, Math.max(tinggiKanvas - 34, 0)), transform: 'translateX(-100%)' };
+    })() : null;
     const pxPerMm = lebarKanvas / w;
 
     return (
@@ -329,19 +365,32 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, terpilihA
                                 )}
                             </div>
                         ))}
+                        {el && (
+                            <button
+                                type="button"
+                                data-testid="hapus-kanvas"
+                                aria-label={`Hapus ${LABEL_ELEMEN[terpilih]}`}
+                                onClick={() => hapusElemen(terpilih)}
+                                className={`absolute z-10 ${kelasTombolHapus}`}
+                                style={hapusKanvas}
+                            >Hapus</button>
+                        )}
                     </div>
                     <p className="mt-2 text-xs text-slate-400">
                         Klik elemen lalu seret ke posisi yang diinginkan. Panah menggeser {LANGKAH_PANAH}%, Shift+panah {LANGKAH_PANAH_SHIFT}%.
                     </p>
-                    {tersembunyi.length > 0 && (
-                        <p className="mt-1 text-xs text-slate-300">
-                            Disembunyikan:{' '}
-                            {tersembunyi.map((k) => (
-                                <button key={k} type="button" onClick={() => { ubahProp(k, { tampil: true }); setTerpilih(k); }} className="mr-2 underline text-emerald-300 hover:text-emerald-200">
-                                    {LABEL_ELEMEN[k]} (tampilkan)
+                    {peringatanElemen.map((kalimat) => (
+                        <p key={kalimat} role="status" className="mt-2 px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200">{kalimat}</p>
+                    ))}
+                    {terhapus.length > 0 && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-300">
+                            <span>Elemen yang dihapus:</span>
+                            {terhapus.map((k) => (
+                                <button key={k} type="button" onClick={() => pulihkan(k)} className={`${kelasTombolBiasa} min-h-8 py-1 text-xs`}>
+                                    Tampilkan lagi: {LABEL_ELEMEN[k]}
                                 </button>
                             ))}
-                        </p>
+                        </div>
                     )}
                 </div>
 
@@ -385,9 +434,7 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, terpilihA
                                     </label>
                                 </>
                             )}
-                            {WAJIB.includes(terpilih)
-                                ? <p className="text-xs text-slate-400">Elemen ini selalu tampil di sertifikat.</p>
-                                : <button type="button" onClick={() => setLayout((prev) => sembunyikanElemen(prev, terpilih, orientasi))} className={kelasTombolBiasa}>Sembunyikan</button>}
+                            <button type="button" data-testid="hapus-panel" onClick={() => hapusElemen(terpilih)} className={kelasTombolHapus}>Hapus</button>
                         </fieldset>
                     )}
                 </div>
@@ -431,6 +478,7 @@ export default function EditorTemplatSertifikat({ kegiatanId, templat, terpilihA
                         );
                     })}
                     <p className="text-xs text-slate-400">Penampung: {templat.aturan.penampung.map((p) => `{${p}}`).join(' ')}. Kolom dikosongkan berarti memakai teks bawaan.</p>
+                    <p className="text-xs text-slate-400">Mau menghilangkan teks? Klik elemennya di kanvas lalu tekan Hapus.</p>
                 </div>
             </details>
 

@@ -15,8 +15,8 @@ final class TataLetak
         'penandatangan_1', 'penandatangan_2', 'penandatangan_3', 'penandatangan_4',
     ];
 
-    /** Elemen yang selalu tampil dan tidak boleh disembunyikan. */
-    public const WAJIB = ['nama', 'qr', 'nomor_seri'];
+    /** Elemen yang selalu tampil dan tidak boleh disembunyikan. Aturan baru: semua elemen bisa disembunyikan. */
+    public const WAJIB = [];
 
     public const PROPERTI = ['x', 'y', 'lebar', 'tinggi', 'ukuran_font', 'rata', 'tebal', 'warna', 'font', 'tampil'];
 
@@ -108,25 +108,27 @@ final class TataLetak
             }
             $nilai = array_merge($hasil[$kunci], array_intersect_key($el, array_flip(self::PROPERTI)));
 
-            foreach (['x' => [0, 100], 'y' => [0, 100], 'lebar' => [1, 100], 'tinggi' => [1, 100], 'ukuran_font' => [6, 72]] as $prop => [$min, $maks]) {
-                if (! is_numeric($nilai[$prop]) || $nilai[$prop] < $min || $nilai[$prop] > $maks) {
-                    $galat["layout.{$kunci}.{$prop}"] = "Nilai {$prop} pada '{$kunci}' harus antara {$min} dan {$maks}.";
+            if (! is_bool($nilai['tebal']) || ! is_bool($nilai['tampil'])) {
+                $galat["layout.{$kunci}.tebal"] = "Nilai tebal dan tampil pada '{$kunci}' harus benar atau salah.";
+            }
+
+            // Batasan posisi, ukuran, dan halaman hanya diperiksa untuk elemen yang tampil.
+            // QR tersembunyi tidak boleh menggagalkan Simpan walaupun ukuran di luar batas.
+            if ($nilai['tampil']) {
+                foreach (['x' => [0, 100], 'y' => [0, 100], 'lebar' => [1, 100], 'tinggi' => [1, 100], 'ukuran_font' => [6, 72]] as $prop => [$min, $maks]) {
+                    if (! is_numeric($nilai[$prop]) || $nilai[$prop] < $min || $nilai[$prop] > $maks) {
+                        $galat["layout.{$kunci}.{$prop}"] = "Nilai {$prop} pada '{$kunci}' harus antara {$min} dan {$maks}.";
+                    }
                 }
             }
             if (! in_array($nilai['rata'], self::RATA, true)) {
                 $galat["layout.{$kunci}.rata"] = "Rata pada '{$kunci}' harus kiri, tengah, atau kanan.";
-            }
-            if (! is_bool($nilai['tebal']) || ! is_bool($nilai['tampil'])) {
-                $galat["layout.{$kunci}.tebal"] = "Nilai tebal dan tampil pada '{$kunci}' harus benar atau salah.";
             }
             if (! is_string($nilai['warna']) || preg_match('/^#[0-9a-fA-F]{6}$/', $nilai['warna']) !== 1) {
                 $galat["layout.{$kunci}.warna"] = "Warna pada '{$kunci}' harus berformat #RRGGBB.";
             }
             if (! in_array($nilai['font'], self::FONT, true)) {
                 $galat["layout.{$kunci}.font"] = "Font '{$nilai['font']}' pada '{$kunci}' tidak tersedia. Pilihan: ".implode(', ', self::FONT).'.';
-            }
-            if (in_array($kunci, self::WAJIB, true) && $nilai['tampil'] !== true) {
-                $galat["layout.{$kunci}.tampil"] = "Elemen '{$kunci}' wajib tampil dan tidak boleh disembunyikan.";
             }
             $hasil[$kunci] = $nilai;
         }
@@ -144,6 +146,7 @@ final class TataLetak
 
     /**
      * Jepit satu elemen ke dalam halaman. QR: persegi, sisi 18-60 mm, margin 5 mm dari tepi halaman.
+     * Elemen yang tersembunyi tidak dijepit ke batasan halaman atau batas QR agar posisi/ukuran terakhir bertahan.
      *
      * @param  array<string, mixed>  $el
      * @return array<string, mixed>
@@ -151,10 +154,20 @@ final class TataLetak
     public static function jepit(array $el, string $kunci, string $orientasi): array
     {
         [$w, $h] = self::ukuranHalaman($orientasi);
+        $tampil = (bool) ($el['tampil'] ?? true);
+
         $el = array_merge($el, [
-            'x' => (float) $el['x'], 'y' => (float) $el['y'], 'lebar' => (float) $el['lebar'],
-            'tinggi' => (float) $el['tinggi'], 'ukuran_font' => (float) $el['ukuran_font'],
+            'x' => is_numeric($el['x'] ?? null) ? (float) $el['x'] : 0.0,
+            'y' => is_numeric($el['y'] ?? null) ? (float) $el['y'] : 0.0,
+            'lebar' => is_numeric($el['lebar'] ?? null) ? (float) $el['lebar'] : 10.0,
+            'tinggi' => is_numeric($el['tinggi'] ?? null) ? (float) $el['tinggi'] : 10.0,
+            'ukuran_font' => is_numeric($el['ukuran_font'] ?? null) ? (float) $el['ukuran_font'] : 12.0,
+            'tampil' => $tampil,
         ]);
+
+        if (! $tampil) {
+            return $el;
+        }
 
         if ($kunci === 'qr') {
             $sisi = max(self::QR_MIN_MM, min(self::QR_MAKS_MM, $el['lebar'] / 100 * $w));
@@ -173,10 +186,6 @@ final class TataLetak
         $el['tinggi'] = max(1.0, min(100.0, $el['tinggi']));
         $el['x'] = round(max(0.0, min(100.0 - $el['lebar'], $el['x'])), 3);
         $el['y'] = round(max(0.0, min(100.0 - $el['tinggi'], $el['y'])), 3);
-
-        if (in_array($kunci, self::WAJIB, true)) {
-            $el['tampil'] = true;
-        }
 
         return $el;
     }
