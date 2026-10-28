@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { router, usePage } from '@inertiajs/react';
 import ParticipantLayout from '@/Layouts/ParticipantLayout';
 import PetaKursi from '@/Components/PetaKursi';
+import KartuCaraHadir, { statusCaraHadir } from '@/Components/KartuCaraHadir';
 import { formatWib } from '@/lib/waktuWib';
 import { KATEGORI_OPTIONS, METODE_OPTIONS, formatNarasumber, labelDari } from '@/lib/kegiatanForm';
 import { GAYA_KURSI, STATUS_BOOKING, keteranganBooking } from '@/lib/kursi';
@@ -28,6 +29,8 @@ export default function KegiatanShow({
     registrasiSaya = [],
     bukaPilihUlang = false,
     paymentMethods = {},
+    hybrid = null,
+    jatah = null,
 }) {
     const { auth = {}, errors = {} } = usePage().props;
     const user = auth.user;
@@ -79,6 +82,7 @@ export default function KegiatanShow({
     const [peserta, setPeserta] = useState(() => [{ ...pesertaKosong(), name: user?.name || '', email: user?.email || '', identity: user?.nim || '', phone: user?.phone || '' }]);
     const [aktif, setAktif] = useState(0);
     const [paymentMethod, setPaymentMethod] = useState('QRIS');
+    const [caraHadir, setCaraHadir] = useState(null);
     const [memproses, setMemproses] = useState(false);
     const [pemberitahuan, setPemberitahuan] = useState(null);
     const petaRef = useRef(null);
@@ -390,14 +394,16 @@ export default function KegiatanShow({
             window.location.href = '/masuk';
             return;
         }
+        if (hybrid && !caraHadir) return setPemberitahuan('Pilih cara hadir: onsite atau via Zoom.');
+        if (jatah?.penuh) return setPemberitahuan(`Kamu sudah menghadiri ${jatah.batas} kegiatan pada ${jatah.periode}. Batas dibuka lagi pada periode berikutnya.`);
         for (let i = 0; i < peserta.length; i++) {
             if (!peserta[i].name.trim()) return setPemberitahuan(`Nama peserta ${i + 1} wajib diisi.`);
-            if (booking.memakai_denah && !peserta[i].seat_id) {
+            if (booking.memakai_denah && caraHadir !== 'daring' && !peserta[i].seat_id) {
                 setAktif(i);
                 return setPemberitahuan(`Pilih kursi untuk peserta ${i + 1} pada peta.`);
             }
         }
-        router.post(`/kegiatan/${kegiatan.id}/checkout`, { delegates: peserta, payment_method: paymentMethod }, {
+        router.post(`/kegiatan/${kegiatan.id}/checkout`, { delegates: peserta, payment_method: paymentMethod, ...(hybrid ? { cara_hadir: caraHadir } : {}) }, {
             preserveScroll: true,
             onStart: () => setMemproses(true),
             onFinish: () => setMemproses(false),
@@ -533,7 +539,7 @@ export default function KegiatanShow({
                             <div className="font-bold text-white text-sm">Tiket Anda di kegiatan ini</div>
                             <ul className="mt-1 space-y-0.5">
                                 {registrasiSaya.map((r) => (
-                                    <li key={r.id}>{r.nama_peserta} • <span className="font-mono">{r.nomor_tiket}</span> • kursi {r.perlu_pilih_ulang ? <strong className="text-amber-300">perlu pilih ulang</strong> : (r.kursi || 'tanpa nomor')}</li>
+                                    <li key={r.id}>{r.nama_peserta} • <span className="font-mono">{r.nomor_tiket}</span> • {r.cara_hadir === 'daring' ? 'via Zoom' : <>kursi {r.perlu_pilih_ulang ? <strong className="text-amber-300">perlu pilih ulang</strong> : (r.kursi || 'tanpa nomor')}</>}</li>
                                 ))}
                             </ul>
                         </div>
@@ -918,6 +924,15 @@ export default function KegiatanShow({
                                     <button type="button" onClick={tambahPeserta} className="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-300 text-xs font-bold border border-emerald-500/30">+ Peserta</button>
                                 </div>
 
+                                {jatah?.berlaku && (
+                                    <p className={`text-sm ${jatah.penuh ? 'font-bold text-amber-200' : 'text-slate-300'}`} data-jatah-semester>
+                                        Jatah semester ini: {jatah.terpakai} dari {jatah.batas} terpakai
+                                        {jatah.penuh ? `. Kamu sudah menghadiri ${jatah.batas} kegiatan pada ${jatah.periode}; batas dibuka lagi pada periode berikutnya.` : '.'}
+                                    </p>
+                                )}
+
+                                {hybrid && <KartuCaraHadir hybrid={hybrid} nilai={caraHadir} onPilih={setCaraHadir} galat={errors.cara_hadir} />}
+
                                 <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Peserta">
                                     {peserta.map((p, i) => (
                                         <button
@@ -953,7 +968,7 @@ export default function KegiatanShow({
                                             <input id="peserta-identitas" type="text" value={peserta[aktif]?.identity || ''} onChange={(e) => ubahPeserta(aktif, 'identity', e.target.value)} className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white" />
                                         </div>
                                     </div>
-                                    {booking.memakai_denah && (
+                                    {booking.memakai_denah && caraHadir !== 'daring' && (
                                         <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
                                             <span className="text-[11px] text-slate-400">Kursi</span>
                                             <span className="font-mono text-sm font-black text-sky-300" data-kursi-peserta={aktif}>
@@ -983,8 +998,9 @@ export default function KegiatanShow({
                                         <span>Total ({peserta.length} peserta)</span>
                                         <span className="text-emerald-400">{isFree ? 'Gratis' : `Rp ${totalBiaya.toLocaleString('id-ID')}`}</span>
                                     </div>
-                                    {booking.memakai_denah && !bisaPilih && <p className="text-[11px] text-amber-300">{keteranganBooking(booking.status, booking.buka, booking.tutup)}</p>}
-                                    <button type="submit" disabled={memproses || (booking.memakai_denah && !bisaPilih)} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 disabled:opacity-40 text-white text-xs font-black uppercase tracking-wider">
+                                    {booking.memakai_denah && caraHadir !== 'daring' && !bisaPilih && <p className="text-[11px] text-amber-300">{keteranganBooking(booking.status, booking.buka, booking.tutup)}</p>}
+                                    {hybrid && !statusCaraHadir(hybrid).tersedia && <p className="text-sm font-bold text-amber-200">Kuota penuh</p>}
+                                    <button type="submit" disabled={memproses || jatah?.penuh || (hybrid && (!caraHadir || !statusCaraHadir(hybrid).tersedia)) || (booking.memakai_denah && caraHadir !== 'daring' && !bisaPilih)} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 disabled:opacity-40 text-white text-xs font-black uppercase tracking-wider">
                                         {memproses ? 'Memproses…' : isFree ? 'Daftar sekarang' : 'Bayar & kunci kursi'}
                                     </button>
                                 </div>

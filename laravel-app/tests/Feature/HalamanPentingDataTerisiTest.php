@@ -15,6 +15,7 @@ use App\Models\KegiatanPenandatangan;
 use App\Models\KegiatanPresensi;
 use App\Models\KegiatanRegistration;
 use App\Models\Penandatangan;
+use App\Models\PeriodeAkademik;
 use App\Models\Sertifikat;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -157,5 +158,34 @@ class HalamanPentingDataTerisiTest extends TestCase
         $this->get(route('dashboard.sertifikat'))->assertOk()->assertSee('CERT-HALAMAN-0001');
         $this->get(route('dashboard.kegiatan.show', $this->selesai->id))->assertRedirect(route('kegiatan.detail', $this->selesai->id));
         $this->get(route('kegiatan.detail', $this->selesai->id))->assertOk();
+    }
+
+    public function test_halaman_hybrid_periode_akademik_dan_panel_kegiatan_diikuti_terisi_data(): void
+    {
+        PeriodeAkademik::create(['nama' => 'Periode Uji', 'tanggal_mulai' => now()->subMonths(2)->toDateString(), 'tanggal_selesai' => now()->addMonths(2)->toDateString()]);
+        $hybrid = Kegiatan::create([
+            'created_by' => $this->admin->id, 'nama_kegiatan' => 'Hybrid Data Terisi', 'kategori' => 'seminar', 'metode_pelaksanaan' => 'hybrid', 'sasaran_peserta' => 'umum',
+            'tanggal_mulai' => now()->subDay(), 'tanggal_selesai' => now()->subHours(20), 'lokasi_type' => 'external', 'lokasi_nama' => 'Hotel', 'lokasi_detail' => 'Jl. Contoh',
+            'kuota' => 4, 'kuota_onsite' => 2, 'biaya' => 0, 'file_panduan_pdf' => 'x.pdf', 'status' => KegiatanStatus::Completed, 'tautan_rapat' => 'https://zoom.us/j/1',
+        ]);
+        foreach ([['onsite', $this->mahasiswa], ['daring', User::factory()->mahasiswaKipk()->create()]] as [$cara, $user]) {
+            $reg = KegiatanRegistration::create([
+                'kegiatan_id' => $hybrid->id, 'booker_user_id' => $user->id, 'participant_user_id' => $user->id, 'nomor_tiket' => "TKT-HY-{$cara}",
+                'cara_hadir' => $cara, 'status_pembayaran' => RegistrationPaymentStatus::Free, 'status_kehadiran' => AttendanceStatus::CheckedIn, 'checked_in_at' => now()->subDay(),
+            ]);
+            KegiatanPresensi::create([
+                'kegiatan_id' => $hybrid->id, 'registration_id' => $reg->id, 'user_id' => $user->id, 'nama_lengkap' => $user->name, 'nim' => '1', 'prodi' => 'X',
+                'email' => $user->email, 'nomor_telepon' => '08', 'signature_path' => 'signatures/kegiatan_presensi/sig.png', 'check_in_at' => now()->subDay(),
+            ]);
+        }
+
+        $this->actingAs($this->mahasiswa)->get(route('dashboard.index'))->assertOk()->assertSee('Hybrid Data Terisi')->assertSee('Jatah kegiatan Periode Uji');
+        $this->actingAs($this->mahasiswa)->get(route('kegiatan.detail', $hybrid->id))->assertOk();
+        $this->actingAs($this->admin)->get(route('admin.kegiatan'))->assertOk();
+        $this->actingAs($this->admin)->get(route('admin.kegiatan.show', $hybrid->id))->assertOk();
+        $this->actingAs($this->admin)->get(route('admin.users'))->assertOk();
+        $this->actingAs($this->admin)->getJson(route('admin.users.kegiatan-diikuti', $this->mahasiswa->id))->assertOk()->assertJsonPath('jatah.terpakai', 2);
+        $this->actingAs($this->admin)->get(route('admin.periode-akademik'))->assertOk()->assertSee('Periode Uji');
+        $this->actingAs($this->admin)->get(route('admin.dashboard'))->assertOk();
     }
 }

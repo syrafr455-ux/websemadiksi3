@@ -16,6 +16,7 @@ use App\Models\KegiatanSubmission;
 use App\Models\KipkDocument;
 use App\Models\Sertifikat;
 use App\Models\User;
+use App\Services\BatasKegiatanService;
 use App\Services\CertificateGeneratorService;
 use App\Services\EmailProtectionService;
 use App\Services\Kegiatan\KelayakanSertifikatService;
@@ -100,7 +101,9 @@ class DashboardController extends Controller
         $emailQuotaStatus = app(EmailProtectionService::class)->getQuotaStatus();
         $menungguPersetujuanAnda = MenuAdmin::hitungMenungguPersetujuan($user);
 
-        return view('admin.dashboard', compact('stats', 'recentStudents', 'recentPresensi', 'recentDocs', 'emailQuotaStatus', 'menungguPersetujuanAnda'));
+        $tanpaPeriodeAktif = app(BatasKegiatanService::class)->periodeBerjalan() === null;
+
+        return view('admin.dashboard', compact('stats', 'recentStudents', 'recentPresensi', 'recentDocs', 'emailQuotaStatus', 'menungguPersetujuanAnda', 'tanpaPeriodeAktif'));
     }
 
     /**

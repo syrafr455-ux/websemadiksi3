@@ -28,6 +28,7 @@ class MenuAdmin
         ['route' => 'admin.kegiatan', 'label' => 'Kelola Kegiatan', 'icon' => 'event', 'aktif' => 'admin.kegiatan*'],
         ['route' => 'admin.penilaian', 'label' => 'Penilaian Karya', 'icon' => 'rate_review', 'aktif' => 'admin.penilaian*'],
         ['route' => 'admin.users', 'label' => 'Data Pengguna', 'icon' => 'group', 'aktif' => 'admin.users*'],
+        ['route' => 'admin.periode-akademik', 'label' => 'Periode Akademik', 'icon' => 'calendar_month', 'aktif' => 'admin.periode-akademik*'],
         ['route' => 'admin.mahasiswa-unusa', 'label' => 'Data Mahasiswa UNUSA', 'icon' => 'school', 'aktif' => 'admin.mahasiswa-unusa*'],
         ['route' => 'admin.penerima-kipk', 'label' => 'Daftar Penerima KIP-K', 'icon' => 'badge', 'aktif' => 'admin.penerima-kipk*'],
         ['route' => 'admin.attendances', 'label' => 'Presensi & Kehadiran', 'icon' => 'how_to_reg', 'aktif' => 'admin.attendances*'],

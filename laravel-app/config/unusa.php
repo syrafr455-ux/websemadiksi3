@@ -38,6 +38,9 @@ return [
     |
     */
 
+    // Batas jumlah kegiatan yang DIHADIRI per periode akademik (tabel periode_akademik). Tanpa UI.
+    'batas_kegiatan_per_periode' => 3,
+
     'semester' => [
         'gasal_start_month' => 8,
         'genap_start_month' => 2,

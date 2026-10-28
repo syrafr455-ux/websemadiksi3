@@ -21,6 +21,7 @@ use App\Models\KipkDocument;
 use App\Models\PenerimaKipk;
 use App\Models\Scholarship;
 use App\Models\Sertifikat;
+use App\Services\BatasKegiatanService;
 use App\Support\Wib;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -188,7 +189,19 @@ class DashboardController extends Controller
         $klaimDitinjau = $user->isUmumUnusa()
             && PenerimaKipk::where('klaim_user_id', $user->id)->where('status_tinjau', PenerimaKipk::TINJAU_PERLU)->exists();
 
+        // Jatah kegiatan yang dihadiri pada periode akademik berjalan dan riwayat semua periode.
+        $batasKegiatan = app(BatasKegiatanService::class);
+        $periodeBerjalan = $batasKegiatan->periodeBerjalan();
+        $riwayatKegiatan = $batasKegiatan->kegiatanDihadiri($user);
+        $jatah = [
+            'periode' => $periodeBerjalan,
+            'batas' => $batasKegiatan->batas(),
+            'terpakai' => $periodeBerjalan ? $riwayatKegiatan->filter(fn (array $baris) => $baris['periode']?->is($periodeBerjalan))->count() : 0,
+        ];
+
         return view('dashboard.index', compact(
+            'jatah',
+            'riwayatKegiatan',
             'user',
             'registrationsCount',
             'attendancesCount',

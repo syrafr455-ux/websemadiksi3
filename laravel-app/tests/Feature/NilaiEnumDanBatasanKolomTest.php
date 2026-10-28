@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AttendanceStatus;
+use App\Enums\CaraHadir;
 use App\Enums\GatewayPaymentStatus;
 use App\Enums\JenisSertifikat;
 use App\Enums\KegiatanStatus;
@@ -61,6 +62,7 @@ class NilaiEnumDanBatasanKolomTest extends TestCase
             'payments.payment_status' => self::nilai(GatewayPaymentStatus::class),
             'kegiatan_registrations.status_kehadiran' => self::nilai(AttendanceStatus::class),
             'kegiatan_registrations.status_pembayaran' => self::nilai(RegistrationPaymentStatus::class),
+            'kegiatan_registrations.cara_hadir' => self::nilai(CaraHadir::class),
             'sertifikat.peran_sertifikat' => self::nilai(PeranSertifikat::class),
             'users.role' => self::nilai(UserRole::class),
         ];
@@ -132,6 +134,19 @@ class NilaiEnumDanBatasanKolomTest extends TestCase
                 $this->assertSame($kehadiran->value, $this->tersimpan('kegiatan_registrations', $registrasi->id, 'status_kehadiran'));
             }
         }
+
+        foreach (CaraHadir::cases() as $cara) {
+            $kegiatanReg = Kegiatan::create($this->dasarKegiatan($admin));
+            $registrasi = KegiatanRegistration::create([
+                'kegiatan_id' => $kegiatanReg->id, 'booker_user_id' => $peserta->id, 'participant_user_id' => $peserta->id,
+                'nomor_tiket' => "TKT-CARA-{$cara->value}", 'cara_hadir' => $cara, 'status_pembayaran' => RegistrationPaymentStatus::Free,
+            ]);
+            $this->assertSame($cara->value, $this->tersimpan('kegiatan_registrations', $registrasi->id, 'cara_hadir'));
+        }
+
+        $this->assertSame('onsite', $this->tersimpan('kegiatan_registrations', KegiatanRegistration::create([
+            'kegiatan_id' => $kegiatan->id, 'booker_user_id' => $peserta->id, 'nomor_tiket' => 'TKT-CARA-LAMA',
+        ])->id, 'cara_hadir'), 'Pendaftaran tanpa nilai dianggap onsite.');
     }
 
     public function test_setiap_nilai_enum_sertifikat_dan_role_pengguna_tersimpan(): void

@@ -15,8 +15,11 @@ use App\Models\Fakultas;
 use App\Models\Kegiatan;
 use App\Models\ProgramStudi;
 use App\Models\User;
+use App\Services\BatasKegiatanService;
 use App\Services\Kip\StatusKipService;
 use App\Services\UnusaAcademicService;
+use App\Support\Wib;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -246,6 +249,32 @@ class UserManagementController extends Controller
             UserRole::PenilaiKarya => PenilaiKaryaRequest::class,
             UserRole::SuperAdmin => SuperAdminRequest::class,
         });
+    }
+
+    /**
+     * Panel baca-saja "Kegiatan diikuti" per pengguna: jatah periode berjalan dan kegiatan yang sudah dihadiri.
+     */
+    public function kegiatanDiikuti(int $id, BatasKegiatanService $batas): JsonResponse
+    {
+        $user = User::findOrFail($id);
+        $periode = $batas->periodeBerjalan();
+        $riwayat = $batas->kegiatanDihadiri($user);
+
+        return response()->json([
+            'jatah' => [
+                'berlaku' => $periode !== null,
+                'periode' => $periode?->nama,
+                'batas' => $batas->batas(),
+                'terpakai' => $periode ? $riwayat->filter(fn (array $b) => $b['periode']?->is($periode))->count() : 0,
+            ],
+            'kegiatan' => $riwayat->map(fn (array $b) => [
+                'id' => $b['kegiatan']->id,
+                'nama' => $b['kegiatan']->nama_kegiatan,
+                'tanggal' => Wib::format($b['kegiatan']->tanggal_mulai, 'd M Y'),
+                'cara_hadir' => $b['cara_hadir'],
+                'periode' => $b['periode']?->nama,
+            ])->values(),
+        ]);
     }
 
     /**

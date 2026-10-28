@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\KegiatanSeatController;
 use App\Http\Controllers\Admin\KegiatanSertifikatController;
 use App\Http\Controllers\Admin\MasterMahasiswaController;
 use App\Http\Controllers\Admin\PenerimaKipkController;
+use App\Http\Controllers\Admin\PeriodeAkademikController;
 use App\Http\Controllers\Admin\PresensiScannerController;
 use App\Http\Controllers\Admin\SertifikatDigitalController;
 use App\Http\Controllers\Admin\SertifikatTemplatController;
@@ -171,6 +172,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::middleware(['role:super_admin'])->group(function () {
         Route::get('/', [App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
 
+        // Periode akademik (reset batas kegiatan yang dihadiri)
+        Route::get('/periode-akademik', [PeriodeAkademikController::class, 'index'])->name('periode-akademik');
+        Route::post('/periode-akademik', [PeriodeAkademikController::class, 'store'])->name('periode-akademik.store');
+        Route::put('/periode-akademik/{id}', [PeriodeAkademikController::class, 'update'])->whereNumber('id')->name('periode-akademik.update');
+        Route::delete('/periode-akademik/{id}', [PeriodeAkademikController::class, 'destroy'])->whereNumber('id')->name('periode-akademik.destroy');
+
         // Enterprise Kegiatan CRUD & Seat Setup
         Route::get('/kegiatan', [KegiatanController::class, 'index'])->name('kegiatan');
         Route::post('/kegiatan', [KegiatanController::class, 'store'])->name('kegiatan.store');
@@ -198,6 +205,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/pengguna', [UserManagementController::class, 'index'])->name('users');
         Route::post('/pengguna', [UserManagementController::class, 'store'])->name('users.store');
         Route::match(['put', 'patch'], '/pengguna/{id}', [UserManagementController::class, 'update'])->whereNumber('id')->name('users.update');
+        Route::get('/pengguna/{id}/kegiatan-diikuti', [UserManagementController::class, 'kegiatanDiikuti'])->whereNumber('id')->name('users.kegiatan-diikuti');
         Route::match(['post', 'patch'], '/pengguna/{id}/toggle-block', [UserManagementController::class, 'toggleBlock'])->name('users.toggle-block');
         Route::match(['post', 'patch'], '/pengguna/{id}/toggle_block', [UserManagementController::class, 'toggleBlock'])->name('users.toggle_block');
         Route::match(['post', 'patch'], '/pengguna/{id}/verify', [UserManagementController::class, 'verify'])->name('users.verify');

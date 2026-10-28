@@ -198,7 +198,8 @@ export default function KegiatanIndex({
         setData((prev) => ({
             ...prev,
             metode_pelaksanaan: metode,
-            lokasi_type: isMurniDaring ? 'online' : prev.lokasi_type,
+            lokasi_type: isMurniDaring ? 'online' : (metode === 'hybrid' && prev.lokasi_type === 'online' ? 'unusa_campus' : prev.lokasi_type),
+            kuota_onsite: metode === 'hybrid' ? prev.kuota_onsite : '',
             lokasi_nama: isMurniDaring ? namaOtomatis : prev.lokasi_nama,
         }));
     };
@@ -398,6 +399,13 @@ export default function KegiatanIndex({
                                                 <div className="text-[11px] text-slate-400">
                                                     {item.kuota_terisi} / {item.kuota} Peserta ({item.registrations_count || 0} Tiket)
                                                 </div>
+                                                {item.kuota_onsite != null && item.metode_pelaksanaan === 'hybrid' && (
+                                                    <div className="text-xs text-slate-200 font-semibold" data-kuota-hybrid>
+                                                        {item.kuota_onsite} onsite + {Math.max(0, item.kuota - item.kuota_onsite)} daring
+                                                    </div>
+                                                )}
+                                                {item.ringkasan_kuota_hybrid && <div className="text-xs text-emerald-300">{item.ringkasan_kuota_hybrid}</div>}
+                                                {(item.peringatan_hybrid || []).map((p) => <div key={p} className="text-xs text-amber-200">{p}</div>)}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -556,6 +564,13 @@ export default function KegiatanIndex({
                                         </div>
                                     </div>
                                 )}
+                                {errors.aksi_submit && (
+                                    <div role="alert" className="mb-4 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-sm text-rose-200">{errors.aksi_submit}</div>
+                                )}
+                                {editingItem?.peringatan_hybrid?.length > 0 && (
+                                    <div role="status" className="mb-4 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200">{editingItem.peringatan_hybrid.join(' ')}</div>
+                                )}
+
                                 {currentStep === 1 && (
                                     <div className="space-y-4">
                                         <div>
@@ -697,6 +712,32 @@ export default function KegiatanIndex({
                                                 />
                                                 {errors.kuota && <span className="text-[10px] text-rose-400">{errors.kuota}</span>}
                                             </div>
+                                            {data.metode_pelaksanaan === 'hybrid' && (
+                                                <div className="md:col-span-3 p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2" data-kuota-onsite>
+                                                    <div className="text-xs font-bold text-white">Kuota hybrid</div>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                        <div>
+                                                            <label htmlFor="kuota-onsite" className="block text-xs font-bold text-slate-300 mb-1">Kuota onsite *</label>
+                                                            <input
+                                                                id="kuota-onsite"
+                                                                type="number"
+                                                                min="1"
+                                                                value={data.kuota_onsite}
+                                                                onChange={(e) => setData('kuota_onsite', e.target.value)}
+                                                                className="w-full px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm"
+                                                            />
+                                                            {errors.kuota_onsite && <span className="text-xs text-rose-300">{errors.kuota_onsite}</span>}
+                                                        </div>
+                                                        <div>
+                                                            <span className="block text-xs font-bold text-slate-300 mb-1">Kuota daring (otomatis)</span>
+                                                            <div className="px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm" data-kuota-daring>
+                                                                {data.kuota_onsite !== '' && Number(data.kuota) > Number(data.kuota_onsite) ? Number(data.kuota) - Number(data.kuota_onsite) : '-'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-xs text-slate-300">Contoh: total 150, onsite 100, maka daring 50. Pendaftaran daring dibuka otomatis setelah kuota onsite penuh.</p>
+                                                </div>
+                                            )}
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-300 mb-1">Poin XP / SKP</label>
                                                 <input
@@ -783,9 +824,11 @@ export default function KegiatanIndex({
                                 {currentStep === 2 && (
                                     <div className="space-y-4">
                                         <div>
-                                            <label className="block text-xs font-bold text-slate-300 mb-2">Tipe Lokasi *</label>
+                                            <label className="block text-xs font-bold text-slate-300 mb-2">
+                                                {data.metode_pelaksanaan === 'hybrid' ? 'Onsite: pilih Ruangan UNUSA atau Venue eksternal *' : 'Tipe Lokasi *'}
+                                            </label>
                                             <div className="grid grid-cols-3 gap-3">
-                                                {LOKASI_TYPE_OPTIONS.map((lt) => (
+                                                {LOKASI_TYPE_OPTIONS.filter((lt) => !(data.metode_pelaksanaan === 'hybrid' && lt.id === 'online')).map((lt) => (
                                                     <button
                                                         key={lt.id}
                                                         type="button"
@@ -808,7 +851,7 @@ export default function KegiatanIndex({
                                             <div className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 space-y-4">
                                                 <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
                                                     <span className="material-symbols-outlined text-base text-indigo-400">videocam</span>
-                                                    Pengaturan Rapat Daring (Online / Hybrid)
+                                                    {data.metode_pelaksanaan === 'hybrid' ? 'Via Zoom (peserta daring)' : 'Pengaturan Rapat Daring (Online / Hybrid)'}
                                                 </div>
 
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

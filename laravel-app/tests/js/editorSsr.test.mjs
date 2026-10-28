@@ -15,6 +15,8 @@ let React;
 let renderToStaticMarkup;
 let Editor;
 let Aksi;
+let Kartu;
+let statusKartu;
 
 const ELEMEN = ['judul', 'pengantar', 'nama', 'asal_institusi', 'jenis_predikat', 'kegiatan', 'tanggal', 'nomor_seri', 'qr', 'penandatangan_1', 'penandatangan_2', 'penandatangan_3', 'penandatangan_4'];
 
@@ -62,6 +64,9 @@ before(async () => {
     ({ renderToStaticMarkup } = await muat('react-dom/server'));
     Editor = (await server.ssrLoadModule('/resources/js/Components/Admin/EditorTemplatSertifikat.jsx')).default;
     Aksi = (await server.ssrLoadModule('/resources/js/Components/Admin/AksiPersetujuanKegiatan.jsx')).default;
+    const modulKartu = await server.ssrLoadModule('/resources/js/Components/KartuCaraHadir.jsx');
+    Kartu = modulKartu.default;
+    statusKartu = modulKartu.statusCaraHadir;
 });
 
 after(async () => {
@@ -209,4 +214,64 @@ test('tombol persetujuan SSR: label sesuai peran dan status', () => {
     assert.match(teks({ can_setujui: true, can_tolak: true }), /Setujui\|Tolak/);
     assert.match(teks({ keputusan_saya: 'setuju' }), /Anda sudah menyetujui/);
     assert.match(teks({ alasan_nonaktif: 'Menunggu diajukan oleh Ahmad' }), /Menunggu diajukan oleh Ahmad/);
+});
+
+const hybridBerpembagian = (onsite, daring) => ({
+    berpembagian: true, lokasi: 'Auditorium Lt. 9', platform: 'zoom', tersedia: true,
+    onsite: { terisi: onsite.terisi, kuota: 100, sisa: 100 - onsite.terisi, penuh: onsite.terisi >= 100 },
+    daring: { terisi: daring.terisi, kuota: 50, sisa: 50 - daring.terisi, status: daring.status },
+});
+const radio = (html, nilai) => html.match(new RegExp(`<input[^>]*value="${nilai}"[^>]*>`))?.[0] ?? '';
+const teksKartu = (props) => renderToStaticMarkup(React.createElement(Kartu, props)).replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
+
+test('kartu cara hadir: sebelum dibuka, Zoom nonaktif dengan alasan berupa teks dan onsite menampilkan sisa kursi', () => {
+    const hybrid = hybridBerpembagian({ terisi: 40 }, { terisi: 0, status: 'belum_dibuka' });
+    const html = renderToStaticMarkup(React.createElement(Kartu, { hybrid, nilai: null }));
+    const teks = teksKartu({ hybrid, nilai: null });
+
+    assert.match(teks, /Hadir langsung \(onsite\)/);
+    assert.match(teks, /Sisa kursi: 60 dari 100/);
+    assert.match(teks, /Ikut via Zoom/);
+    assert.match(teks, /Dibuka otomatis setelah kuota onsite penuh\. Kuota daring: 50\./);
+    assert.match(teks, /Belum dibuka/);
+    assert.match(radio(html, 'daring'), /disabled/, 'radio Zoom nonaktif');
+    assert.doesNotMatch(radio(html, 'onsite'), /disabled/);
+    assert.doesNotMatch(html, /checked/, 'tanpa pilihan bawaan');
+    assert.match(html, /min-h-\[44px\]/, 'area sentuh minimal 44 px');
+    assert.doesNotMatch(teks, /Kuota penuh/);
+});
+
+test('kartu cara hadir: setelah onsite penuh, Zoom terbuka dengan sisa kuota dan onsite nonaktif', () => {
+    const hybrid = hybridBerpembagian({ terisi: 100 }, { terisi: 12, status: 'terbuka' });
+    const html = renderToStaticMarkup(React.createElement(Kartu, { hybrid, nilai: 'daring' }));
+    const teks = teksKartu({ hybrid, nilai: 'daring' });
+
+    assert.match(teks, /Sisa kuota: 38 dari 50/);
+    assert.match(teks, /Kuota onsite penuh/);
+    assert.match(radio(html, 'onsite'), /disabled/);
+    assert.doesNotMatch(radio(html, 'daring'), /disabled/);
+    assert.match(radio(html, 'daring'), /checked/);
+});
+
+test('kartu cara hadir: bila keduanya penuh tampil teks Kuota penuh dan kedua pilihan nonaktif', () => {
+    const hybrid = hybridBerpembagian({ terisi: 100 }, { terisi: 50, status: 'penuh' });
+    const html = renderToStaticMarkup(React.createElement(Kartu, { hybrid, nilai: null }));
+
+    assert.match(teksKartu({ hybrid, nilai: null }), /Kuota penuh/);
+    assert.equal((html.match(/<input[^>]*disabled/g) || []).length, 2);
+    assert.equal(statusKartu(hybrid).tersedia, false);
+});
+
+test('kartu cara hadir: hybrid lama tanpa pembagian membuka kedua cara hadir sejak awal; non-hybrid tidak menampilkan kartu', () => {
+    const lama = { berpembagian: false, lokasi: 'Hotel Contoh', platform: 'zoom' };
+    const html = renderToStaticMarkup(React.createElement(Kartu, { hybrid: lama, nilai: null }));
+
+    assert.doesNotMatch(html, /disabled/);
+    assert.equal(renderToStaticMarkup(React.createElement(Kartu, { hybrid: null })), '');
+});
+
+test('kartu cara hadir: pesan galat pemilihan tampil sebagai teks', () => {
+    const teks = teksKartu({ hybrid: hybridBerpembagian({ terisi: 0 }, { terisi: 0, status: 'belum_dibuka' }), nilai: null, galat: 'Pilih cara hadir: onsite atau via Zoom.' });
+
+    assert.match(teks, /Pilih cara hadir: onsite atau via Zoom\./);
 });

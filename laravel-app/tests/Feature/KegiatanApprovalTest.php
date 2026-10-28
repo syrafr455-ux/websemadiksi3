@@ -350,8 +350,12 @@ class KegiatanApprovalTest extends TestCase
                 'metode_pelaksanaan' => 'hybrid',
                 'lokasi_type' => 'unusa_campus',
                 'lokasi_nama' => 'Auditorium Lt 9 & Zoom',
+                'lokasi_kampus' => 'Kampus B (Jemursari)',
+                'lokasi_gedung' => 'Tower UNUSA',
+                'lokasi_ruangan' => 'Auditorium Lt. 9',
                 'platform_daring' => 'zoom',
                 'tautan_rapat' => 'https://zoom.us/j/987654321',
+                'kuota_onsite' => 40,
             ],
         ];
 

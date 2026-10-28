@@ -307,6 +307,12 @@ export default function KegiatanShow({
                     </div>
                 )}
 
+                {(kegiatan.peringatan_hybrid || []).length > 0 && (
+                    <div role="status" className="px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200" data-peringatan-hybrid>
+                        {kegiatan.peringatan_hybrid.join(' ')}
+                    </div>
+                )}
+
                 {/* Ringkasan */}
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                     <Kartu icon="schedule" label="Jadwal (WIB)">
@@ -332,6 +338,7 @@ export default function KegiatanShow({
                             <span className="text-sm text-slate-400 font-bold"> / {kegiatan.kuota}</span>
                         </div>
                         <div className="text-slate-400">Peserta aktif (gratis, menunggu bayar, lunas)</div>
+                        {kegiatan.ringkasan_kuota_hybrid && <div className="text-emerald-300 font-semibold" data-ringkasan-hybrid>{kegiatan.ringkasan_kuota_hybrid}</div>}
                         <Baris label="Total tiket tercatat">{ringkasan.pendaftar_total ?? 0}</Baris>
                         <Baris label="Hadir">{ringkasan.hadir ?? 0}</Baris>
                     </Kartu>

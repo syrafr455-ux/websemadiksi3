@@ -57,6 +57,7 @@ class KegiatanEditFormRoundTripTest extends TestCase
             'lokasi_detail' => 'Auditorium Lantai 9',
             'biaya' => 25000,
             'kuota' => 37,
+            'kuota_onsite' => 18,
             'poin_xp' => 15,
             'narasumber' => [
                 ['nama' => 'Siti Aminah', 'gelar' => 'Dr.', 'instansi' => 'UNUSA'],
@@ -120,6 +121,7 @@ class KegiatanEditFormRoundTripTest extends TestCase
             'lokasi_detail' => $item['lokasi_detail'] ?? '',
             'biaya' => $item['biaya'] ?? 0,
             'kuota' => $item['kuota'] ?? 1,
+            'kuota_onsite' => $item['kuota_onsite'] ?? '',
             'poin_xp' => $item['poin_xp'] ?? 0,
             'narasumber' => is_array($item['narasumber'] ?? null) ? $item['narasumber'] : [],
             'is_seat_booking_active' => (bool) ($item['is_seat_booking_active'] ?? false),

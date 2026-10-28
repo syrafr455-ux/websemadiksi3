@@ -71,6 +71,48 @@
             </div>
         @endif
 
+        {{-- Jatah kegiatan yang dihadiri per periode akademik dan riwayat kegiatan yang sudah diikuti --}}
+        <section class="p-6 rounded-3xl bg-surface border border-surface-variant/40 shadow-sm space-y-4" data-jatah-kegiatan>
+            @if($jatah['periode'])
+                <div>
+                    <h3 class="text-base font-extrabold text-on-surface">Jatah kegiatan {{ $jatah['periode']->nama }}: {{ $jatah['terpakai'] }} dari {{ $jatah['batas'] }} terpakai</h3>
+                    <p class="text-sm text-outline mt-1">
+                        Yang dihitung hanya kegiatan yang benar-benar kamu hadiri. Jatah dihitung ulang saat periode akademik berganti.
+                        @if($jatah['terpakai'] >= $jatah['batas'])
+                            <strong class="text-amber-800">Jatah periode ini sudah habis, pendaftaran kegiatan baru dibuka lagi pada periode berikutnya.</strong>
+                        @endif
+                    </p>
+                </div>
+            @else
+                <p class="text-sm text-outline">Belum ada periode akademik aktif, jadi batas kegiatan belum berlaku.</p>
+            @endif
+
+            <div>
+                <h3 class="text-base font-extrabold text-on-surface mb-2">Kegiatan yang sudah saya ikuti</h3>
+                @if($riwayatKegiatan->isEmpty())
+                    <p class="text-sm text-outline">Belum ada kegiatan yang kamu hadiri. <a href="{{ route('dashboard.kegiatan') }}" class="font-bold text-primary underline">Lihat daftar kegiatan</a>.</p>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs uppercase text-outline">
+                                <tr><th class="py-2 pr-4">Kegiatan</th><th class="py-2 pr-4">Tanggal</th><th class="py-2 pr-4">Cara hadir</th><th class="py-2">Periode</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-surface-variant/40">
+                                @foreach($riwayatKegiatan as $baris)
+                                    <tr>
+                                        <td class="py-2 pr-4 font-semibold text-on-surface">{{ $baris['kegiatan']->nama_kegiatan }}</td>
+                                        <td class="py-2 pr-4 text-on-surface-variant">{{ \App\Support\Wib::format($baris['kegiatan']->tanggal_mulai, 'd M Y') }}</td>
+                                        <td class="py-2 pr-4 text-on-surface-variant">{{ $baris['cara_hadir'] === 'daring' ? 'Via Zoom' : 'Onsite' }}</td>
+                                        <td class="py-2 text-on-surface-variant">{{ $baris['periode']?->nama ?? 'Di luar periode' }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
+        </section>
+
         {{-- Stats Grid --}}
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             <div class="p-5 rounded-2xl bg-surface border border-surface-variant/40 shadow-sm flex items-center gap-4">

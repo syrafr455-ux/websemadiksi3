@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\CaraHadir;
 use App\Enums\KegiatanStatus;
 use App\Models\AuditLog;
 use App\Models\Kegiatan;
 use App\Models\KegiatanGabung;
 use App\Models\KegiatanRegistration;
+use App\Services\Kegiatan\KuotaHybridService;
 use App\Support\Wib;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -69,6 +71,14 @@ class KegiatanGabungController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Anda tidak memiliki pendaftaran atau tiket yang terkonfirmasi untuk kegiatan ini.',
+            ], 403);
+        }
+
+        // Hybrid berpembagian: ruang Zoom hanya untuk pendaftar via Zoom (kredensial tidak diberikan ke pendaftar onsite).
+        if (app(KuotaHybridService::class)->berpembagian($kegiatan) && $registration->cara_hadir !== CaraHadir::Daring) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pendaftaran Anda adalah onsite. Ruang Zoom hanya untuk peserta yang mendaftar via Zoom.',
             ], 403);
         }
 

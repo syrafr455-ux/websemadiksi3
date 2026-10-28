@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AttendanceStatus;
+use App\Enums\CaraHadir;
 use App\Enums\RegistrationPaymentStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -19,6 +20,7 @@ class KegiatanRegistration extends Model
         'booker_user_id',
         'participant_user_id',
         'seat_id',
+        'cara_hadir',
         'nomor_tiket',
         'ticket_code',
         'participant_name',
@@ -41,6 +43,7 @@ class KegiatanRegistration extends Model
         return [
             'status_kehadiran' => AttendanceStatus::class,
             'status_pembayaran' => RegistrationPaymentStatus::class,
+            'cara_hadir' => CaraHadir::class,
             'checked_in_at' => 'datetime',
             'amount_paid' => 'decimal:2',
             'delegation_data' => 'array',

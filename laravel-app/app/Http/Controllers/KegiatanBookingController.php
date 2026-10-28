@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AttendanceStatus;
+use App\Enums\CaraHadir;
 use App\Enums\KegiatanStatus;
 use App\Enums\RegistrationPaymentStatus;
 use App\Enums\SeatStatus;
@@ -13,7 +14,9 @@ use App\Models\Kegiatan;
 use App\Models\KegiatanRegistration;
 use App\Models\KegiatanSeat;
 use App\Models\User;
+use App\Services\BatasKegiatanService;
 use App\Services\EmailProtectionService;
+use App\Services\Kegiatan\KuotaHybridService;
 use App\Services\Kegiatan\PetaKursiService;
 use App\Services\PaymentGatewayService;
 use App\Support\Wib;
@@ -22,6 +25,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -77,14 +81,68 @@ class KegiatanBookingController extends Controller
             'isDraftPreview' => $kegiatan->status === KegiatanStatus::Draft,
             'pendaftaran' => [
                 'dibuka' => $kegiatan->isRegistrationOpen(),
-                'kuota_tersisa' => max(0, (int) $kegiatan->kuota - (int) $kegiatan->kuota_terisi),
+                'kuota_tersisa' => $this->kuotaTersisa($kegiatan),
             ],
+            'hybrid' => $this->propsHybrid($kegiatan),
+            'jatah' => $this->propsJatah($user),
             'booking' => $this->statusBooking($kegiatan),
             'kursi' => $this->peta->untukPeserta($kegiatan, $user),
             'registrasiSaya' => $this->registrasiSaya($kegiatan, $user),
             'bukaPilihUlang' => $request->boolean('pilih_ulang'),
             'paymentMethods' => config('payment.methods', []),
         ]);
+    }
+
+    /** Sisa kuota total; hybrid berpembagian dihitung dari pendaftar aktif per cara hadir. */
+    protected function kuotaTersisa(Kegiatan $kegiatan): int
+    {
+        $kuotaHybrid = app(KuotaHybridService::class);
+        if ($kuotaHybrid->berpembagian($kegiatan)) {
+            $terisi = $kuotaHybrid->terisi($kegiatan);
+
+            return max(0, (int) $kegiatan->kuota - $terisi['onsite'] - $terisi['daring']);
+        }
+
+        return max(0, (int) $kegiatan->kuota - (int) $kegiatan->kuota_terisi);
+    }
+
+    /**
+     * Data dua kartu pilihan cara hadir (hybrid). Tidak memuat tautan, ID, atau kode akses Zoom.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function propsHybrid(Kegiatan $kegiatan): ?array
+    {
+        if (! $kegiatan->isHybrid()) {
+            return null;
+        }
+
+        $kuotaHybrid = app(KuotaHybridService::class);
+        $dasar = ['lokasi' => $kegiatan->lokasi_nama, 'platform' => $kegiatan->platform_daring, 'berpembagian' => $kuotaHybrid->berpembagian($kegiatan)];
+
+        return $dasar['berpembagian'] ? $dasar + $kuotaHybrid->status($kegiatan) : $dasar;
+    }
+
+    /**
+     * Jatah kegiatan yang dihadiri pada periode akademik berjalan untuk pengguna yang masuk.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function propsJatah(?User $user): ?array
+    {
+        if (! $user) {
+            return null;
+        }
+
+        $batas = app(BatasKegiatanService::class);
+        $periode = $batas->periodeBerjalan();
+        if (! $periode) {
+            return ['berlaku' => false];
+        }
+
+        $terpakai = $batas->hitung($user, $periode);
+
+        return ['berlaku' => true, 'periode' => $periode->nama, 'batas' => $batas->batas(), 'terpakai' => $terpakai, 'penuh' => $terpakai >= $batas->batas()];
     }
 
     /**
@@ -148,6 +206,7 @@ class KegiatanBookingController extends Controller
                 'nomor_tiket' => $reg->nomor_tiket,
                 'kursi' => $reg->seat?->seat_code,
                 'seat_id' => $reg->seat_id,
+                'cara_hadir' => $reg->cara_hadir?->value ?? 'onsite',
                 'perlu_pilih_ulang' => (bool) $reg->needs_seat_reselection,
                 'saya_pemesan' => (int) $reg->booker_user_id === (int) $user->id,
                 'saya_peserta' => (int) $reg->participant_user_id === (int) $user->id,
@@ -194,6 +253,7 @@ class KegiatanBookingController extends Controller
 
         $validated = $request->validate([
             'payment_method' => ['nullable', 'string'],
+            'cara_hadir' => ['nullable', 'string', Rule::in(CaraHadir::values())],
             'delegates' => ['required', 'array', 'min:1', 'max:10'],
             'delegates.*.name' => ['required', 'string', 'max:255'],
             'delegates.*.email' => ['nullable', 'email', 'max:255'],
@@ -205,8 +265,25 @@ class KegiatanBookingController extends Controller
         $delegates = $validated['delegates'];
         $count = count($delegates);
 
-        // Periksa kuota tersisa
-        if ($kegiatan->kuota_terisi + $count > $kegiatan->kuota_total) {
+        // Cara hadir: hybrid wajib dipilih peserta; kegiatan lain otomatis (daring murni = daring, selain itu onsite).
+        $kuotaHybrid = app(KuotaHybridService::class);
+        if ($kegiatan->isHybrid()) {
+            if (empty($validated['cara_hadir'])) {
+                return back()->withErrors(['cara_hadir' => 'Pilih cara hadir: onsite atau via Zoom.'])->with('error', 'Pilih cara hadir: onsite atau via Zoom.')->withInput();
+            }
+            $caraHadir = CaraHadir::from($validated['cara_hadir']);
+        } else {
+            $caraHadir = $kuotaHybrid->caraHadirOtomatis($kegiatan);
+        }
+        $berpembagian = $kuotaHybrid->berpembagian($kegiatan);
+
+        // Peserta daring tidak memakai kursi denah.
+        if ($caraHadir === CaraHadir::Daring) {
+            $delegates = array_map(fn (array $d) => array_merge($d, ['seat_id' => null]), $delegates);
+        }
+
+        // Periksa kuota tersisa (hybrid berpembagian diperiksa per cara hadir di dalam transaksi terkunci).
+        if (! $berpembagian && $kegiatan->kuota_terisi + $count > $kegiatan->kuota_total) {
             return back()->with('error', "Kuota kegiatan tidak mencukupi untuk {$count} peserta.");
         }
 
@@ -215,12 +292,35 @@ class KegiatanBookingController extends Controller
 
         DB::beginTransaction();
         try {
+            // Kunci baris kegiatan: penghitungan kuota dan pembuatan pendaftaran serial per kegiatan.
+            $kegiatan = Kegiatan::whereKey($kegiatan->id)->lockForUpdate()->firstOrFail();
+
+            // 1) Batas kegiatan yang dihadiri per periode akademik, sebelum apa pun dibuat atau ditagih.
+            $batas = app(BatasKegiatanService::class);
+            foreach ($delegates as $i => $delegate) {
+                $pesertaId = $this->idPesertaDelegasi($delegate, $i, $user);
+                $peserta = $pesertaId === null ? null : ($pesertaId === $user->id ? $user : User::find($pesertaId));
+                $pesanBatas = $peserta ? $batas->periksaDaftar($peserta, $peserta->is($user) ? 'Kamu' : $peserta->name) : null;
+                if ($pesanBatas) {
+                    DB::rollBack();
+
+                    return back()->with('error', $pesanBatas)->withInput();
+                }
+            }
+
+            // 2) Kuota hybrid berpembagian per cara hadir.
+            if ($berpembagian && ($pesanKuota = $kuotaHybrid->periksa($kegiatan, $caraHadir, $count))) {
+                DB::rollBack();
+
+                return back()->with('error', $pesanKuota)->withInput();
+            }
+
             // Ambil dan kunci kursi dengan pessimistic locking jika event memiliki pemilihan kursi
             $seatIds = array_filter(array_column($delegates, 'seat_id'));
             $lockedSeats = [];
 
             // Gate isSeatBookingOpen() HANYA untuk kegiatan yang memakai denah kursi
-            if ($kegiatan->hasSeatLayout()) {
+            if ($kegiatan->hasSeatLayout() && $caraHadir === CaraHadir::Onsite) {
                 if (! $kegiatan->isSeatBookingOpen()) {
                     DB::rollBack();
 
@@ -288,23 +388,7 @@ class KegiatanBookingController extends Controller
                 $seat = $seatId ? ($lockedSeats[$seatId] ?? null) : null;
                 $seatCode = $seat ? $seat->seat_code : 'GEN';
 
-                // Tentukan participant user jika email sama dengan pemesan
-                $participantUserId = ($index === 0 && strtolower(trim($delegate['email'] ?? '')) === strtolower($user->email))
-                    ? $user->id
-                    : null;
-
-                // Cek apakah email delegasi sudah terdaftar sebagai user di SEMADIKSI
-                if (! $participantUserId && ! empty($delegate['email'])) {
-                    $foundUser = User::where('email', strtolower(trim($delegate['email'])))->first();
-                    if ($foundUser) {
-                        $participantUserId = $foundUser->id;
-                    }
-                }
-
-                // Jika delegasi pertama tanpa email, kaitkan ke user yang sedang login
-                if ($index === 0 && ! $participantUserId) {
-                    $participantUserId = $user->id;
-                }
+                $participantUserId = $this->idPesertaDelegasi($delegate, $index, $user);
 
                 // Cegah double registration untuk user yang sama pada kegiatan yang sama
                 if ($participantUserId) {
@@ -331,6 +415,7 @@ class KegiatanBookingController extends Controller
                     'booker_user_id' => $user->id,
                     'participant_user_id' => $participantUserId,
                     'seat_id' => $seatId,
+                    'cara_hadir' => $caraHadir,
                     'nomor_tiket' => $nomorTiket,
                     'participant_name' => trim($delegate['name']),
                     'participant_identity' => $delegate['identity'] ?? ($participantUserId === $user->id ? $user->nim : null),
@@ -370,6 +455,10 @@ class KegiatanBookingController extends Controller
                 DB::commit();
 
                 foreach ($createdRegistrations as $reg) {
+                    // E-tiket QR hanya untuk pendaftar onsite; peserta daring masuk lewat Kegiatan Saya.
+                    if ($caraHadir === CaraHadir::Daring) {
+                        continue;
+                    }
                     try {
                         $targetEmail = $reg->participantUser?->email ?? $reg->delegation_data['email'] ?? $user->email;
                         if ($targetEmail) {
@@ -394,6 +483,26 @@ class KegiatanBookingController extends Controller
 
             return back()->with('error', 'Terjadi kesalahan saat memproses pendaftaran: '.$e->getMessage())->withInput();
         }
+    }
+
+    /**
+     * Akun peserta untuk satu delegasi: pemesan bila email sama (delegasi pertama), akun dengan email itu bila ada,
+     * dan delegasi pertama tanpa akun dikaitkan ke pemesan. Null bila delegasi tidak punya akun.
+     */
+    protected function idPesertaDelegasi(array $delegate, int $index, User $pemesan): ?int
+    {
+        $email = strtolower(trim($delegate['email'] ?? ''));
+        $id = ($index === 0 && $email === strtolower($pemesan->email)) ? $pemesan->id : null;
+
+        if (! $id && $email !== '') {
+            $id = User::where('email', $email)->value('id');
+        }
+
+        if ($index === 0 && ! $id) {
+            $id = $pemesan->id;
+        }
+
+        return $id;
     }
 
     /**

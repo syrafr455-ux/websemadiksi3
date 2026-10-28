@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Rules\ValidMeetingUrl;
 use App\Services\EmailProtectionService;
 use App\Services\Kegiatan\DenahKursiService;
+use App\Services\Kegiatan\PengaturanHybridService;
 use App\Services\Kegiatan\PetaKursiService;
 use App\Services\UnusaFacilityService;
 use App\Support\AksiPersetujuan;
@@ -38,7 +39,8 @@ class KegiatanController extends Controller
 {
     public function __construct(
         protected UnusaFacilityService $facilityService,
-        protected DenahKursiService $denah
+        protected DenahKursiService $denah,
+        protected PengaturanHybridService $hybrid
     ) {}
 
     /**
@@ -154,6 +156,8 @@ class KegiatanController extends Controller
             'jumlah_setuju' => $jumlahSetuju,
             'total_penyetuju' => $totalPenyetuju,
             'creator_name' => $item->createdBy?->name,
+            'peringatan_hybrid' => $this->hybrid->peringatan($item),
+            'ringkasan_kuota_hybrid' => $this->hybrid->ringkasan($item),
             'tautan_rapat_tersimpan' => filled($item->tautan_rapat),
             'meeting_id_tersimpan' => filled($item->meeting_id),
             'passcode_rapat_tersimpan' => filled($item->passcode_rapat),
@@ -178,6 +182,16 @@ class KegiatanController extends Controller
         $metode = $validated['metode_pelaksanaan'] ?? ($lokasiType === 'online' ? 'online' : 'offline');
         $isOnlineOrHybrid = ($lokasiType === 'online' || in_array($metode, ['online', 'hybrid'], true));
 
+        // Pembagian kuota onsite/daring hanya untuk hybrid; kegiatan lain tetap satu kuota.
+        $kuotaOnsite = $metode === 'hybrid' && isset($validated['kuota_onsite']) ? (int) $validated['kuota_onsite'] : null;
+        $this->hybrid->validasiKuota([
+            'metode_pelaksanaan' => $metode,
+            'kuota' => $validated['kuota'],
+            'kuota_onsite' => $kuotaOnsite,
+            'is_seat_booking_active' => $request->boolean('is_seat_booking_active'),
+            'seat_layout_config' => $validated['seat_layout_config'] ?? null,
+        ]);
+
         if ($aksiSubmit) {
             $statusKegiatan = $aksiSubmit === 'ajukan' ? KegiatanStatus::Diajukan : KegiatanStatus::Draft;
         } elseif (isset($validated['status'])) {
@@ -198,7 +212,20 @@ class KegiatanController extends Controller
                 ]);
             }
 
-            if ($isOnlineOrHybrid && empty($validated['tautan_rapat'])) {
+            if ($metode === 'hybrid') {
+                $kekurangan = $this->hybrid->kekuranganAjukan([
+                    'metode_pelaksanaan' => $metode,
+                    'lokasi_type' => $lokasiType,
+                    'lokasi_nama' => $validated['lokasi_nama'] ?? null,
+                    'lokasi_detail' => $validated['lokasi_detail'] ?? null,
+                    'lokasi_ruangan' => $validated['lokasi_ruangan'] ?? null,
+                    'tautan_rapat' => $validated['tautan_rapat'] ?? null,
+                    'kuota_onsite' => $kuotaOnsite,
+                ]);
+                if ($kekurangan !== []) {
+                    throw ValidationException::withMessages(['aksi_submit' => implode(' ', $kekurangan)]);
+                }
+            } elseif ($isOnlineOrHybrid && empty($validated['tautan_rapat'])) {
                 throw ValidationException::withMessages([
                     'tautan_rapat' => 'Tautan rapat daring wajib diisi sebelum kegiatan dapat diajukan.',
                 ]);
@@ -252,6 +279,7 @@ class KegiatanController extends Controller
                 'lokasi_detail' => $validated['lokasi_detail'] ?? null,
                 'biaya' => (float) $validated['biaya'],
                 'kuota' => (int) $validated['kuota'],
+                'kuota_onsite' => $kuotaOnsite,
                 'narasumber' => $this->normalizeNarasumber($validated['narasumber'] ?? null),
                 'poin_xp' => (int) ($validated['poin_xp'] ?? 0),
                 'file_panduan_pdf' => $panduanPath ?? 'kegiatan/panduan/default_panduan.pdf',
@@ -324,6 +352,7 @@ class KegiatanController extends Controller
                 'id' => $reg->id,
                 'nama_peserta' => $reg->ticket_holder_name,
                 'identitas_peserta' => $reg->ticket_holder_identity,
+                'cara_hadir' => $reg->cara_hadir?->value ?? 'onsite',
                 'email_peserta' => $reg->participantUser?->email ?? ($reg->delegation_data['email'] ?? null),
                 // Booker hanya ditampilkan bila tiket dipesankan orang lain (delegasi).
                 'booker' => $reg->booker_user_id && $reg->booker_user_id !== $reg->participant_user_id && $reg->bookerUser
@@ -372,9 +401,11 @@ class KegiatanController extends Controller
                     'id', 'nama_kegiatan', 'kategori', 'metode_pelaksanaan', 'sasaran_peserta',
                     'tanggal_mulai', 'tanggal_selesai', 'registration_deadline', 'submission_deadline',
                     'lokasi_type', 'lokasi_kampus', 'lokasi_gedung', 'lokasi_ruangan', 'lokasi_nama', 'lokasi_detail',
-                    'biaya', 'kuota', 'is_seat_booking_active', 'booking_opens_at', 'booking_closes_at',
+                    'biaya', 'kuota', 'kuota_onsite', 'is_seat_booking_active', 'booking_opens_at', 'booking_closes_at',
                     'venue_change_count', 'is_submission_active', 'file_panduan_url',
                 ]),
+                'peringatan_hybrid' => $this->hybrid->peringatan($kegiatan),
+                'ringkasan_kuota_hybrid' => $this->hybrid->ringkasan($kegiatan),
                 'created_by' => $kegiatan->createdBy ? [
                     'id' => $kegiatan->createdBy->id,
                     'name' => $kegiatan->createdBy->name,
@@ -518,6 +549,22 @@ class KegiatanController extends Controller
             throw ValidationException::withMessages(['registration_deadline' => 'Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.']);
         }
 
+        // Pembagian kuota hybrid: nilai efektif setelah perubahan, termasuk batas pendaftar aktif.
+        $metodeEfektif = $payload['metode_pelaksanaan'] ?? $kegiatan->metode_pelaksanaan;
+        if ($metodeEfektif !== 'hybrid') {
+            if ($kegiatan->kuota_onsite !== null || ($payload['kuota_onsite'] ?? null) !== null) {
+                $payload['kuota_onsite'] = null;
+            }
+        } else {
+            $this->hybrid->validasiKuota([
+                'metode_pelaksanaan' => $metodeEfektif,
+                'kuota' => $payload['kuota'] ?? $kegiatan->kuota,
+                'kuota_onsite' => array_key_exists('kuota_onsite', $payload) ? $payload['kuota_onsite'] : $kegiatan->kuota_onsite,
+                'is_seat_booking_active' => $payload['is_seat_booking_active'] ?? (bool) $kegiatan->is_seat_booking_active,
+                'seat_layout_config' => $validated['seat_layout_config'] ?? $kegiatan->seat_layout_config,
+            ], $kegiatan->metode_pelaksanaan === 'hybrid' ? $kegiatan : null);
+        }
+
         // Mengedit kegiatan berstatus diajukan juga menghapus persetujuan
         if ($kegiatan->status === KegiatanStatus::Diajukan) {
             $kegiatan->persetujuan()->delete();
@@ -641,7 +688,12 @@ class KegiatanController extends Controller
             return back()->with('error', 'Hanya kegiatan berstatus draft yang dapat diajukan.');
         }
 
-        if ($kegiatan->isDaringOrHybrid() && empty($kegiatan->tautan_rapat)) {
+        if ($kegiatan->isHybrid()) {
+            $kekurangan = $this->hybrid->kekuranganAjukanKegiatan($kegiatan);
+            if ($kekurangan !== []) {
+                return back()->with('error', 'Kegiatan hybrid belum lengkap. '.implode(' ', $kekurangan));
+            }
+        } elseif ($kegiatan->isDaringOrHybrid() && empty($kegiatan->tautan_rapat)) {
             return back()->with('error', 'Tautan rapat daring wajib diisi sebelum kegiatan dapat diajukan.');
         }
 
@@ -961,6 +1013,8 @@ class KegiatanController extends Controller
             'biaya' => [...$wajib, 'numeric', 'min:0', 'max:99999999'],
             // Batas produk: kapasitas denah terbesar 30 baris x 50 kolom = 1.500; webinar besar jauh di bawah 100.000.
             'kuota' => [...$wajib, 'integer', 'min:1', 'max:100000'],
+            // Hanya bermakna untuk hybrid (batas 1..total-1 diperiksa PengaturanHybridService); non-hybrid dikosongkan.
+            'kuota_onsite' => ['nullable', 'integer', 'min:0', 'max:100000'],
             // Batas produk: poin per kegiatan puluhan sampai ratusan; 10.000 sudah longgar (kolom integer 32-bit).
             'poin_xp' => ['nullable', 'integer', 'min:0', 'max:10000'],
             // Daftar narasumber kosong dikirim sebagai null (FormData membuang array kosong saat ada unggahan berkas).
@@ -1012,6 +1066,9 @@ class KegiatanController extends Controller
             'biaya.max' => 'Biaya maksimal 99.999.999.',
             'biaya.numeric' => 'Biaya harus berupa angka.',
             'kuota.max' => 'Kuota maksimal 100.000.',
+            'kuota_onsite.integer' => 'Kuota onsite harus berupa angka bulat.',
+            'kuota_onsite.min' => 'Kuota onsite harus antara 1 dan total kuota dikurangi 1. Sisanya otomatis menjadi kuota daring.',
+            'kuota_onsite.max' => 'Kuota onsite maksimal 100.000.',
             'poin_xp.max' => 'Poin XP maksimal 10.000.',
             'seat_layout_config.rows.max' => 'Denah maksimal 30 baris.',
             'registration_deadline.before_or_equal' => 'Batas pendaftaran tidak boleh melewati waktu mulai kegiatan.',
@@ -1075,6 +1132,9 @@ class KegiatanController extends Controller
         }
         if ($ada('kuota')) {
             $payload['kuota'] = (int) $validated['kuota'];
+        }
+        if ($ada('kuota_onsite')) {
+            $payload['kuota_onsite'] = $validated['kuota_onsite'] === null ? null : (int) $validated['kuota_onsite'];
         }
         if ($ada('poin_xp')) {
             $payload['poin_xp'] = (int) ($validated['poin_xp'] ?? 0);

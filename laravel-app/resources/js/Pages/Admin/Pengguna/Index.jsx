@@ -69,6 +69,41 @@ function StatusKip({ u, nomorTerbuka, onBukaNomor, onUbahStatus }) {
     );
 }
 
+/** Panel baca-saja: jatah kegiatan periode berjalan dan kegiatan yang sudah dihadiri (dimuat saat dibuka). */
+function KegiatanDiikuti({ userId }) {
+    const [data, setData] = useState(null);
+    const [galat, setGalat] = useState(null);
+
+    const muat = (e) => {
+        if (!e.currentTarget.open || data) return;
+        window.axios.get(`/admin/pengguna/${userId}/kegiatan-diikuti`).then((res) => setData(res.data)).catch(() => setGalat('Data kegiatan gagal dimuat.'));
+    };
+
+    return (
+        <details onToggle={muat} className="mt-1" data-kegiatan-diikuti={userId}>
+            <summary className="cursor-pointer text-xs font-bold text-teal-300">Kegiatan diikuti</summary>
+            <div className="mt-1 text-xs text-slate-200 space-y-1">
+                {galat && <span className="text-rose-300">{galat}</span>}
+                {!data && !galat && <span className="text-slate-300">Memuat...</span>}
+                {data && (
+                    <>
+                        <div className="font-semibold">
+                            {data.jatah.berlaku ? `${data.jatah.periode}: ${data.jatah.terpakai} dari ${data.jatah.batas} terpakai` : 'Belum ada periode akademik aktif.'}
+                        </div>
+                        {data.kegiatan.length === 0 ? <div className="text-slate-300">Belum ada kegiatan yang dihadiri.</div> : (
+                            <ul className="list-disc list-inside space-y-0.5">
+                                {data.kegiatan.map((k) => (
+                                    <li key={k.id}>{k.nama} - {k.tanggal} - {k.cara_hadir === 'daring' ? 'Via Zoom' : 'Onsite'} - {k.periode || 'di luar periode'}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </>
+                )}
+            </div>
+        </details>
+    );
+}
+
 function DetailPeran({ u, ...aksi }) {
     // aksi: nomorTerbuka, onBukaNomor, onUbahStatus, onAturProdi
     if (u.role === 'user_umum') {
@@ -77,6 +112,7 @@ function DetailPeran({ u, ...aksi }) {
                 <div className="font-bold text-slate-200">{u.asal_kampus || '-'}</div>
                 <div className="text-[11px] text-slate-400">NIM {u.nim || '-'} • {u.program_studi_teks || '-'}</div>
                 {u.is_unusa && <StatusKip u={u} {...aksi} />}
+                <KegiatanDiikuti userId={u.id} />
             </div>
         );
     }
@@ -98,6 +134,7 @@ function DetailPeran({ u, ...aksi }) {
                     Atur fakultas & prodi
                 </button>
                 <StatusKip u={u} {...aksi} />
+                <KegiatanDiikuti userId={u.id} />
             </div>
         );
     }

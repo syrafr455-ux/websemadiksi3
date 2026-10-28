@@ -126,80 +126,18 @@ class KelayakanSertifikatService
             ];
         }
 
-        $metode = strtolower((string) $kegiatan->metode_pelaksanaan);
-
-        // 2. Evaluasi Check-in Awal (Fase 1)
-        $hasTicketCheckIn = ! empty($registration->checked_in_at);
-        $hasJoinClick = $registration->relationLoaded('gabung')
-            ? ($registration->gabung !== null)
-            : KegiatanGabung::where('registration_id', $registration->id)->exists();
-
-        $checkInAwal = false;
-        $sumberCheckIn = null;
-
-        if ($metode === 'online' || $metode === 'daring') {
-            // Daring: absen awal = ada kegiatan_gabung
-            $checkInAwal = $hasJoinClick;
-            $sumberCheckIn = $hasJoinClick ? 'gabung' : null;
-            if (! $checkInAwal) {
-                return [
-                    'layak' => false,
-                    'alasan' => 'Belum gabung',
-                    'detail' => $this->bangunDetailPeserta($registration, false, null, false, null, false),
-                ];
-            }
-        } elseif ($metode === 'hybrid') {
-            // Hybrid: absen awal = check-in tiket ATAU gabung
-            $checkInAwal = $hasTicketCheckIn || $hasJoinClick;
-            $sumberCheckIn = $hasTicketCheckIn ? 'tiket' : ($hasJoinClick ? 'gabung' : null);
-            if (! $checkInAwal) {
-                return [
-                    'layak' => false,
-                    'alasan' => 'Belum check-in awal atau gabung',
-                    'detail' => $this->bangunDetailPeserta($registration, false, null, false, null, false),
-                ];
-            }
-        } else {
-            // Offline: check-in tiket fase 1 tercatat
-            $checkInAwal = $hasTicketCheckIn;
-            $sumberCheckIn = $hasTicketCheckIn ? 'tiket' : null;
-            if (! $checkInAwal) {
-                return [
-                    'layak' => false,
-                    'alasan' => 'Belum check-in awal',
-                    'detail' => $this->bangunDetailPeserta($registration, false, null, false, null, false),
-                ];
-            }
-        }
-
-        // 3. Evaluasi Presensi Akhir (Fase 2)
-        // Data presensi wajib memiliki registration_id yang valid dan signature_path
-        if ($presensi === null) {
-            $presensi = KegiatanPresensi::where('kegiatan_id', $kegiatan->id)
-                ->where(function ($q) use ($registration) {
-                    $q->where('registration_id', $registration->id);
-                    if ($registration->participant_user_id) {
-                        $q->orWhere('user_id', $registration->participant_user_id);
-                    }
-                })
-                ->first();
-        }
-
-        $hasPresensiAkhir = false;
-        $sumberPresensi = null;
-
-        if ($presensi && ! empty($presensi->signature_path)) {
-            $hasPresensiAkhir = true;
-            $sumberPresensi = str_contains($presensi->signature_path, 'sig_manual_') ? 'manual' : 'qr';
-        }
-
-        if (! $hasPresensiAkhir) {
+        // 2-3. Check-in awal (fase 1) dan presensi akhir (fase 2): satu definisi "hadir" untuk sertifikat dan batas kegiatan.
+        $hadir = $this->kehadiranTercatat($kegiatan, $registration, $presensi);
+        if (! $hadir['hadir']) {
             return [
                 'layak' => false,
-                'alasan' => 'Belum presensi akhir',
-                'detail' => $this->bangunDetailPeserta($registration, $checkInAwal, $sumberCheckIn, false, null, false),
+                'alasan' => $hadir['alasan'],
+                'detail' => $this->bangunDetailPeserta($registration, $hadir['check_in_awal'], $hadir['sumber_check_in'], false, null, false),
             ];
         }
+        $checkInAwal = $hadir['check_in_awal'];
+        $sumberCheckIn = $hadir['sumber_check_in'];
+        $sumberPresensi = $hadir['sumber_presensi'];
 
         // 4. Evaluasi Karya Lomba (Bila Kategori Lomba atau Wajib Pengumpulan Karya)
         $isLomba = $kegiatan->isLomba() || (bool) $kegiatan->is_submission_active;
@@ -226,6 +164,66 @@ class KelayakanSertifikatService
             'layak' => true,
             'alasan' => 'Layak',
             'detail' => $this->bangunDetailPeserta($registration, $checkInAwal, $sumberCheckIn, true, $sumberPresensi, $isLomba ? $hasSubmission : true),
+        ];
+    }
+
+    /**
+     * Definisi tunggal "hadir": check-in awal (tiket untuk luring, gabung untuk daring, salah satunya untuk hybrid)
+     * DAN presensi akhir bertanda tangan. Dipakai oleh kelayakan sertifikat dan oleh batas kegiatan per periode.
+     * Tidak memeriksa status pembayaran, blokir akun, atau karya lomba.
+     *
+     * @return array{hadir: bool, alasan: string|null, check_in_awal: bool, sumber_check_in: string|null, presensi_akhir: bool, sumber_presensi: string|null}
+     */
+    public function kehadiranTercatat(Kegiatan $kegiatan, KegiatanRegistration $registration, ?KegiatanPresensi $presensi = null): array
+    {
+        $metode = strtolower((string) $kegiatan->metode_pelaksanaan);
+
+        $hasTicketCheckIn = ! empty($registration->checked_in_at);
+        $hasJoinClick = $registration->relationLoaded('gabung')
+            ? ($registration->gabung !== null)
+            : KegiatanGabung::where('registration_id', $registration->id)->exists();
+
+        if ($metode === 'online' || $metode === 'daring') {
+            $checkInAwal = $hasJoinClick;
+            $sumberCheckIn = $hasJoinClick ? 'gabung' : null;
+            $alasanAwal = 'Belum gabung';
+        } elseif ($metode === 'hybrid') {
+            $checkInAwal = $hasTicketCheckIn || $hasJoinClick;
+            $sumberCheckIn = $hasTicketCheckIn ? 'tiket' : ($hasJoinClick ? 'gabung' : null);
+            $alasanAwal = 'Belum check-in awal atau gabung';
+        } else {
+            $checkInAwal = $hasTicketCheckIn;
+            $sumberCheckIn = $hasTicketCheckIn ? 'tiket' : null;
+            $alasanAwal = 'Belum check-in awal';
+        }
+
+        if (! $checkInAwal) {
+            return ['hadir' => false, 'alasan' => $alasanAwal, 'check_in_awal' => false, 'sumber_check_in' => null, 'presensi_akhir' => false, 'sumber_presensi' => null];
+        }
+
+        // Data presensi wajib memiliki registration_id yang valid dan signature_path
+        if ($presensi === null) {
+            $presensi = KegiatanPresensi::where('kegiatan_id', $kegiatan->id)
+                ->where(function ($q) use ($registration) {
+                    $q->where('registration_id', $registration->id);
+                    if ($registration->participant_user_id) {
+                        $q->orWhere('user_id', $registration->participant_user_id);
+                    }
+                })
+                ->first();
+        }
+
+        if (! $presensi || empty($presensi->signature_path)) {
+            return ['hadir' => false, 'alasan' => 'Belum presensi akhir', 'check_in_awal' => true, 'sumber_check_in' => $sumberCheckIn, 'presensi_akhir' => false, 'sumber_presensi' => null];
+        }
+
+        return [
+            'hadir' => true,
+            'alasan' => null,
+            'check_in_awal' => true,
+            'sumber_check_in' => $sumberCheckIn,
+            'presensi_akhir' => true,
+            'sumber_presensi' => str_contains($presensi->signature_path, 'sig_manual_') ? 'manual' : 'qr',
         ];
     }
 

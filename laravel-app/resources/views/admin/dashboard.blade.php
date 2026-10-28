@@ -1,5 +1,11 @@
 <x-layouts.admin title="Dashboard Pengelola" pageTitle="Dashboard Utama Pengurus" pageSubtitle="Ringkasan Utama aktivitas beasiswa & basis data PostgreSQL">
     <div class="space-y-8">
+        @if(!empty($tanpaPeriodeAktif))
+            <div role="status" class="px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200 flex flex-wrap items-center justify-between gap-2">
+                <span>Belum ada periode akademik aktif; batas kegiatan belum berlaku.</span>
+                <a href="{{ route('admin.periode-akademik') }}" class="underline font-bold text-amber-100">Atur periode akademik</a>
+            </div>
+        @endif
         @if(!empty($emailQuotaStatus['is_near_limit']))
             <div class="bg-amber-950/40 border border-amber-600/40 rounded-2xl p-4 sm:p-5 flex items-start gap-4 text-amber-200">
                 <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">

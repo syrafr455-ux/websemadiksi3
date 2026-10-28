@@ -68,6 +68,7 @@ class TataLetakAdminSeragamTest extends TestCase
             'data mahasiswa unusa' => route('admin.mahasiswa-unusa'),
             'daftar penerima kip-k' => route('admin.penerima-kipk'),
             'formulir masuk' => route('admin.submissions'),
+            'periode akademik' => route('admin.periode-akademik'),
             'sertifikat terbitkan' => route('admin.certificates', ['tab' => 'terbitkan', 'kegiatan_id' => $k]),
             'sertifikat terbitkan juri' => route('admin.certificates', ['tab' => 'terbitkan', 'kegiatan_id' => $k, 'jenis' => 'juri']),
             'sertifikat arsip' => route('admin.certificates', ['tab' => 'arsip']),
